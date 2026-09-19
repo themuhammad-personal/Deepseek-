@@ -34,6 +34,7 @@
   import { findActiveFileInput } from "../scanner.js";
   import { sendFileWithMessage } from "../auto.js";
   import { setDeepResearchEnabled } from "../deep-research.js";
+  import { setDeepCodeEnabled } from "../deep-code.js";
 
   // The native input[type="file"] reference passed from scanner
   let { nativeInput } = $props();
@@ -523,12 +524,18 @@
     };
     window.addEventListener("bds:deep-research-config-changed", onDeepResearchChanged);
 
+    const onDeepCodeChanged = (e) => {
+      isDeepCodeActive = Boolean(e?.detail?.enabled ?? appState.deepCode?.enabled);
+    };
+    window.addEventListener("bds:deep-code-toggle-state", onDeepCodeChanged);
+
     return () => {
       destroyed = true;
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
       window.removeEventListener(REMOTE_CONFIG_EVENT, onConfigOrStateUpdate);
       window.removeEventListener("bds:deep-research-config-changed", onDeepResearchChanged);
+      window.removeEventListener("bds:deep-code-toggle-state", onDeepCodeChanged);
       if (appState.heroBarRef?.refresh === refreshProjectPanel) {
         appState.heroBarRef = null;
       }
@@ -682,6 +689,31 @@
         textarea.value = "/" + textarea.value;
       }
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  let isDeepCodeActive = $state(Boolean(appState.deepCode?.enabled));
+  let activeDirectoryName = $derived.by(() => {
+    const dir = appState.deepCode?.activeDirectory || (appState.deepCode?.manualPath ? appState.deepCode.manualPath.split(/[/\\]/).filter(Boolean).pop() : "");
+    return dir || "";
+  });
+
+  function handleDeepCode() {
+    closeMenu();
+    if (window.AndroidBridge?.vibrate) {
+      try { window.AndroidBridge.vibrate(10); } catch {}
+    }
+    if (!isDeepCodeActive) {
+      setDeepCodeEnabled(true);
+      isDeepCodeActive = true;
+      if (appState.ui?.showToast) {
+        appState.ui.showToast(t('attachMenu.deepCodeEnabled') || 'Deep Code enabled');
+      }
+      if (!appState.deepCode?.activeDirectory && !appState.deepCode?.manualPath) {
+        window.dispatchEvent(new CustomEvent("bds:open-deep-code-modal"));
+      }
+    } else {
+      window.dispatchEvent(new CustomEvent("bds:open-deep-code-modal"));
     }
   }
 
@@ -1293,6 +1325,35 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.customCommands') || 'Commands & Prompts'}</span>
           <span class="bds-item-desc">{t('attachMenu.customCommandsDesc') || 'Quick shortcuts, snippets & tools'}</span>
+        </span>
+      </button>
+
+      <button type="button" class="bds-attach-item" data-testid="attach-menu-deep-code" onclick={handleDeepCode}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">
+            {t('attachMenu.deepCode') || 'Deep Code'}
+            {#if isDeepCodeActive}
+              <span class="bds-active-badge">✓ {activeDirectoryName || 'On'}</span>
+            {/if}
+          </span>
+          <span class="bds-item-desc">{t('attachMenu.deepCodeDesc') || 'Collaborative coding workspace & project dev'}</span>
         </span>
       </button>
 
@@ -2594,6 +2655,19 @@
       color: #f4f4f5 !important;
       text-align: left !important;
       line-height: 1.3 !important;
+    }
+
+    .bds-active-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      font-size: 10px !important;
+      font-weight: 600 !important;
+      padding: 1px 6px !important;
+      border-radius: 10px !important;
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #10b981 !important;
+      margin-left: 6px !important;
+      vertical-align: middle !important;
     }
 
     .bds-item-desc {

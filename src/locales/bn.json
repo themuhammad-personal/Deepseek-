@@ -16,7 +16,9 @@
       "content": "বিষয়বস্তু",
       "description": "বিবরণ",
       "none": "কোনটি নয়",
-      "working": "কাজ চলছে..."
+      "working": "কাজ চলছে...",
+      "active": "সক্রিয়",
+      "off": "বন্ধ"
     },
     "drawer": {
       "title": "Super DeepSeek",
@@ -196,7 +198,9 @@
       "advancedSearchPlaceholder": "সেটিংস অনুসন্ধান করুন...",
       "advancedNoResults": "কোনো ফলাফল পাওয়া যায়নি।",
       "disableTipBox": "পরামর্শ বাক্সটি বন্ধ রাখুন",
-      "disableTipBoxHint": "ড্রয়ার খোলার সময় পরামর্শ দেখানো বন্ধ করে।"
+      "disableTipBoxHint": "ড্রয়ার খোলার সময় পরামর্শ দেখানো বন্ধ করে।",
+      "deepCode": "ডিপ কোড",
+      "deepCodeDesc": "স্বয়ংক্রিয় ওয়ার্কস্পেস ও কোডিং এজেন্ট"
     },
     "attachMenu": {
       "buttonTitle": "সংযুক্তি ও মোড মেনু",
@@ -262,7 +266,11 @@
       "deepResearchEnabled": "ডিপ রিসার্চ সক্রিয় করা হয়েছে",
       "deepResearchDisabled": "ডিপ রিসার্চ নিষ্ক্রিয় করা হয়েছে",
       "customCommands": "কমান্ড ও প্রম্পট",
-      "customCommandsDesc": "শর্টকাট, স্নিপেট ও টুলস"
+      "customCommandsDesc": "শর্টকাট, স্নিপেট ও টুলস",
+      "deepCode": "ডিপ কোড",
+      "deepCodeDesc": "কোডিং ওয়ার্কস্পেস ও প্রজেক্ট ডেভেলপমেন্ট",
+      "deepCodeEnabled": "ডিপ কোড সক্রিয় করা হয়েছে",
+      "deepCodeDisabled": "ডিপ কোড নিষ্ক্রিয় করা হয়েছে"
     },
     "mcp": {
       "title": "এমসিপি সার্ভার",
@@ -621,59 +629,59 @@
       "executeFailed": "Failed to execute session on Harness."
     },
     "deepCodeModal": {
-      "title": "DeepCode & Harness",
-      "subtitle": "Link a local codebase to empower DeepSeek with file inspection, code search, and automated Harness task execution.",
-      "activeCodebase": "Active Codebase",
-      "filesIndexed": "{{count}} files indexed",
-      "linkFolder": "Link Local Folder...",
-      "addNewDirectory": "Add New Directory",
-      "pickFolder": "Select Folder",
-      "indexing": "Indexing Files...",
-      "manualPathLabel": "Absolute System Path (for Harness CWD):",
-      "manualPathPlaceholder": "e.g. A:/Users/Edige/GitHub/asistan",
-      "manualPathHint": "Due to web browser security rules, you need to enter the path again.",
-      "savePath": "Save Path",
-      "pathSaved": "Absolute path saved. It will be used as the Harness CWD.",
-      "pathMismatch": "The entered path does not match the selected folder \"{{name}}\". Check the last folder name.",
-      "recentTitle": "Recent Codebases",
-      "emptyRecent": "No recent directories. Click above to link a local folder.",
-      "removeHistory": "Remove from history",
-      "done": "Done",
-      "closeAria": "Close",
-      "linkedFeedback": "Linked \"{{name}}\" ({{count}} files indexed)",
-      "selectFailed": "Failed to select directory.",
-      "fsApiUnsupported": "File System Access API is not supported on this browser context.",
-      "switchedFeedback": "Switched to \"{{name}}\"",
-      "recentNeedsPicker": "\"{{name}}\" has no linked file access. Select it with the folder picker to enable file reads.",
-      "cancel": "Cancel"
+      "title": "ডিপ কোড ও হার্নেস",
+      "subtitle": "স্থানীয় কোডবেস ডিরেক্টরি যুক্ত করুন যাতে ডিপসিক স্বয়ংক্রিয় ফাইল পরিদর্শন, কোড সার্চ এবং হার্নেস টাস্ক চালাতে পারে।",
+      "activeCodebase": "সক্রিয় কোডবেস",
+      "filesIndexed": "{{count}}টি ফাইল ইনডেক্স করা হয়েছে",
+      "linkFolder": "ফোল্ডার লিঙ্ক করুন...",
+      "addNewDirectory": "নতুন ডিরেক্টরি যোগ করুন",
+      "pickFolder": "ফোল্ডার নির্বাচন করুন",
+      "indexing": "ফাইল ইনডেক্সিং হচ্ছে...",
+      "manualPathLabel": "সিস্টেম ডিরেক্টরি পাথ (হার্নেস CWD):",
+      "manualPathPlaceholder": "যেমন: /sdcard/projects/app বা C:/Projects/app",
+      "manualPathHint": "আপনার ডিভাইসের প্রজেক্টের সঠিক পাথ লিখুন।",
+      "savePath": "পাথ সংরক্ষণ করুন",
+      "pathSaved": "পাথ সফলভাবে সংরক্ষিত হয়েছে।",
+      "pathMismatch": "প্রদত্ত পাথ নির্বাচিত ফোল্ডার \"{{name}}\"-এর সাথে মিলছে না।",
+      "recentTitle": "সাম্প্রতিক কোডবেস",
+      "emptyRecent": "কোনো সাম্প্রতিক ডিরেক্টরি নেই। ফোল্ডার লিঙ্ক করুন।",
+      "removeHistory": "ইতিহাস থেকে মুছুন",
+      "done": "সম্পন্ন",
+      "closeAria": "বন্ধ করুন",
+      "linkedFeedback": "\"{{name}}\" লিঙ্ক করা হয়েছে ({{count}}টি ফাইল ইনডেক্সড)",
+      "selectFailed": "ডিরেক্টরি নির্বাচন ব্যর্থ হয়েছে।",
+      "fsApiUnsupported": "এই ডিভাইসে ব্রাউজার ফাইল সিস্টেম এপিআই সমর্থিত নয়। নিচে পাথ লিখে সংরক্ষণ করুন।",
+      "switchedFeedback": "\"{{name}}\"-এ পরিবর্তিত হয়েছে",
+      "recentNeedsPicker": "\"{{name}}\"-এ ফাইল রিড পারমিশন প্রয়োজন। ফোল্ডারটি পুনরায় নির্বাচন করুন।",
+      "cancel": "বাতিল"
     },
     "deepCodeOnboarding": {
-      "title": "Welcome to DeepCode",
-      "harnessIntro": "DeepCode works together with the official <strong>DeepSeek Harness</strong>. You need to have <strong>DeepSeek Harness</strong> installed on your device for this feature to work.",
-      "harnessLink": "Download DeepSeek Harness on GitHub",
-      "pluginLink": "Get the Better DeepSeek Bridge plugin (GitHub)",
-      "pluginInfo": "To connect Better DeepSeek to DeepSeek Harness, a <strong>plugin</strong> is required. If the plugin is installed, everything happens fully automatically. If it is not installed, you will need to perform manual steps.",
-      "gotIt": "Got it",
-      "closeAria": "Close"
+      "title": "ডিপ কোডে স্বাগতম",
+      "harnessIntro": "ডিপ কোড অফিসিয়াল <strong>ডিপসিক হার্নেস</strong>-এর সাথে কাজ করে স্থানীয়ভাবে কোড এক্সিকিউট করার জন্য।",
+      "harnessLink": "গিটহাবে ডিপসিক হার্নেস দেখুন",
+      "pluginLink": "সুপার ডিপসিক ব্রিজ প্লাগইন (GitHub)",
+      "pluginInfo": "ডিপসিক হার্নেসের সাথে সংযোগ করতে ব্রিজ প্লাগইন ইনস্টল থাকলে সবকিছু স্বয়ংক্রিয়ভাবে কার্যকর হয়।",
+      "gotIt": "বুঝেছি",
+      "closeAria": "বন্ধ করুন"
     },
     "deepCodeToggle": {
-      "label": "DeepCode",
-      "labelActive": "DeepCode: Active",
-      "labelWithDir": "DeepCode: {{dir}}",
-      "ariaLabel": "DeepCode: Local Codebase & Harness",
-      "titleActive": "DeepCode Active: {{path}}",
-      "titleDefault": "DeepCode: Local Codebase & Harness Workspace",
-      "panelTitle": "DeepCode",
-      "closeAria": "Close",
-      "integrationTitle": "Codebase & Harness Integration",
-      "integrationDesc": "Inject codebase context & enable DeepSeek Harness local tasks.",
-      "enableToggle": "Enable DeepCode",
-      "disableToggle": "Disable DeepCode",
-      "recentTitle": "Recent Codebases",
-      "removeHistory": "Remove from history",
-      "emptyRecents": "No recent codebases yet. Link a local folder to start.",
-      "statusEnhanced": "Harness Bridge Connected (Auto SSE)",
-      "statusFallback": "Harness Fallback Mode"
+      "label": "ডিপ কোড",
+      "labelActive": "ডিপ কোড: সক্রিয়",
+      "labelWithDir": "ডিপ কোড: {{dir}}",
+      "ariaLabel": "ডিপ কোড: লোকাল কোডবেস ও হার্নেস",
+      "titleActive": "ডিপ কোড সক্রিয়: {{path}}",
+      "titleDefault": "ডিপ কোড: লোকাল কোডবেস ওয়ার্কস্পেস",
+      "panelTitle": "ডিপ কোড",
+      "closeAria": "বন্ধ করুন",
+      "integrationTitle": "কোডবেস ও হার্নেস ইন্টিগ্রেশন",
+      "integrationDesc": "কোডবেস কনটেক্সট ইনজেক্ট করুন ও লোকাল টাস্ক চালান।",
+      "enableToggle": "ডিপ কোড চালু করুন",
+      "harnessStatus": "হার্নেস ব্রিজ স্ট্যাটাস:",
+      "checking": "যাচাই করা হচ্ছে...",
+      "enhancedMode": "সরাসরি সংযুক্ত (এনহ্যান্সড)",
+      "fallbackMode": "স্ট্যান্ডঅ্যালন মোড (ফলব্যাক)",
+      "manageDirectories": "ডিরেক্টরি ও কোডবেস পরিচালনা",
+      "addNew": "+ নতুন যুক্ত করুন"
     },
     "downloadCard": {
       "download": "Download",
@@ -997,6 +1005,23 @@
       "seeAllChanges": "See all changes in v{{version}} on GitHub",
       "seeDetailed": "See detailed release notes on GitHub",
       "features": {
+        "v0_1_14": {
+          "title": "উন্নত চার্ট, ফারসি ভাষা ও অন্যান্য উন্নতি",
+          "features": {
+            "feat_0": {
+              "title": "উন্নত চার্টস (Vega-Lite)",
+              "description": "সুপার ডিপসিক এখন আপনার ডেটার জন্য দৃষ্টিনন্দন ইন্টারঅ্যাক্টিভ চার্ট ও গ্রাফ তৈরি করতে পারে।"
+            },
+            "feat_1": {
+              "title": "নতুন ভাষা সমর্থন",
+              "description": "ফারসি (Farsi) ভাষার পূর্ণ সমর্থন যোগ করা হয়েছে।"
+            },
+            "feat_2": {
+              "title": "বাগ ফিক্স ও কর্মক্ষমতা বৃদ্ধি",
+              "description": "অ্যাপের নির্ভরযোগ্যতা এবং স্থিতিশীলতা ব্যাপকভাবে উন্নত করা হয়েছে।"
+            }
+          }
+        },
         "v0_1_13": {
           "title": "Emergency Hotfix 1",
           "features": {

@@ -3,23 +3,30 @@
   import appState from "../state.js";
   import {
     pickAndLinkDeepCodeDirectory,
+    activateDeepCodeDirectory,
     selectRecentDirectory,
     removeRecentDirectory,
+    setDeepCodeEnabled,
   } from "../deep-code.js";
+  import { supportsLocalDirectoryLinking } from "../../lib/local-directory-source.js";
+  import { isNativeFilePickerAvailable, nativePickFiles } from "../../platform/android-file-picker.js";
   import { t } from "../../lib/i18n.svelte.js";
 
   let { show = false, activeDirectory = null, fileCount = 0, onclose = null } = $props();
 
   let loading = $state(false);
   let feedback = $state("");
-  let recentDirectories = $state(appState.deepCode.recentDirectories || []);
-  let manualPath = $state(appState.deepCode.manualPath || "");
+  let localEnabled = $state(Boolean(appState.deepCode?.enabled));
+  let recentDirectories = $state(appState.deepCode?.recentDirectories || []);
+  let manualPath = $state(appState.deepCode?.manualPath || "");
 
   let lastEventRecent = null;
 
   onMount(() => {
+    localEnabled = Boolean(appState.deepCode?.enabled);
     const handler = (event) => {
       const detail = event.detail || {};
+      localEnabled = Boolean(detail.enabled ?? appState.deepCode?.enabled);
       lastEventRecent = Array.isArray(detail.recentDirectories) ? detail.recentDirectories : lastEventRecent;
       manualPath = detail.manualPath ?? manualPath;
       if (lastEventRecent) recentDirectories = lastEventRecent;
@@ -33,17 +40,40 @@
   });
 
   $effect(() => {
-    recentDirectories = appState.deepCode.recentDirectories || [];
-    manualPath = appState.deepCode.manualPath || "";
+    localEnabled = Boolean(appState.deepCode?.enabled);
+    recentDirectories = appState.deepCode?.recentDirectories || [];
+    manualPath = appState.deepCode?.manualPath || "";
   });
+
+  function handleToggle() {
+    const next = !localEnabled;
+    localEnabled = next;
+    setDeepCodeEnabled(next);
+  }
 
   async function handleSelectFolder() {
     feedback = "";
     loading = true;
     try {
-      const res = await pickAndLinkDeepCodeDirectory();
-      feedback = t("deepCodeModal.linkedFeedback", { name: res.rootName, count: res.fileCount });
-      setTimeout(() => { feedback = ""; }, 3500);
+      if (supportsLocalDirectoryLinking()) {
+        const res = await pickAndLinkDeepCodeDirectory();
+        feedback = t("deepCodeModal.linkedFeedback", { name: res.rootName, count: res.fileCount });
+        setTimeout(() => { feedback = ""; }, 3500);
+      } else if (isNativeFilePickerAvailable()) {
+        const res = await nativePickFiles("folder");
+        if (res && res.files && res.files.length > 0) {
+          const first = res.files[0];
+          let root = "project";
+          if (first.name && first.name.includes("/")) {
+            root = first.name.split("/")[0];
+          }
+          await activateDeepCodeDirectory(root, res.files.length, manualPath || root);
+          feedback = t("deepCodeModal.linkedFeedback", { name: root, count: res.files.length });
+          setTimeout(() => { feedback = ""; }, 3500);
+        }
+      } else {
+        feedback = t("deepCodeModal.fsApiUnsupported");
+      }
     } catch (err) {
       if (err.name !== "AbortError") {
         feedback = err.message || t("deepCodeModal.selectFailed");
@@ -51,6 +81,15 @@
     } finally {
       loading = false;
     }
+  }
+
+  async function handleManualSave() {
+    const p = manualPath.trim().replace(/[\\/]+$/, "");
+    if (!p) return;
+    const folderName = p.split(/[/\\]/).pop() || "project";
+    await activateDeepCodeDirectory(folderName, fileCount || 0, p);
+    feedback = t("deepCodeModal.pathSaved") || "Path saved!";
+    setTimeout(() => { feedback = ""; }, 3000);
   }
 
   async function handleSelectRecent(entry) {
@@ -70,8 +109,6 @@
 </script>
 
 {#if show}
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -98,14 +135,26 @@
           {t("deepCodeModal.subtitle")}
         </p>
 
+        <!-- Master Switch Card -->
+        <div class="bds-dc-toggle-card">
+          <div class="bds-dc-toggle-info">
+            <span class="bds-dc-toggle-title">{t("deepCodeToggle.enableToggle") || "Enable Deep Code"}</span>
+            <span class="bds-dc-toggle-sub">{t("deepCodeToggle.integrationDesc") || "Inject codebase context & run local Harness tasks"}</span>
+          </div>
+          <label class="bds-ios-switch">
+            <input type="checkbox" checked={localEnabled} onchange={handleToggle} />
+            <span class="bds-ios-slider"></span>
+          </label>
+        </div>
+
         {#if activeDirectory || manualPath}
           <div class="bds-skill-item bds-active-dir-item" style="margin-bottom: 12px;">
             <div style="flex: 1; min-width: 0;">
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span class="bds-active-dot"></span>
-                <strong style="font-size: 13px; color: var(--bds-text-primary);">{activeDirectory || t("deepCodeModal.activeCodebase")}</strong>
+                <strong class="bds-dc-dir-name" style="font-size: 13px; color: var(--bds-text-primary);">{activeDirectory || t("deepCodeModal.activeCodebase")}</strong>
                 {#if fileCount > 0}
-                  <span class="bds-count-badge">{t("deepCodeModal.filesIndexed", { count: fileCount })}</span>
+                  <span class="bds-count-badge bds-dc-dir-meta">{t("deepCodeModal.filesIndexed", { count: fileCount })}</span>
                 {/if}
               </div>
               {#if manualPath}
@@ -128,6 +177,26 @@
           <span>{loading ? t("deepCodeModal.indexing") : t("deepCodeModal.linkFolder")}</span>
         </button>
 
+        <!-- Manual Path Input Section -->
+        <div class="bds-manual-section">
+          <label class="bds-manual-label" for="bds-dc-manual-input">
+            {t("deepCodeModal.manualPathLabel") || "System Directory Path (Harness CWD):"}
+          </label>
+          <div class="bds-manual-input-row">
+            <input
+              id="bds-dc-manual-input"
+              type="text"
+              placeholder={t("deepCodeModal.manualPathPlaceholder") || "e.g. /sdcard/projects/app or C:/code"}
+              bind:value={manualPath}
+              class="bds-manual-input"
+            />
+            <button type="button" class="bds-btn" onclick={handleManualSave}>
+              {t("deepCodeModal.savePath") || "Save"}
+            </button>
+          </div>
+          <p class="bds-manual-hint">{t("deepCodeModal.manualPathHint") || "Enter your local codebase directory path."}</p>
+        </div>
+
         {#if feedback}
           <p class="bds-dc-feedback">{feedback}</p>
         {/if}
@@ -143,7 +212,7 @@
           </div>
         </div>
 
-        <div class="bds-list" style="max-height: 220px; overflow-y: auto;">
+        <div class="bds-list" style="max-height: 200px; overflow-y: auto;">
           {#if recentDirectories && recentDirectories.length > 0}
             {#each recentDirectories as dir}
               {@const isSelected = activeDirectory === dir.name || (manualPath && dir.path && manualPath.toLowerCase() === dir.path.toLowerCase())}
@@ -183,13 +252,13 @@
               </div>
             {/each}
           {:else}
-            <p class="bds-empty" style="font-size: 11px; padding: 16px 0;">{t("deepCodeModal.emptyRecent")}</p>
+            <p class="bds-empty" style="font-size: 11px; padding: 12px 0;">{t("deepCodeModal.emptyRecent")}</p>
           {/if}
         </div>
       </div>
 
-      <div class="bds-drawer-bottom" style="display: flex; justify-content: flex-end;">
-        <button type="button" class="bds-btn-outlined" style="font-size: 12px; padding: 5px 14px;" onclick={onclose}>
+      <div class="bds-drawer-bottom" style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button type="button" class="bds-btn-outlined" style="font-size: 12px; padding: 6px 16px;" onclick={onclose}>
           {t("deepCodeModal.done")}
         </button>
       </div>
@@ -201,9 +270,9 @@
   .bds-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -218,47 +287,165 @@
   }
 
   .bds-dc-modal {
-    width: min(92vw, 400px);
+    width: min(92vw, 420px);
     border: 1px solid var(--bds-border);
-    border-radius: var(--bds-radius, 14px);
+    border-radius: var(--bds-radius, 16px);
     background: var(--bds-bg-panel);
     box-shadow: var(--bds-shadow);
     color: var(--bds-text-primary);
-    padding: 24px;
+    padding: 22px;
     display: flex;
     flex-direction: column;
-    max-height: 82vh;
+    max-height: 85vh;
     box-sizing: border-box;
     font-family: inherit;
   }
 
   .bds-dc-modal .bds-drawer-header {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
 
   .bds-dc-subtitle {
     font-size: 12px;
     color: var(--bds-text-secondary);
-    margin: 0 0 16px;
+    margin: 0 0 14px;
     line-height: 1.45;
+  }
+
+  .bds-dc-toggle-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    background: var(--bds-bg-elevated);
+    border: 1px solid var(--bds-border);
+    border-radius: 12px;
+    gap: 10px;
+  }
+
+  .bds-dc-toggle-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .bds-dc-toggle-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bds-text-primary);
+  }
+
+  .bds-dc-toggle-sub {
+    font-size: 10.5px;
+    color: var(--bds-text-tertiary);
+    margin-top: 2px;
+  }
+
+  .bds-ios-switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .bds-ios-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .bds-ios-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--bds-bg-hover, #3a3b3f);
+    transition: 0.25s;
+    border-radius: 22px;
+  }
+
+  .bds-ios-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.25s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .bds-ios-switch input:checked + .bds-ios-slider {
+    background-color: #10b981;
+  }
+
+  .bds-ios-switch input:checked + .bds-ios-slider:before {
+    transform: translateX(16px);
+  }
+
+  .bds-manual-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .bds-manual-label {
+    font-size: 11px;
+    color: var(--bds-text-secondary);
+    font-weight: 500;
+  }
+
+  .bds-manual-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .bds-manual-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bds-bg-elevated);
+    border: 1px solid var(--bds-border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--bds-text-primary);
+    outline: none;
+  }
+
+  .bds-manual-input:focus {
+    border-color: var(--bds-accent);
+  }
+
+  .bds-manual-hint {
+    font-size: 10px;
+    color: var(--bds-text-tertiary);
+    margin: 0;
+    line-height: 1.35;
   }
 
   .bds-dc-hr {
     border: none;
     height: 1px;
     background: var(--bds-border);
-    margin: 20px 0;
+    margin: 14px 0;
   }
 
   .bds-dc-feedback {
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--bds-accent);
-    margin: 0 0 10px;
+    margin: 6px 0 0;
     text-align: center;
   }
 
   .bds-active-dir-item {
     background: var(--bds-bg-elevated);
+    padding: 10px 12px;
+    border-radius: 10px;
   }
 
   .bds-active-dot {
@@ -309,5 +496,18 @@
     opacity: 1 !important;
     color: #f87171;
     background: rgba(239, 68, 68, 0.15);
+  }
+
+  @media (max-width: 767px) {
+    .bds-dc-modal {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      margin: 0 !important;
+      border-radius: 20px 20px 0 0 !important;
+      position: fixed !important;
+      bottom: 0 !important;
+      max-height: 88vh !important;
+      padding: 20px 16px !important;
+    }
   }
 </style>

@@ -954,4 +954,28 @@
     opacity: 0.6;
     cursor: not-allowed;
   }
+
+  @media (max-width: 640px) {
+    .bds-harness-task-card {
+      margin: 10px 0;
+      padding: 12px;
+      border-radius: 12px;
+    }
+    .bds-final-report-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .bds-report-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    .bds-harness-actions {
+      flex-direction: column;
+    }
+    .bds-harness-actions button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 </style>

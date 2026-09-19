@@ -339,6 +339,27 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
               </div>
+
+              <!-- Deep Code Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "deep_code")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">{t("settings.deepCode") || "Deep Code"}</span>
+                    <span class="bds-settings-row-sub">{appState.deepCode?.activeDirectory || (t("settings.deepCodeDesc") || "Autonomous workspace & coding agent")}</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.deepCode?.enabled ? (t("common.active") || "On") : (t("common.off") || "Off")}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -634,6 +655,22 @@
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="deep_research"
+          onsave={handleSettingsSaved}
+          onapiplayground={openApiPlayground}
+          onimportdata={() => {
+            refreshSettings();
+            refreshCharacters();
+            refreshSkills();
+            refreshMemories();
+            refreshProjects();
+          }}
+        />
+
+      {:else if currentSection === "deep_code"}
+        <!-- Sub-View: Deep Code -->
+        <SettingsPanel
+          bind:this={settingsRef}
+          activeTab="deep_code"
           onsave={handleSettingsSaved}
           onapiplayground={openApiPlayground}
           onimportdata={() => {

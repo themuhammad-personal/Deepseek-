@@ -17,6 +17,7 @@
   import { makeId } from "../../lib/utils/helpers.js";
   import SnippetList from "./SnippetList.svelte";
   import { triggerBlobDownload } from "../../lib/utils/download.js";
+  import { setDeepCodeEnabled } from "../deep-code.js";
 
   let { onapiplayground, onimportdata, onsave, activeTab = "all", searchQuery = "" } = $props();
 
@@ -98,6 +99,11 @@
   let subProjectsOpen = $state(false);
   let subInjectionOpen = $state(false);
   let subResearchOpen = $state(false);
+  let subDeepCodeOpen = $state(false);
+  let deepCodeEnabled = $state(Boolean(appState.deepCode?.enabled));
+  let deepCodeActiveDir = $derived(appState.deepCode?.activeDirectory || "");
+  let deepCodeFileCount = $derived(appState.deepCode?.fileCount || 0);
+  let deepCodeManualPath = $derived(appState.deepCode?.manualPath || "");
   let subVoiceOpen = $state(false);
   let subIntegrationsOpen = $state(false);
   let subUtilitiesOpen = $state(false);
@@ -585,6 +591,9 @@
       'settings.contextGuardEnabled', 'settings.contextGuardLimit',
       'settings.contextGuardStopPercent',
     ]},
+    { key: 'subDeepCode', labelKey: 'settings.deepCode', settingKeys: [
+      'deepCodeToggle.enableToggle', 'deepCodeModal.activeCodebase',
+    ]},
     { key: 'subVoice', labelKey: 'settings.subVoice', settingKeys: [
       'settings.voiceMode', 'settings.autoSubmitVoice',
       'settings.speechLanguage', 'settings.vadSilenceTimeout',
@@ -657,7 +666,8 @@
     return {
       subLanguage: subLanguageOpen, subChat: subChatOpen,
       subProjects: subProjectsOpen, subInjection: subInjectionOpen,
-      subResearch: subResearchOpen, subVoice: subVoiceOpen,
+      subResearch: subResearchOpen, subDeepCode: subDeepCodeOpen,
+      subVoice: subVoiceOpen,
       subIntegrations: subIntegrationsOpen, subCSS: subCSSOpen,
       subMcp: subMcpOpen,
       subUtilities: subUtilitiesOpen,
@@ -668,7 +678,9 @@
     if (!states) return;
     subLanguageOpen = states.subLanguage; subChatOpen = states.subChat;
     subProjectsOpen = states.subProjects; subInjectionOpen = states.subInjection;
-    subResearchOpen = states.subResearch; subVoiceOpen = states.subVoice;
+    subResearchOpen = states.subResearch;
+    if (typeof states.subDeepCode === "boolean") subDeepCodeOpen = states.subDeepCode;
+    subVoiceOpen = states.subVoice;
     subIntegrationsOpen = states.subIntegrations; subCSSOpen = states.subCSS;
     subMcpOpen = states.subMcp;
     subUtilitiesOpen = states.subUtilities;
@@ -691,6 +703,7 @@
     subProjectsOpen = matchingKeys.has('subProjects');
     subInjectionOpen = matchingKeys.has('subInjection');
     subResearchOpen = matchingKeys.has('subResearch');
+    subDeepCodeOpen = matchingKeys.has('subDeepCode');
     subVoiceOpen = matchingKeys.has('subVoice');
     subIntegrationsOpen = matchingKeys.has('subIntegrations');
     subCSSOpen = matchingKeys.has('subCSS');
@@ -717,6 +730,9 @@
     } else if (activeTab === "deep_research") {
       advancedOpen = true;
       subResearchOpen = true;
+    } else if (activeTab === "deep_code") {
+      advancedOpen = true;
+      subDeepCodeOpen = true;
     } else if (activeTab === "appearance") {
       advancedOpen = true;
       subCSSOpen = true;
@@ -745,6 +761,7 @@
     if (activeTab === "all") return true;
     if (activeTab === "mcp") return sectionKey === "subMcp";
     if (activeTab === "deep_research") return sectionKey === "subResearch";
+    if (activeTab === "deep_code") return sectionKey === "subDeepCode";
     if (activeTab === "data") return sectionKey === "subIntegrations" || sectionKey === "subUtilities";
     if (activeTab === "appearance") return sectionKey === "subCSS" || sectionKey === "subLanguage";
     if (activeTab === "chat") return sectionKey === "subChat" || sectionKey === "subVoice" || sectionKey === "subCSS" || sectionKey === "subLanguage" || sectionKey === "subInjection";
@@ -755,8 +772,8 @@
       if (activeCategory === "general") return sectionKey === "subLanguage" || sectionKey === "subUtilities";
       if (activeCategory === "chat") return sectionKey === "systemPrompts" || sectionKey === "subChat" || sectionKey === "subInjection";
       if (activeCategory === "voice") return sectionKey === "subVoice";
-      if (activeCategory === "research") return sectionKey === "subResearch";
-      if (activeCategory === "mcp") return sectionKey === "subMcp";
+      if (activeCategory === "research") return sectionKey === "subResearch" || sectionKey === "subDeepCode";
+      if (activeCategory === "mcp") return sectionKey === "subMcp" || sectionKey === "subDeepCode";
       if (activeCategory === "appearance") return sectionKey === "subCSS";
       if (activeCategory === "integrations") return sectionKey === "subIntegrations";
       if (activeCategory === "backup") return sectionKey === "subUtilities" || sectionKey === "subProjects";
@@ -2228,6 +2245,65 @@
         {/if}
       </div>
     </div>
+    </div>
+    {/if}
+
+    {#if isSectionMatch('subDeepCode')}
+    <div class="bds-card" class:open={subDeepCodeOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subDeepCodeOpen} onclick={() => subDeepCodeOpen = !subDeepCodeOpen} aria-expanded={subDeepCodeOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+          </span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.deepCode') || 'Deep Code & Harness'}</span>
+            <span class="bds-card-subtitle">{t('settings.deepCodeDesc') || 'Autonomous workspace indexing & Harness coding agent'}</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subDeepCodeOpen}>
+        <div class="bds-sub-inner">
+          <div class="bds-toggle-row">
+            <div>
+              <span class="bds-toggle-label">{t('deepCodeToggle.enableToggle') || 'Enable Deep Code'}</span>
+              <p class="bds-toggle-desc">{t('deepCodeToggle.integrationDesc') || 'Inject codebase context & enable DeepSeek Harness local tasks.'}</p>
+            </div>
+            <label class="bds-ios-switch">
+              <input type="checkbox" checked={deepCodeEnabled} onchange={toggleDeepCodeSetting} />
+              <span class="bds-ios-slider"></span>
+            </label>
+          </div>
+
+          <div class="bds-toggle-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+              <div>
+                <span class="bds-toggle-label">{t('deepCodeModal.activeCodebase') || 'Active Codebase'}</span>
+                {#if deepCodeActiveDir}
+                  <p class="bds-toggle-desc" style="color: #10b981; margin: 2px 0 0;">● {deepCodeActiveDir} ({deepCodeFileCount} files)</p>
+                {:else}
+                  <p class="bds-toggle-desc" style="margin: 2px 0 0;">No folder linked yet.</p>
+                {/if}
+              </div>
+              <button type="button" class="bds-btn" style="padding: 6px 14px; font-size: 11px;" onclick={openDeepCodeModal}>
+                {t('deepCodeModal.linkFolder') || 'Manage...'}
+              </button>
+            </div>
+            {#if deepCodeManualPath}
+              <p style="font-family: monospace; font-size: 11px; opacity: 0.7; margin: 0;">{deepCodeManualPath}</p>
+            {/if}
+          </div>
+        </div>
+      </div>
     </div>
     {/if}
 

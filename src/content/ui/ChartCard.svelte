@@ -915,4 +915,34 @@
     font-weight: 600 !important;
     padding-bottom: 2px !important;
   }
+
+  @media (max-width: 640px) {
+    .bds-chart-card {
+      margin: 10px 0;
+      padding: 14px 12px 10px 12px;
+      border-radius: 12px;
+    }
+    .bds-chart-header {
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .bds-chart-title {
+      font-size: 14px;
+    }
+    .bds-chart-subtitle {
+      font-size: 11px;
+    }
+    .bds-chart-btn {
+      width: 28px;
+      height: 28px;
+    }
+    .bds-chart-body {
+      min-height: 200px;
+    }
+    .bds-vega-container {
+      min-height: 200px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 </style>
