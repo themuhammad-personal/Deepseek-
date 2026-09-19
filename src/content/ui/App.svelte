@@ -136,6 +136,22 @@
   window.addEventListener("bds:open-deep-code-modal", () => {
     deepCodeModalOpen = true;
   });
+
+  window.addEventListener("bds:toggle-drawer", () => {
+    toggleDrawer();
+  });
+
+  window.addEventListener("bds:open-drawer", () => {
+    drawerOpen = true;
+  });
+
+  window.addEventListener("bds:close-drawer", () => {
+    closeDrawer();
+  });
+
+  export function toggleDrawerPublic() {
+    toggleDrawer();
+  }
 </script>
 
 <button id="bds-toggle" type="button" onclick={toggleDrawer} aria-label="Better DeepSeek">

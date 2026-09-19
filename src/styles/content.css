@@ -2031,16 +2031,71 @@ textarea.bds-input,
   color: var(--bds-text-tertiary);
 }
 
+/* ── Top Header Better DeepSeek Tool Button ── */
+.bds-header-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--bds-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  margin: 0 4px;
+  transition: all var(--bds-transition, 0.18s ease);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  vertical-align: middle;
+}
+
+.bds-header-tool-btn:hover {
+  background: var(--bds-bg-hover);
+  color: var(--bds-text-primary);
+  border-color: var(--bds-border);
+}
+
+.bds-header-tool-btn:active {
+  transform: scale(0.94);
+}
+
+.bds-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bds-header-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 5px #10b981;
+}
+
 /* ══════════════════════════════════
    Mobile Layout (viewport < 768px)
    ══════════════════════════════════ */
 @media (max-width: 767px) {
-  /* Root: anchored at bottom right, clear of input bar */
+  /* When the native header button is injected, hide the floating toggle entirely */
+  body.bds-has-header-btn #bds-toggle {
+    display: none !important;
+  }
+
+  /* Root: anchored at top right, NEVER at bottom over composer */
   #bds-root {
-    right: 14px;
+    position: fixed;
+    right: 12px;
     left: auto;
-    top: auto;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    bottom: auto;
     width: auto;
     align-items: flex-end;
     flex-direction: column;
@@ -2052,31 +2107,35 @@ textarea.bds-input,
     pointer-events: auto;
   }
 
-  /* Toggle: modern floating action capsule with active status */
+  /* Toggle: minimal 34px icon capsule docked cleanly at top right */
   #bds-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    height: 42px;
-    padding: 0 16px;
-    border-radius: 21px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-    background: var(--bds-accent);
-    color: #ffffff;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.18);
-    opacity: 0.96;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--bds-bg-elevated);
+    border: 1px solid var(--bds-border);
+    color: var(--bds-accent);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    opacity: 0.95;
     transition: transform 0.15s ease, opacity 0.15s ease;
   }
 
   #bds-toggle:active {
-    transform: scale(0.95);
-    opacity: 1;
+    transform: scale(0.92);
   }
 
-  .bds-toggle-full { display: inline; }
-  .bds-toggle-short { display: none; }
+  .bds-toggle-full { display: none !important; }
+  .bds-toggle-short { display: none !important; }
+
+  /* Hide separate project button from composer on mobile to avoid overcrowding */
+  .bds-project-btn {
+    display: none !important;
+  }
 
   /* Drawer: modern slide-up bottom sheet on mobile (Claude/ChatGPT style) */
   #bds-drawer {
@@ -2093,7 +2152,7 @@ textarea.bds-input,
     border-bottom: none;
     max-height: 88dvh;
     height: 88dvh;
-    padding: 12px 16px 20px;
+    padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
     z-index: 999999;
     box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
   }
@@ -2117,7 +2176,7 @@ textarea.bds-input,
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-    bottom: 80px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
     width: calc(100% - 32px);
     max-width: 400px;
   }

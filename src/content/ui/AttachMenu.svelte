@@ -452,6 +452,10 @@
 
   function updatePosition() {
     if (!menuRef) return;
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      dropdownStyle = "";
+      return;
+    }
     const rect = menuRef.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -824,13 +828,13 @@
   }
 
   function openProjectPanel(e) {
-    e.stopPropagation();
+    if (e && e.stopPropagation) e.stopPropagation();
     if (showProjectPanel) {
       showProjectPanel = false;
       return;
     }
     refreshProjectPanel();
-    if (projectBtnRef) {
+    if (projectBtnRef && typeof window !== "undefined" && window.innerWidth >= 768) {
       const rect = projectBtnRef.getBoundingClientRect();
       // Guard against overflow on narrow viewports: if the panel would
       // extend past the right edge, align it to the right instead.
@@ -842,6 +846,8 @@
       }
       projectPanelStyle =
         `bottom: calc(100vh - ${rect.top}px + 8px); left: ${left}px; max-width: ${Math.min(panelW, viewportW - 16)}px;`;
+    } else {
+      projectPanelStyle = "";
     }
     showProjectPanel = true;
   }
@@ -993,38 +999,25 @@
   {#if isOpen}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="bds-attach-backdrop" use:portal onclick={() => (isOpen = false)}></div>
+
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="bds-attach-dropdown"
       style={dropdownStyle}
       use:portal
       onclick={(event) => event.stopPropagation()}
     >
+      <div class="bds-sheet-handle" aria-hidden="true"></div>
+      <div class="bds-sheet-header">
+        <span class="bds-sheet-title">{t('attachMenu.buttonTitle')}</span>
+        <button type="button" class="bds-sheet-close" onclick={() => (isOpen = false)}>✕</button>
+      </div>
+
       {#if shouldShowUploadFile}
       <button type="button" class="bds-attach-item" onclick={handleUploadFile}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="bds-item-icon"
-          ><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-          ></path><polyline points="14 2 14 8 20 8"></polyline><line
-            x1="12"
-            y1="18"
-            x2="12"
-            y2="12"
-          ></line><line x1="9" y1="15" x2="15" y2="15"></line></svg
-        >
-        {t('attachMenu.uploadFile')}
-      </button>
-      {/if}
-      {#if shouldShowUploadFolder && supportsFolderUpload}
-        <button type="button" class="bds-attach-item" onclick={handleUploadFolder}>
+        <span class="bds-item-icon-box">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"
@@ -1036,86 +1029,174 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             class="bds-item-icon"
-            ><path
-              d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-            ></path><line x1="12" y1="11" x2="12" y2="17"></line><line
-              x1="9"
-              y1="14"
-              x2="15"
-              y2="14"
-            ></line></svg
+            ><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+            ></path><polyline points="14 2 14 8 20 8"></polyline><line
+              x1="12"
+              y1="18"
+              x2="12"
+              y2="12"
+            ></line><line x1="9" y1="15" x2="15" y2="15"></line></svg
           >
-          {t('attachMenu.uploadFolder')}
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">{t('attachMenu.uploadFile')}</span>
+          <span class="bds-item-desc">PDF, images, documents & code</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
+      </button>
+      {/if}
+
+      {#if shouldShowUploadFolder && supportsFolderUpload}
+        <button type="button" class="bds-attach-item" onclick={handleUploadFolder}>
+          <span class="bds-item-icon-box">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="bds-item-icon"
+              ><path
+                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+              ></path><line x1="12" y1="11" x2="12" y2="17"></line><line
+                x1="9"
+                y1="14"
+                x2="15"
+                y2="14"
+              ></line></svg
+            >
+          </span>
+          <span class="bds-item-content">
+            <span class="bds-item-title">{t('attachMenu.uploadFolder')}</span>
+            <span class="bds-item-desc">Read directory files via picker</span>
+          </span>
+          <span class="bds-item-arrow">›</span>
         </button>
       {/if}
-      {#if shouldShowGithub || shouldShowWeb}
-        <div class="bds-attach-divider"></div>
+
+      {#if shouldShowProject}
+        <button type="button" class="bds-attach-item" onclick={(e) => { isOpen = false; openProjectPanel(e); }}>
+          <span class="bds-item-icon-box">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="bds-item-icon"
+            >
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </span>
+          <span class="bds-item-content">
+            <span class="bds-item-title">{t('attachMenu.attachProject')}</span>
+            <span class="bds-item-desc">{panelActiveProjectId ? (panelProjects.find(p => p.id === panelActiveProjectId)?.name || "Active Project") : "Attach project files & context"}</span>
+          </span>
+          <span class="bds-item-arrow">›</span>
+        </button>
       {/if}
+
       {#if shouldShowGithub}
       <button type="button" class="bds-attach-item" onclick={handleGithubImport}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="bds-item-icon"
-          ><path
-            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-          ></path></svg
-        >
-        <span class="bds-attach-item-label">
-          <span>{t('attachMenu.githubRepo')}</span>
-          {#if hasGithubToken()}
-            <span
-              class="bds-github-auth-icon"
-              aria-label={t('attachMenu.githubAuthLabel')}
-              title={t('attachMenu.githubAuthLabel')}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="11"
-                height="11"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.15"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="5" y="11" width="14" height="10" rx="2"></rect>
-                <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
-              </svg>
-            </span>
-          {/if}
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            class="bds-item-icon"
+            ><path
+              d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+            ></path></svg
+          >
         </span>
+        <span class="bds-item-content">
+          <span class="bds-attach-item-label">
+            <span class="bds-item-title">{t('attachMenu.githubRepo')}</span>
+            {#if hasGithubToken()}
+              <span
+                class="bds-github-auth-icon"
+                aria-label={t('attachMenu.githubAuthLabel')}
+                title={t('attachMenu.githubAuthLabel')}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.15"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3"></path>
+                </svg>
+              </span>
+            {/if}
+          </span>
+          <span class="bds-item-desc">Clone and inspect repo files</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
       </button>
       {/if}
+
       {#if shouldShowWeb}
       <button type="button" class="bds-attach-item" onclick={handleWebImport}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="bds-item-icon"
-          ><circle cx="12" cy="12" r="10"></circle><line
-            x1="2"
-            y1="12"
-            x2="22"
-            y2="12"
-          ></line><path
-            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
-          ></path></svg
-        >
-        {t('attachMenu.fetchWebPage')}
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+            ><circle cx="12" cy="12" r="10"></circle><line
+              x1="2"
+              y1="12"
+              x2="22"
+              y2="12"
+            ></line><path
+              d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+            ></path></svg
+          >
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">{t('attachMenu.fetchWebPage')}</span>
+          <span class="bds-item-desc">Extract text and content from URL</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
       </button>
       {/if}
+
+      <div class="bds-attach-divider"></div>
+
+      <button type="button" class="bds-attach-item bds-attach-item-bds" onclick={() => { isOpen = false; window.dispatchEvent(new CustomEvent('bds:toggle-drawer')); }}>
+        <span class="bds-item-icon-box bds-item-icon-accent">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">Settings & MCP Tools</span>
+          <span class="bds-item-desc">Live MCP servers, prompts & rules</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
+      </button>
     </div>
   {/if}
 </div>
@@ -1255,6 +1336,10 @@
 {#if showProjectPanel}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="bds-attach-backdrop" use:portal onclick={() => (showProjectPanel = false)}></div>
+
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="bds-project-panel"
     style={projectPanelStyle}
@@ -1262,6 +1347,7 @@
     bind:this={projectPanelRef}
     onclick={(event) => event.stopPropagation()}
   >
+    <div class="bds-sheet-handle" aria-hidden="true"></div>
     <div class="bds-pp-header">
       <span class="bds-pp-label">{t('attachMenu.projectLabel')}</span>
       <select
@@ -1274,6 +1360,7 @@
           <option value={p.id}>{p.name}</option>
         {/each}
       </select>
+      <button type="button" class="bds-pp-close" onclick={() => (showProjectPanel = false)}>✕</button>
     </div>
 
     <p class="bds-pp-hint">
@@ -2109,5 +2196,177 @@
     display: flex;
     gap: 6px;
     justify-content: flex-end;
+  }
+
+  /* ─── Backdrop Overlay ─── */
+  .bds-attach-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 999998;
+    animation: bds-fade-in 0.18s ease;
+  }
+
+  .bds-sheet-handle,
+  .bds-sheet-header,
+  .bds-pp-close,
+  .bds-item-arrow,
+  .bds-item-desc {
+    display: none;
+  }
+
+  .bds-item-icon-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .bds-item-content {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  @media (max-width: 767px) {
+    .bds-project-btn {
+      display: none !important;
+    }
+
+    .bds-sheet-handle {
+      display: block;
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--bds-border-hover, rgba(255, 255, 255, 0.25));
+      margin: 2px auto 14px;
+    }
+
+    .bds-sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px 10px;
+      border-bottom: 1px solid var(--bds-border);
+      margin-bottom: 8px;
+    }
+
+    .bds-sheet-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--bds-text-primary);
+    }
+
+    .bds-sheet-close,
+    .bds-pp-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      color: var(--bds-text-tertiary);
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 50%;
+    }
+
+    .bds-sheet-close:active,
+    .bds-pp-close:active {
+      background: var(--bds-bg-hover);
+      color: var(--bds-text-primary);
+    }
+
+    .bds-attach-dropdown {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      top: auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 24px 24px 0 0 !important;
+      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5) !important;
+      animation: bds-sheet-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .bds-attach-item {
+      padding: 12px !important;
+      border-radius: 14px !important;
+      gap: 12px !important;
+      white-space: normal !important;
+    }
+
+    .bds-item-icon-box {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--bds-bg-elevated);
+      border: 1px solid var(--bds-border);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--bds-accent);
+      flex-shrink: 0;
+    }
+
+    .bds-item-icon-accent {
+      background: var(--bds-accent-glow);
+      border-color: var(--bds-accent);
+    }
+
+    .bds-item-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bds-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--bds-text-primary);
+    }
+
+    .bds-item-desc {
+      display: block;
+      font-size: 11px;
+      color: var(--bds-text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bds-item-arrow {
+      display: block;
+      color: var(--bds-text-tertiary);
+      font-size: 18px;
+      margin-left: auto;
+      opacity: 0.6;
+    }
+
+    .bds-project-panel {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      top: auto !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      max-height: 80vh !important;
+      border-radius: 24px 24px 0 0 !important;
+      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5) !important;
+      animation: bds-sheet-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+  }
+
+  @keyframes bds-sheet-slide-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 </style>
