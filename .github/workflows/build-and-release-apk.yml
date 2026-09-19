@@ -29,10 +29,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup Java 17
@@ -84,16 +84,27 @@ jobs:
         working-directory: android
         run: ./gradlew --no-daemon testDebugUnitTest
 
-      - name: Decode Keystore (Optional)
+      - name: Setup Signing Keystore
+        working-directory: android
         env:
           BDS_KEYSTORE: ${{ secrets.BDS_KEYSTORE }}
         run: |
           if [ -n "$BDS_KEYSTORE" ]; then
             echo "Decoding release keystore from secrets..."
-            echo "$BDS_KEYSTORE" | base64 --decode > android/ci-release.jks
+            echo "$BDS_KEYSTORE" | base64 --decode > ci-release.jks
           else
-            echo "Notice: BDS_KEYSTORE secret not set; build will use fallback signing configuration."
+            echo "Notice: BDS_KEYSTORE secret not set. Generating a standalone release keystore..."
+            keytool -genkeypair -v \
+              -keystore ci-release.jks \
+              -alias bds-release \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=BetterDeepSeek, OU=Android, O=BetterDeepSeek, L=Dhaka, ST=Dhaka, C=BD"
           fi
+          ls -la ci-release.jks
 
       - name: Build Android Release APK
         working-directory: android
@@ -109,13 +120,16 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          APK_RAW=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APK_RAW=$(find android/app/build/outputs/apk/release -name "*release*.apk" ! -name "*unaligned*" | head -n 1)
           if [ -z "$APK_RAW" ]; then
-            echo "Error: No release APK found!"
+            APK_RAW=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          fi
+
+          if [ -z "$APK_RAW" ]; then
+            echo "Error: No release APK found in android/app/build/outputs/apk/release!"
             exit 1
           fi
 
-          # Output filename format
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             APK_NAME="better-deepseek-v${VERSION}.apk"
           else
@@ -141,8 +155,8 @@ jobs:
         with:
           name: better-deepseek-apk
           path: |
-            ${{ steps.prep.outputs.apk_path }}
-            ${{ steps.prep.outputs.checksum_path }}
+            *.apk
+            *.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -198,7 +212,7 @@ jobs:
             #### 📲 Installation:
             1. Download the `.apk` file below.
             2. Open on your Android device (Android 8.0+ / SDK 26+).
-            3. Verify SHA256 checksum against `${{ steps.rel_cfg.outputs.apk_path }}.sha256`.
+            3. Verify SHA256 checksum with the attached `.sha256` file.
           files: |
             *.apk
             *.sha256

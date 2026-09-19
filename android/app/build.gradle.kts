@@ -38,9 +38,13 @@ android {
                 val keystoreFile = rootProject.file("ci-release.jks")
                 if (keystoreFile.exists()) {
                     storeFile = keystoreFile
-                    storePassword = System.getenv("BDS_KEYSTORE_PASSWORD") ?: ""
-                    keyAlias = System.getenv("BDS_KEY_ALIAS") ?: ""
-                    keyPassword = System.getenv("BDS_KEY_PASSWORD") ?: ""
+                    val envStorePass = System.getenv("BDS_KEYSTORE_PASSWORD")
+                    val envAlias = System.getenv("BDS_KEY_ALIAS")
+                    val envKeyPass = System.getenv("BDS_KEY_PASSWORD")
+
+                    storePassword = if (!envStorePass.isNullOrEmpty()) envStorePass else "android"
+                    keyAlias = if (!envAlias.isNullOrEmpty()) envAlias else "bds-release"
+                    keyPassword = if (!envKeyPass.isNullOrEmpty()) envKeyPass else "android"
                 } else {
                     // Fallback to debug keystore when release keystore is not supplied
                     val debugConfig = getByName("debug")
