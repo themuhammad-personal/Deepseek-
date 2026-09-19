@@ -701,14 +701,18 @@
 
   $effect(() => {
     if (activeTab === "mcp") {
+      advancedOpen = true;
       subMcpOpen = true;
       subResearchOpen = true;
     } else if (activeTab === "chat") {
+      advancedOpen = true;
       subInjectionOpen = true;
       subChatOpen = true;
     } else if (activeTab === "projects") {
+      advancedOpen = true;
       subProjectsOpen = true;
     } else if (activeTab === "settings") {
+      advancedOpen = true;
       subCSSOpen = true;
       subVoiceOpen = true;
       subIntegrationsOpen = true;
@@ -722,7 +726,8 @@
     if (q.length > 0) return true;
     if (activeTab === "all") return true;
     if (activeTab === "mcp") return sectionKey === "subMcp" || sectionKey === "subResearch";
-    if (activeTab === "chat") return sectionKey === "subInjection" || sectionKey === "subChat";
+    if (activeTab === "chat") return sectionKey === "systemPrompts" || sectionKey === "subInjection" || sectionKey === "subChat";
+    if (activeTab === "prompts") return sectionKey === "systemPrompts";
     if (activeTab === "projects") return sectionKey === "subProjects";
     if (activeTab === "settings") return sectionKey === "subCSS" || sectionKey === "subVoice" || sectionKey === "subIntegrations" || sectionKey === "subLanguage" || sectionKey === "subUtilities";
     return false;
@@ -1366,6 +1371,7 @@
   }
 </script>
 
+{#if isTabMatch('systemPrompts')}
 <div class="bds-section-title">
   <span class="bds-icon-inline">
     <svg
@@ -1482,6 +1488,7 @@
     </button>
   </div>
 {/if}
+{/if}
 
 {#if showPromptEditor}
   <div class="bds-modal-overlay">
@@ -1572,6 +1579,7 @@
   <p style="font-size: 10px; opacity: 0.5; margin: 2px 0 12px;">{t('settings.autoSaved')}</p>
 {/if}
 
+{#if activeTab === "all" || !activeTab}
 <button
   type="button"
   class="bds-advanced-toggle"
@@ -1597,8 +1605,9 @@
     </svg>
   </span>
 </button>
+{/if}
 
-<div class="bds-advanced-content" class:open={advancedOpen}>
+<div class="bds-advanced-content" class:open={advancedOpen || activeTab !== "all"}>
   {#if advancedOpen}
     <div class="bds-advanced-search-wrapper">
       <div class="bds-advanced-search-input-wrapper">

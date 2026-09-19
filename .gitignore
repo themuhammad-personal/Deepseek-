@@ -45,6 +45,7 @@ android/ci-release.jks
 *.apk
 *.sha256
 android/local.properties
+uploads/
 better-deepseek-firefox.zip
 better-deepseek-source.zip
 better-deepseek-chrome.zip
