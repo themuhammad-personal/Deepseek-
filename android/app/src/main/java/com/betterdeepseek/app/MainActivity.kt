@@ -390,7 +390,9 @@ class MainActivity : ComponentActivity() {
                     webViewClient = bdsWebViewClient()
                     webChromeClient = bdsWebChromeClient()
                     bridge.evaluateJs = { script -> evaluateJavascript(script, null) }
-                    isVerticalScrollBarEnabled = true
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                    overScrollMode = View.OVER_SCROLL_NEVER
                     setBackgroundColor(if (isPageDark) PAGE_BG_DARK else PAGE_BG_LIGHT)
                 }
 
@@ -446,10 +448,25 @@ class MainActivity : ComponentActivity() {
                         val popup = popupWebView
                         if (popup != null) {
                             closePopup(popup)
-                        } else if (webView.canGoBack()) {
-                            webView.goBack()
-                        } else {
-                            moveTaskToBack(true)
+                            return
+                        }
+                        webView.evaluateJavascript(
+                            "(function(){" +
+                            "  var closeBtn = document.querySelector('#bds-close, .bds-sheet-close, .bds-modal-close, .bds-image-close-btn, .bds-dr-revision-close, .bds-cmd-help-close, .bds-github-close');" +
+                            "  if (closeBtn && closeBtn.offsetParent !== null) {" +
+                            "    closeBtn.click(); return true;" +
+                            "  }" +
+                            "  return false;" +
+                            "})()",
+                        ) { result ->
+                            if (result == "true" || result == "\"true\"") {
+                                return@evaluateJavascript
+                            }
+                            if (webView.canGoBack()) {
+                                webView.goBack()
+                            } else {
+                                moveTaskToBack(true)
+                            }
                         }
                     }
                 }

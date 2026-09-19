@@ -92,17 +92,20 @@ jobs:
           if [ -n "$BDS_KEYSTORE" ]; then
             echo "Decoding release keystore from secrets..."
             echo "$BDS_KEYSTORE" | base64 --decode > ci-release.jks
+          elif [ -f "app/superdeepseek-release.jks" ]; then
+            echo "Using permanent Super DeepSeek release keystore..."
+            cp app/superdeepseek-release.jks ci-release.jks
           else
-            echo "Notice: BDS_KEYSTORE secret not set. Generating a standalone release keystore..."
+            echo "Generating fallback release keystore..."
             keytool -genkeypair -v \
               -keystore ci-release.jks \
-              -alias bds-release \
+              -alias superdeepseek \
               -keyalg RSA \
               -keysize 2048 \
-              -validity 10000 \
-              -storepass android \
-              -keypass android \
-              -dname "CN=BetterDeepSeek, OU=Android, O=BetterDeepSeek, L=Dhaka, ST=Dhaka, C=BD"
+              -validity 20000 \
+              -storepass superdeepseek \
+              -keypass superdeepseek \
+              -dname "CN=SuperDeepSeek, OU=Mobile, O=SuperDeepSeek, L=Dhaka, ST=Dhaka, C=BD"
           fi
           ls -la ci-release.jks
 
@@ -110,9 +113,9 @@ jobs:
         working-directory: android
         run: ./gradlew --no-daemon assembleRelease -PbdsBuildId=${{ github.run_number }}
         env:
-          BDS_KEYSTORE_PASSWORD: ${{ secrets.BDS_KEYSTORE_PASSWORD }}
-          BDS_KEY_ALIAS: ${{ secrets.BDS_KEY_ALIAS }}
-          BDS_KEY_PASSWORD: ${{ secrets.BDS_KEY_PASSWORD }}
+          BDS_KEYSTORE_PASSWORD: ${{ secrets.BDS_KEYSTORE_PASSWORD || 'superdeepseek' }}
+          BDS_KEY_ALIAS: ${{ secrets.BDS_KEY_ALIAS || 'superdeepseek' }}
+          BDS_KEY_PASSWORD: ${{ secrets.BDS_KEY_PASSWORD || 'superdeepseek' }}
 
       - name: Prepare APK and Compute Checksums
         id: prep
@@ -131,13 +134,16 @@ jobs:
           fi
 
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            APK_NAME="better-deepseek-v${VERSION}.apk"
+            APK_NAME="super-deepseek-v${VERSION}.apk"
           else
-            APK_NAME="better-deepseek-latest.apk"
+            APK_NAME="super-deepseek-latest.apk"
           fi
 
           cp "$APK_RAW" "$APK_NAME"
+          # Also keep better-deepseek-latest.apk for backward compatibility with older updaters
+          cp "$APK_RAW" "better-deepseek-latest.apk"
           sha256sum "$APK_NAME" > "${APK_NAME}.sha256"
+          sha256sum "better-deepseek-latest.apk" > "better-deepseek-latest.apk.sha256"
           
           echo "apk_path=$APK_NAME" >> "$GITHUB_OUTPUT"
           echo "checksum_path=${APK_NAME}.sha256" >> "$GITHUB_OUTPUT"
@@ -183,12 +189,12 @@ jobs:
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
             echo "is_latest=true" >> "$GITHUB_OUTPUT"
-            echo "title=Better DeepSeek v${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "title=Super DeepSeek v${VERSION}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=latest" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             echo "is_latest=false" >> "$GITHUB_OUTPUT"
-            echo "title=Better DeepSeek (Continuous Build #${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+            echo "title=Super DeepSeek (Continuous Build #${{ github.run_number }})" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release
@@ -197,20 +203,21 @@ jobs:
           tag_name: ${{ steps.rel_cfg.outputs.tag }}
           name: ${{ steps.rel_cfg.outputs.title }}
           body: |
-            ### 🤖 Better DeepSeek Standalone Android App
+            ### ⚡ Super DeepSeek Standalone Android App
 
             **Version:** `${{ steps.rel_cfg.outputs.version }}`
             **Build ID:** `${{ github.run_number }}`
             **Commit:** `${{ github.sha }}`
 
             #### 🚀 Highlights & Features:
-            - **Modern Mobile UI/UX**: Claude & ChatGPT style bottom-sheet drawer with smooth drag handle, segmented category navigation tabs, and instant filter search.
-            - **Full Custom MCP Server Support**: Native Android OkHttp client with JSON-RPC 2.0, Server-Sent Events (SSE), and cleartext LAN support (`http://10.0.2.2`, `http://192.168.x.x`, `http://localhost`).
-            - **Zero Feature Loss**: All custom prompts, prompt library, skills, system instructions, project workspaces, custom commands, and visualization charts are preserved and accessible.
-            - **Native YouTube Transcripts**: Integrated native video transcript extraction.
+            - **Super DeepSeek Branding & Aesthetic**: Completely reimagined ChatGPT & Claude level mobile interface with custom SVG line iconography, no emojis, and beautiful card grouping.
+            - **Seamless In-Place Updates**: Permanent cryptographic release keystore ensuring future updates install smoothly on top without needing to uninstall previous builds.
+            - **Ready-to-Use Preset MCP Servers**: 1-tap activation for Brave Search, Web Fetch, Weather & Time, GitHub, and local Termux mobile agents.
+            - **50MB Uploads & Document Support**: Full PDF, Office DOCX/XLSX/PPTX, ZIP, and image support with seamless mid-conversation uploads.
+            - **Deep Research & Custom Commands**: Integrated autonomous web research and slash commands inside the native Plus (+) sheet.
 
             #### 📲 Installation:
-            1. Download the `.apk` file below.
+            1. Download the `super-deepseek-latest.apk` (or `better-deepseek-latest.apk`) below.
             2. Open on your Android device (Android 8.0+ / SDK 26+).
             3. Verify SHA256 checksum with the attached `.sha256` file.
           files: |

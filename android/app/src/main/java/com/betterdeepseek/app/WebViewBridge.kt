@@ -9,6 +9,9 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.os.VibrationEffect
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Base64
@@ -668,6 +671,45 @@ class WebViewBridge(
         } catch (t: Throwable) {
             Log.e(TAG, "downloadBlob failed for $safeName", t)
             showToast("Download error: ${t.message ?: "unknown"}")
+        }
+    }
+
+    /**
+     * Perform native physical haptic vibration for crisp Android touch interaction.
+     */
+    @JavascriptInterface
+    fun performHaptic(type: String?) {
+        try {
+            val vibrator =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val manager =
+                                context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE)
+                                        as? VibratorManager
+                        manager?.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    } ?: return
+
+            if (!vibrator.hasVibrator()) return
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val effect =
+                        when (type?.lowercase()) {
+                            "heavy", "error" ->
+                                    VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE)
+                            "medium" ->
+                                    VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+                            else ->
+                                    VibrationEffect.createOneShot(12, VibrationEffect.DEFAULT_AMPLITUDE)
+                        }
+                vibrator.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(15)
+            }
+        } catch (_: Throwable) {
+            // Silently ignore if device does not support vibration
         }
     }
 

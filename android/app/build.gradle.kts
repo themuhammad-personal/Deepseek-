@@ -8,7 +8,7 @@ plugins {
 // rebuilds on every push to `main` — would otherwise have no way to tell two builds of the same
 // version apart. Left at 0 for local builds, which the updater reads as "not a CI build" and
 // falls back to its timestamp heuristic for.
-val bdsBuildId: Long = (project.findProperty("BdsBuildId") as String?)?.toLongOrNull() ?: 0L
+val bdsBuildId: Long = (project.findProperty("bdsBuildId") as String?)?.toLongOrNull() ?: 0L
 
 android {
     namespace = "com.betterdeepseek.app"
@@ -22,9 +22,10 @@ android {
         applicationId = "com.betterdeepseek.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
+        // Monotonically increasing versionCode ensures updates install smoothly over older versions
+        versionCode = (1000L + bdsBuildId).toInt()
         // Keep in sync with package.json "version" and static/manifest.json "version".
-        versionName = "0.1.14"
+        versionName = "1.0.0"
         buildConfigField("long", "BUILD_ID", "${bdsBuildId}L")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,16 +36,19 @@ android {
         }
         signingConfigs {
             create("release") {
-                val keystoreFile = rootProject.file("ci-release.jks")
-                if (keystoreFile.exists()) {
-                    storeFile = keystoreFile
+                val permanentKeystore = file("superdeepseek-release.jks").takeIf { it.exists() }
+                    ?: rootProject.file("ci-release.jks").takeIf { it.exists() }
+                    ?: rootProject.file("android/app/superdeepseek-release.jks").takeIf { it.exists() }
+
+                if (permanentKeystore != null && permanentKeystore.exists()) {
+                    storeFile = permanentKeystore
                     val envStorePass = System.getenv("BDS_KEYSTORE_PASSWORD")
                     val envAlias = System.getenv("BDS_KEY_ALIAS")
                     val envKeyPass = System.getenv("BDS_KEY_PASSWORD")
 
-                    storePassword = if (!envStorePass.isNullOrEmpty()) envStorePass else "android"
-                    keyAlias = if (!envAlias.isNullOrEmpty()) envAlias else "bds-release"
-                    keyPassword = if (!envKeyPass.isNullOrEmpty()) envKeyPass else "android"
+                    storePassword = if (!envStorePass.isNullOrEmpty()) envStorePass else "superdeepseek"
+                    keyAlias = if (!envAlias.isNullOrEmpty()) envAlias else "superdeepseek"
+                    keyPassword = if (!envKeyPass.isNullOrEmpty()) envKeyPass else "superdeepseek"
                 } else {
                     // Fallback to debug keystore when release keystore is not supplied
                     val debugConfig = getByName("debug")

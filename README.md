@@ -1,15 +1,15 @@
-# 📱 DeepSeek Mobile — Standalone Android Edition
+# ⚡ Super DeepSeek — Standalone Android Edition
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/themuhammad-personal/Deepseek-/main/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="DeepSeek Mobile Logo" width="108" height="108" style="border-radius: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
+  <img src="https://raw.githubusercontent.com/themuhammad-personal/Deepseek-/main/android/app/src/main/res/drawable/ic_launcher_foreground.xml" alt="Super DeepSeek Logo" width="108" height="108" style="border-radius: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
 </p>
 
 <p align="center">
-  <b>A modern, standalone Android client for DeepSeek AI featuring Claude & ChatGPT-style fluid mobile interfaces, Model Context Protocol (MCP) tools, Deep Research, and persistent agentic memory.</b>
+  <b>A modern, standalone Android client for DeepSeek AI featuring Claude & ChatGPT-style fluid mobile interfaces, 1-Tap Preset Model Context Protocol (MCP) tools, Deep Research, 50MB file uploads, and seamless in-place updates.</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/themuhammad-personal/Deepseek-/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
+  <a href="https://github.com/themuhammad-personal/Deepseek-/releases/latest"><img src="https://img.shields.io/badge/Download-Super_DeepSeek_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
   <a href="https://github.com/themuhammad-personal/Deepseek-/actions/workflows/build-and-release-apk.yml"><img src="https://img.shields.io/github/actions/workflow/status/themuhammad-personal/Deepseek-/build-and-release-apk.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Build" alt="Build Status" /></a>
   <a href="https://github.com/themuhammad-personal/Deepseek-/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-brightgreen?style=for-the-badge&logo=android" alt="Android 8.0+" />
@@ -20,9 +20,9 @@
 
 ## 🌟 Overview & Highlights
 
-**DeepSeek Mobile** transforms the DeepSeek experience into a first-class, standalone native Android application. It combines DeepSeek's frontier reasoning models with an ergonomic, distraction-free mobile user interface inspired by the best mobile apps like **ChatGPT** and **Claude**.
+**Super DeepSeek** transforms the DeepSeek experience into a first-class, standalone native Android application. It combines DeepSeek's frontier reasoning models with an ergonomic, distraction-free mobile user interface inspired by the best mobile apps like **ChatGPT** and **Claude**.
 
-Unlike generic web wrappers, **DeepSeek Mobile** features a native Kotlin runtime layer with **OkHttp**, bidirectional JavaScript bridges, hardware-accelerated file pickers, local camera integration, custom **Model Context Protocol (MCP)** tool execution, and an adaptive overlay built with modern **Svelte 5**.
+Unlike generic web wrappers, **Super DeepSeek** features a native Kotlin runtime layer with **OkHttp**, bidirectional JavaScript bridges, hardware-accelerated file pickers, local camera integration, custom **Model Context Protocol (MCP)** tool execution, and an adaptive overlay built with modern **Svelte 5**.
 
 ---
 
@@ -62,7 +62,7 @@ Unlike generic web wrappers, **DeepSeek Mobile** features a native Kotlin runtim
 ## 🏗️ Architecture & Technology Stack
 
 ```
-DeepSeek Mobile (Standalone Android)
+Super DeepSeek (Standalone Android)
 ├── Android Layer (Kotlin)
 │   ├── MainActivity.kt           — Hardware-accelerated WebView, lifecycle, permissions
 │   ├── WebViewBridge.kt          — Fast JavaScript-to-Kotlin bridge (File I/O, MCP, Haptics)
@@ -97,7 +97,7 @@ DeepSeek Mobile (Standalone Android)
 2. Download the latest `better-deepseek-latest.apk` or versioned release.
 3. Open the APK file on your Android device (Android 8.0 or newer).
 4. If prompted, allow installation from unknown sources.
-5. Launch **DeepSeek Mobile** and log in to your account.
+5. Launch **Super DeepSeek** and log in to your account.
 
 ---
 
@@ -159,4 +159,4 @@ Every commit pushed to the `main` branch or release tag triggers GitHub Actions:
 
 This project is open-source software licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
-*Disclaimer: DeepSeek Mobile is an independent, community-driven project created to improve user experience on mobile devices. It is not affiliated with, endorsed by, or sponsored by DeepSeek AI.*
+*Disclaimer: Super DeepSeek is an independent, community-driven project created to improve user experience on mobile devices. It is not affiliated with, endorsed by, or sponsored by DeepSeek AI.*

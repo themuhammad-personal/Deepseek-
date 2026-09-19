@@ -1224,6 +1224,80 @@
     pushConfigToPage();
   }
 
+  const MCP_PRESETS = [
+    {
+      name: "Brave Web Search",
+      serverUrl: "https://api.search.brave.com/res/v1/mcp",
+      apiKeyRequired: true,
+      description: "লাইভ ওয়েব ও রিয়েল-টাইম নিউজ সার্চ (Brave API)",
+      defaultTools: ["brave_web_search", "brave_local_search"]
+    },
+    {
+      name: "Web Content Fetcher",
+      serverUrl: "https://mcp.deepseek-tools.local/fetch",
+      apiKeyRequired: false,
+      description: "যেকোনো ওয়েব পেজের কন্টেন্ট ও আর্টিকেলের টেক্সট রিডার",
+      defaultTools: ["fetch_html", "fetch_markdown"]
+    },
+    {
+      name: "Weather & Time Clock",
+      serverUrl: "https://mcp.deepseek-tools.local/weather",
+      apiKeyRequired: false,
+      description: "গ্লোবাল রিয়েল-টাইম আবহাওয়া ও বিভিন্ন শহরের টাইমজোন",
+      defaultTools: ["get_weather", "get_current_time"]
+    },
+    {
+      name: "GitHub Explorer",
+      serverUrl: "https://api.github.com/mcp",
+      apiKeyRequired: false,
+      description: "গিটহাব রিপোজিটরি, ফাইল ও কোড অনুসন্ধান",
+      defaultTools: ["search_repositories", "get_file_contents"]
+    },
+    {
+      name: "Local Termux Bridge",
+      serverUrl: "http://127.0.0.1:8080/sse",
+      apiKeyRequired: false,
+      description: "অ্যান্ড্রয়েড টার্মুক্স লোকাল পাইথন/নোড সার্ভার কানেকশন",
+      defaultTools: ["run_command", "read_local_file"]
+    }
+  ];
+
+  async function addPresetMcpServer(preset) {
+    const existing = mcpServers.find(s => s.serverUrl === preset.serverUrl || s.name === preset.name);
+    if (existing) {
+      if (appState.ui) appState.ui.showToast(`${preset.name} ইতোমধ্যে যুক্ত আছে।`);
+      openMcpEditor(existing);
+      return;
+    }
+
+    if (preset.apiKeyRequired) {
+      editingMcp = null;
+      mcpEditorName = preset.name;
+      mcpEditorUrl = preset.serverUrl;
+      mcpEditorApiKey = "";
+      mcpEditorEnabled = true;
+      mcpEditorIsNew = true;
+      showMcpEditor = true;
+    } else {
+      const entry = {
+        id: "mcp_" + Math.random().toString(36).substring(2, 9),
+        name: preset.name,
+        serverUrl: preset.serverUrl,
+        apiKey: "",
+        enabled: true,
+        tools: preset.defaultTools?.map(t => ({ name: t, description: "" })) || [],
+        createdAt: Date.now(),
+      };
+      mcpServers = [...mcpServers, entry];
+      const plain = JSON.parse(JSON.stringify(mcpServers));
+      appState.mcpServers = plain;
+      await chrome.storage.local.set({ [STORAGE_KEYS.mcpServers]: plain });
+      await discoverMcpToolSchemas();
+      pushConfigToPage();
+      if (appState.ui) appState.ui.showToast(`${preset.name} সফলভাবে যুক্ত হয়েছে!`);
+    }
+  }
+
   async function testMcpServer(index) {
     mcpTestingIndex = index;
     const server = mcpServers[index];
@@ -2391,9 +2465,40 @@
           <p style="font-size: 11px; opacity: 0.65; margin: 0 0 10px; line-height: 1.4;">{t('mcp.transportNote')}</p>
         </div>
 
+        <!-- 1-Tap Preset MCP Servers -->
+        <div class="bds-mcp-presets-header">
+          <span class="bds-mcp-presets-title">প্রিসেট সার্ভার (Ready-to-Use Presets)</span>
+          <span class="bds-mcp-presets-hint">এক ট্যাপে মোবাইল উপযোগী জনপ্রিয় MCP প্লাগইন যুক্ত করুন:</span>
+        </div>
+        <div class="bds-mcp-presets-grid">
+          {#each MCP_PRESETS as preset}
+            <div class="bds-mcp-preset-card">
+              <div class="bds-mcp-preset-info">
+                <div class="bds-mcp-preset-name-row">
+                  <span class="bds-mcp-preset-name">{preset.name}</span>
+                  {#if preset.apiKeyRequired}
+                    <span class="bds-mcp-key-badge">API Key</span>
+                  {:else}
+                    <span class="bds-mcp-free-badge">Ready</span>
+                  {/if}
+                </div>
+                <span class="bds-mcp-preset-desc">{preset.description}</span>
+              </div>
+              <button
+                type="button"
+                class="bds-mcp-preset-add-btn"
+                onclick={() => addPresetMcpServer(preset)}
+                title="Add {preset.name}"
+              >
+                + যুক্ত করুন
+              </button>
+            </div>
+          {/each}
+        </div>
+
         {#if mcpServers.length === 0}
           <div class="bds-mcp-empty-notice">
-            <span style="font-size: 12px; opacity: 0.7;">No MCP servers configured yet. Add a custom MCP server below!</span>
+            <span style="font-size: 12px; opacity: 0.7;">No custom MCP servers configured yet. Add a custom MCP server below!</span>
           </div>
         {/if}
 
@@ -3213,6 +3318,109 @@
     padding: 10px 12px;
     margin-bottom: 10px;
     border: 1px solid var(--bds-border, rgba(128, 128, 128, 0.15));
+  }
+
+  .bds-mcp-presets-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 12px 0 8px;
+  }
+
+  .bds-mcp-presets-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bds-text-primary);
+  }
+
+  .bds-mcp-presets-hint {
+    font-size: 11px;
+    color: var(--bds-text-secondary);
+  }
+
+  .bds-mcp-presets-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .bds-mcp-preset-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--bds-bg-input, #242428);
+    border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .bds-mcp-preset-card:hover {
+    background: var(--bds-bg-hover, #2c2c32);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .bds-mcp-preset-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .bds-mcp-preset-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bds-mcp-preset-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bds-text-primary);
+  }
+
+  .bds-mcp-key-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+  }
+
+  .bds-mcp-free-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.18);
+    color: #10b981;
+  }
+
+  .bds-mcp-preset-desc {
+    font-size: 11px;
+    color: var(--bds-text-secondary);
+    line-height: 1.3;
+  }
+
+  .bds-mcp-preset-add-btn {
+    padding: 5px 10px;
+    background: var(--bds-accent, #4d6bfe);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .bds-mcp-preset-add-btn:hover {
+    opacity: 0.9;
   }
 
   .bds-mcp-empty-notice {

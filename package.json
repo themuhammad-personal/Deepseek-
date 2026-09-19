@@ -1,7 +1,7 @@
 {
-  "name": "deepseek-android",
-  "version": "0.1.14",
-  "description": "DeepSeek Mobile — Standalone Android Native App with Modern ChatGPT & Claude UI, Model Context Protocol (MCP) and Agentic Tools",
+  "name": "super-deepseek-android",
+  "version": "1.0.0",
+  "description": "Super DeepSeek — Standalone Android Native App with Modern ChatGPT & Claude UI, Model Context Protocol (MCP) and Agentic Tools",
   "homepage": "https://github.com/themuhammad-personal/Deepseek-",
   "repository": {
     "type": "git",

@@ -447,6 +447,9 @@
 
   function toggleMenu(e) {
     e.stopPropagation();
+    if (typeof window !== "undefined" && window.AndroidBridge?.performHaptic) {
+      window.AndroidBridge.performHaptic("light");
+    }
     if (!isOpen) {
       updatePosition();
       isOpen = true;
