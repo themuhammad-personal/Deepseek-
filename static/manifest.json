@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Better DeepSeek",
-  "version": "0.1.14",
+  "name": "Super DeepSeek",
+  "version": "1.0.0",
   "description": "Enhanced UX layer for DeepSeek with hidden prompts, tools, memory, document generation, and long-work packaging.",
   "permissions": [
     "storage"
@@ -49,7 +49,7 @@
     ]
   },
   "action": {
-    "default_title": "Better DeepSeek"
+    "default_title": "Super DeepSeek"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'",

@@ -1,162 +1,175 @@
-# ⚡ Super DeepSeek — Standalone Android Edition
+<p align="center">
+  <img src="docs/super-deepseek-logo.png" alt="Super DeepSeek Icon" width="140" height="140" style="border-radius: 32px; box-shadow: 0 16px 40px rgba(0, 229, 255, 0.35);" />
+</p>
+
+<h1 align="center">⚡ Super DeepSeek (Android Edition)</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/themuhammad-personal/Deepseek-/main/android/app/src/main/res/drawable/ic_launcher_foreground.xml" alt="Super DeepSeek Logo" width="108" height="108" style="border-radius: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);" />
+  <b>Next-Generation Standalone Android Client for DeepSeek AI</b><br>
+  <i>Featuring Claude & ChatGPT-level fluid mobile UX, 1-Tap Preset Model Context Protocol (MCP) agents, Deep Research, 50MB document uploads, and seamless in-place updates.</i>
 </p>
 
 <p align="center">
-  <b>A modern, standalone Android client for DeepSeek AI featuring Claude & ChatGPT-style fluid mobile interfaces, 1-Tap Preset Model Context Protocol (MCP) tools, Deep Research, 50MB file uploads, and seamless in-place updates.</b>
-</p>
-
-<p align="center">
-  <a href="https://github.com/themuhammad-personal/Deepseek-/releases/latest"><img src="https://img.shields.io/badge/Download-Super_DeepSeek_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
-  <a href="https://github.com/themuhammad-personal/Deepseek-/actions/workflows/build-and-release-apk.yml"><img src="https://img.shields.io/github/actions/workflow/status/themuhammad-personal/Deepseek-/build-and-release-apk.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Build" alt="Build Status" /></a>
+  <a href="https://github.com/themuhammad-personal/Deepseek-/releases/latest"><img src="https://img.shields.io/badge/Download_APK-Super_DeepSeek_v1.0.0-00E5FF?style=for-the-badge&logo=android&logoColor=black" alt="Download Super DeepSeek APK" /></a>
+  <a href="https://github.com/themuhammad-personal/Deepseek-/actions/workflows/build-and-release-apk.yml"><img src="https://img.shields.io/github/actions/workflow/status/themuhammad-personal/Deepseek-/build-and-release-apk.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Pipeline" alt="Build Status" /></a>
   <a href="https://github.com/themuhammad-personal/Deepseek-/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License: MIT" /></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-brightgreen?style=for-the-badge&logo=android" alt="Android 8.0+" />
-  <img src="https://img.shields.io/badge/Language-Bangla%20%26%20English-orange?style=for-the-badge" alt="Multi-Language" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-8.0%2B%20(API%2026%2B)-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0+" />
+  <img src="https://img.shields.io/badge/Tests-105%20Suites%20%7C%201%2C556%20Passed-brightgreen?style=flat-square&logo=vitest&logoColor=white" alt="Tests 100% Passed" />
+  <img src="https://img.shields.io/badge/Upload%20Cap-50MB%20Docs%20%2B%2025MB%20Images-blue?style=flat-square" alt="50MB Upload Cap" />
+  <img src="https://img.shields.io/badge/Updates-Permanent%20Keystore%20Signed-indigo?style=flat-square" alt="In-Place Updates" />
+  <img src="https://img.shields.io/badge/Language-বাংলা%20%26%20English-orange?style=flat-square" alt="Bilingual" />
 </p>
 
 ---
 
-## 🌟 Overview & Highlights
+## 🌟 Why Super DeepSeek?
 
-**Super DeepSeek** transforms the DeepSeek experience into a first-class, standalone native Android application. It combines DeepSeek's frontier reasoning models with an ergonomic, distraction-free mobile user interface inspired by the best mobile apps like **ChatGPT** and **Claude**.
+DeepSeek has established itself as one of the world's most capable open-weights reasoning and coding models. However, standard browser interfaces on mobile devices often suffer from web clutter, cramped buttons, hardcoded file upload limits, and awkward touch controls.
 
-Unlike generic web wrappers, **Super DeepSeek** features a native Kotlin runtime layer with **OkHttp**, bidirectional JavaScript bridges, hardware-accelerated file pickers, local camera integration, custom **Model Context Protocol (MCP)** tool execution, and an adaptive overlay built with modern **Svelte 5**.
-
----
-
-## ✨ Key Features
-
-### 1. 🎨 Claude & ChatGPT Mobile Design
-- **Single Rounded Action Capsule**: Replaces cluttered web buttons with a clean, unified composer.
-  - **Left Cluster**: Native DeepSeek toggles for **DeepThink** (Atom icon) and **Web Search** (Globe icon) sit side by side without overlapping.
-  - **Right Cluster**: Minimalist circular **Plus (+)** button and **Send** button with micro-interactions.
-- **Ergonomic Bottom Sheet**: Tapping the Plus (+) button opens a smooth slide-up bottom sheet featuring SVG line icons (zero emoji clutter), safe-area padding, and dark-mode backdrop blur.
-- **Pure Localized Typography**: Clean native sans-serif typography (`-apple-system, Roboto, sans-serif`) with full, institutional Bengali (`bn`) and English (`en`) support — eliminating mixed-language gibberish.
-- **Clean Grouped Settings**: Sub-screens arranged in iOS-style rounded cards (`16px border-radius`) with smooth animated switch toggles (`#10b981` emerald active state) and organized categories.
-- **Ad & Banner Removal**: Automatically hides promotional web artifacts like *"অ্যাপ পান"* (Get App) headers and duplicate drawer download links across all screen sizes.
-
-### 2. 🔌 Model Context Protocol (MCP) Tools on Android
-- **Native OkHttp Network Engine**: Built-in native Android HTTP bridge supporting standard **JSON-RPC 2.0** and **Server-Sent Events (SSE)** streaming.
-- **Local & LAN Connectivity**: Configured `network_security_config.xml` allows connections to local development environments:
-  - Emulator host: `http://10.0.2.2:<port>`
-  - Local device loopback: `http://127.0.0.1:<port>`
-  - Local WiFi LAN: `http://192.168.x.x:<port>`
-- **Live Tool Discovery**: AI automatically queries available tools from registered MCP servers and executes them in-flight with real-time argument streaming and structured results.
-- **Authentication**: Supports Bearer tokens, custom headers (`X-API-Key`), and query parameters.
-
-### 3. 🧠 Deep Research & Agentic Intelligence
-- **Deep Research**: Automated multi-step web research with configurable search breadth, deep fetch recursions, and smart source deduplication.
-- **Context Guard**: Real-time token consumption tracking and context window guards to prevent prompt overflow.
-- **Persistent Cross-Session Memory**: Store user preferences, facts, and rules that persist across chats and devices.
-- **Custom System Prompts & Personas**: Create and toggle specialized system instructions, coding personas, and domain knowledge rules.
-
-### 4. 🎙️ Voice & Media Capabilities
-- **Speech-to-Text (STT)**: Direct voice input with real-time audio transcription and optional auto-submit.
-- **Text-to-Speech (TTS)**: Automatic or on-demand natural voice playback of model responses.
-- **Native Media Picker**: Direct access to camera capture, photo library, document files, and multi-file directory workspaces.
+**Super DeepSeek** bridges this gap by transforming DeepSeek into a **premier, standalone native Android application**. It pairs frontier intelligence (**DeepSeek-V3** & **DeepSeek-R1**) with the ergonomic, distraction-free refinement found in world-class mobile apps like **Claude** and **ChatGPT**.
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+## 📊 Feature Comparison
+
+| Feature | Standard Mobile Web | Generic Wrappers | ⚡ Super DeepSeek |
+| :--- | :---: | :---: | :---: |
+| **Mobile Interface** | Cluttered web buttons | Static iframe | **Claude & ChatGPT-style rounded capsule & bottom sheets** |
+| **Iconography** | Low-res emoji icons | Mixed web icons | **100% Vector Line SVG (Crisp on all DPIs)** |
+| **File Upload Limit** | Restricted (2 MB) | Fails on large files | **50 MB Documents + 25 MB Photos** |
+| **Document Formats** | Plain text only | Dropped as binary | **PDF, Word (DOCX), Excel (XLSX), PPTX & ZIP** |
+| **Mid-Chat Attachments** | Stalls / Freezes | Inconsistent | **Instant camera & multi-file attachment at any turn** |
+| **Model Context Protocol (MCP)** | ❌ None | ❌ None | **1-Tap Preset Servers (Brave, Web, Weather, GitHub, Termux)** |
+| **App Updates** | Manual reinstall | Signature mismatch error | **Seamless in-place upgrade (No data/chat loss)** |
+| **Native Touch Experience** | Web scrollbars visible | Web-like bounce | **Physical Haptic Feedback + Native Back Gesture** |
+| **Promotional Clutter** | Annoying "Get App" banners | Web headers visible | **100% Removed automatically in all languages** |
+| **Localization** | Broken mixed strings | Incomplete | **Institutional Bengali (বাংলা) & English** |
+
+---
+
+## ✨ Core Highlights & Innovations
+
+### 1. 🎨 Modern Mobile Interface (Claude & ChatGPT Style)
+* **Single Action Capsule**: Eradicates scattered floating buttons with a unified, floating message composer.
+  * **Left Cluster**: DeepSeek native toggles for **DeepThink R1** (Atom reasoning icon) and **Web Search** (Globe search icon) positioned side-by-side without overlap.
+  * **Right Cluster**: Minimalist circular **Plus (+)** sheet trigger and animated **Send** button.
+* **Ergonomic Bottom Sheet**: Tapping the Plus (+) button opens a smooth slide-up bottom sheet with dark-mode glassmorphism backdrop blur and clean SVG vector stroke icons.
+* **Grouped Settings Cards**: Settings are organized into iOS-style rounded cards with clean category headers, generous tap targets, and smooth switch toggles.
+* **No Promotional Clutter**: Multi-lingual scripts automatically eliminate web banners like *"অ্যাপ পান"* (Get App) and duplicate drawer download links.
+
+### 2. 🔄 Seamless In-Place Updates (No Reinstall Required)
+* **The Problem Solved**: Previously, CI builds generated ephemeral keystores on every run, resulting in Android rejecting updates with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` and forcing users to delete their app and lose their chats.
+* **The Permanent Fix**: **Super DeepSeek** is signed with a permanent cryptographic release keystore (`superdeepseek-release.jks`, valid for 20,000 days).
+* **Automatic `versionCode` Progression**: Gradle calculates `versionCode = 1000 + bdsBuildId`, guaranteeing that every release can be installed directly over existing versions with one tap.
+
+### 3. 📂 50MB File Uploads & Native Document Processing
+* **Expanded Cap**: File upload capacity increased from 2MB to **50 MB** for documents and **25 MB** for photos.
+* **Universal Format Support**: Binary documents (PDF, DOCX, XLSX, PPTX, ZIP) are automatically converted into Base64 chunked streams and dispatched to DeepSeek as native `File` objects.
+* **Robust Mid-Conversation Scanning**: Dynamic file inputs are continuously resolved, ensuring photo and document uploads work reliably at any point during an ongoing conversation.
+
+### 4. 🔌 1-Tap Preset Model Context Protocol (MCP) Servers
+Model Context Protocol enables DeepSeek to interact with live external tools and APIs. On mobile, typing complex JSON configurations is inconvenient. Super DeepSeek introduces **Ready-to-Use 1-Tap MCP Presets**:
+* 🔍 **Brave Web Search**: Real-time live web search and news discovery.
+* 🌐 **Web Content Fetcher**: Scrapes and reads full text and markdown from any URL.
+* ⛅ **Weather & Time Clock**: Accurate worldwide weather forecasts and timezone clocks.
+* 🐙 **GitHub Explorer**: Inspect public repositories, browse files, and read commit logs.
+* 💻 **Local Termux Bridge**: Connects directly to local Python, Node, or SQLite servers running inside Android Termux (`http://127.0.0.1:8080/sse`).
+
+### 5. 📱 True Native Android Polish
+* **Scrollbars Removed**: Eliminates web-like scrollbars and overscroll halos (`isVerticalScrollBarEnabled = false`, `overScrollMode = OVER_SCROLL_NEVER`).
+* **Hardware Haptic Feedback**: Every touch on the Plus button, drawer toggles, and send button triggers a physical tactile vibration pulse via Android's `Vibrator` API.
+* **Native Back Gesture Integration**: Swiping back on Android gracefully closes open bottom sheets, dialogs, and settings drawers first before navigating back or exiting.
+
+---
+
+## 🏗️ Architecture & Technical Stack
 
 ```
 Super DeepSeek (Standalone Android)
-├── Android Layer (Kotlin)
-│   ├── MainActivity.kt           — Hardware-accelerated WebView, lifecycle, permissions
-│   ├── WebViewBridge.kt          — Fast JavaScript-to-Kotlin bridge (File I/O, MCP, Haptics)
-│   ├── UpdateChecker.kt          — GitHub Release continuous update check & digest verification
-│   └── NetworkSecurityConfig     — Permissive LAN & cleartext traffic for local MCP servers
+├── 📱 Android Native Layer (Kotlin + Android SDK 34)
+│   ├── MainActivity.kt           — Single-task WebView, window insets, back dispatcher
+│   ├── WebViewBridge.kt          — Bidirectional JS-to-Kotlin bridge (File I/O, MCP, Haptics)
+│   ├── UpdateChecker.kt          — In-app update monitor querying GitHub Releases API
+│   ├── superdeepseek-release.jks — Permanent cryptographic signing keystore
+│   └── NetworkSecurityConfig     — Permissive cleartext LAN rules for local Termux & MCP
 │
-├── Web Application Layer (Svelte 5 + Vite)
+├── ⚡ Modern Frontend Layer (Svelte 5 + Vite)
 │   ├── src/content/ui/
-│   │   ├── Drawer.svelte         — Claude-style slide-up bottom sheet settings & tools
-│   │   ├── AttachMenu.svelte     — Clean plus (+) attachment sheet with SVG vector icons
-│   │   └── SettingsPanel.svelte  — Grouped rounded cards with iOS switches
-│   ├── src/android/
-│   │   ├── hide-get-app.js       — Multi-lingual promotional banner eliminator
-│   │   └── hide-drawer-app-item.js
-│   ├── src/locales/
-│   │   ├── bn.json               — Full Bengali localization (58 comprehensive sections)
-│   │   └── en.json               — Canonical English localization
-│   └── src/styles/
-│       └── content.css           — Mobile-first dark mode tokens & layout rules
+│   │   ├── AttachMenu.svelte     — Claude-style Plus bottom sheet with SVG vector icons
+│   │   ├── Drawer.svelte         — Super DeepSeek slide-up navigation drawer
+│   │   ├── SettingsPanel.svelte  — Grouped card settings with 1-tap MCP presets
+│   │   └── App.svelte            — Primary responsive mount point
+│   ├── src/content/files/
+│   │   ├── folder-reader.js      — 30MB directory tree concatenator
+│   │   └── github-reader.js      — 30MB GitHub repository zip extractor
+│   ├── src/platform/
+│   │   └── android-file-picker.js— Base64 chunked bridge reader (PDF, DOCX, XLSX, Images)
+│   └── src/locales/
+│       ├── bn.json               — Institutional Bengali (বাংলা) localization
+│       └── en.json               — Canonical English localization
 │
-└── Automation & CI/CD
-    ├── .github/workflows/        — Automated APK build, sign, and release pipeline
+└── 🚀 Automation & CI/CD Pipeline
+    ├── .github/workflows/        — Automated APK compilation, signing, and GitHub release
     └── vitest.config.js          — 105 test suites with 1,556 unit and integration tests
 ```
 
 ---
 
-## 📥 Installation
+## 📥 Installation Guide
 
-### Download Ready-to-Use APK
-1. Go to the [Releases Page](https://github.com/themuhammad-personal/Deepseek-/releases/latest).
-2. Download the latest `better-deepseek-latest.apk` or versioned release.
-3. Open the APK file on your Android device (Android 8.0 or newer).
-4. If prompted, allow installation from unknown sources.
-5. Launch **Super DeepSeek** and log in to your account.
+### Option 1: Direct APK Download (Recommended)
+1. Navigate to the [Releases Page](https://github.com/themuhammad-personal/Deepseek-/releases/latest).
+2. Download `super-deepseek-latest.apk`.
+3. Open the file on your device (Android 8.0 or newer).
+4. If prompted, tap **Settings** and enable **Allow from this source**.
+5. Tap **Install** (or **Update** if you already have it installed).
 
----
-
-## 🛠️ Development & Building from Source
-
-### Prerequisites
-- **Node.js**: v20 or v22 (LTS recommended)
-- **JDK**: Java 17 (Eclipse Temurin or OpenJDK)
-- **Android SDK**: API Level 34 (Android 14) with Build-Tools `34.0.0`
-
-### 1. Clone Repository
+### Option 2: Build From Source
 ```bash
+# 1. Clone repository
 git clone https://github.com/themuhammad-personal/Deepseek-.git
 cd Deepseek-
-```
 
-### 2. Install Dependencies
-```bash
+# 2. Install dependencies
 npm ci
-```
 
-### 3. Run Test Suite
-```bash
-npm run test:unit
-```
-*Runs all 105 test files (1,556 unit and integration tests) using Vitest in JSDOM.*
+# 3. Run test verification (105 test suites)
+npm test
 
-### 4. Build Web Assets
-```bash
+# 4. Compile Android assets
 npm run build:android
-```
-*Compiles Svelte 5 and JavaScript bundles with Vite and automatically stages them to `android/app/src/main/assets/bds`.*
 
-### 5. Build Android APK
-```bash
-# Debug APK
-npm run android:assemble:debug
-
-# Release APK
-npm run android:assemble:release
+# 5. Build signed Release APK
+cd android
+./gradlew assembleRelease
 ```
-*Generated APK will be located in `android/app/build/outputs/apk/release/`.*
+The compiled, signed APK will be generated at:
+`android/app/build/outputs/apk/release/app-release.apk`
 
 ---
 
-## 🔄 Automated CI/CD Workflow
+## 🧪 Quality Assurance & Test Verification
 
-Every commit pushed to the `main` branch or release tag triggers GitHub Actions:
-- Compiles the web assets (`npm run build:android`).
-- Runs complete test suites (`npm test`).
-- Compiles Android native code with Gradle (`./gradlew assembleRelease`).
-- Signs the APK with release keystores.
-- Validates the APK signature with `apksigner`.
-- Computes SHA256 checksums and automatically publishes the APK to GitHub Releases.
+Super DeepSeek maintains a 100% automated test pass rate across unit and integration suites:
+
+```text
+ ✓ tests/integration/auto.test.js (39 tests)
+ ✓ tests/integration/ui/SidebarMenuInjector.test.js (17 tests)
+ ✓ tests/integration/scanner.test.js (34 tests)
+ ✓ tests/integration/ui/AttachMenu.test.js (24 tests)
+ ✓ tests/integration/deep-research-state.test.js (28 tests)
+ ...
+ Test Files  105 passed (105)
+      Tests  1556 passed (1556)
+```
 
 ---
 
-## 📄 License & Disclaimer
+## 📄 License & Open-Source Ethics
 
-This project is open-source software licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
+Super DeepSeek is open-source software licensed under the **[MIT License](LICENSE)**.
 
-*Disclaimer: Super DeepSeek is an independent, community-driven project created to improve user experience on mobile devices. It is not affiliated with, endorsed by, or sponsored by DeepSeek AI.*
+*Disclaimer: Super DeepSeek is an independent open-source client developed to provide an elevated mobile user experience. It is not officially affiliated with, endorsed by, or sponsored by DeepSeek AI.*
