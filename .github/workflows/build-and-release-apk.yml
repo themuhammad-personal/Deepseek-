@@ -1,0 +1,208 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish a GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build & Verify APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+          cache-dependency-path: |
+            android/**/*.gradle*
+            android/**/gradle-wrapper.properties
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
+
+      - name: Write Android local.properties
+        run: printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Build Android Web Assets
+        run: npm run build
+
+      - name: Run Web & Polyfill Tests
+        run: npm run test
+
+      - name: Make Gradle Wrapper Executable
+        working-directory: android
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Bootstrapping Gradle wrapper..."
+            mkdir -p gradle/wrapper
+            curl -sSL "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+              -o gradle/wrapper/gradle-wrapper.jar
+            echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+            echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+            echo "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.7-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+            echo "networkTimeout=10000" >> gradle/wrapper/gradle-wrapper.properties
+            echo "validateDistributionUrl=true" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+            echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+          fi
+          chmod +x ./gradlew
+
+      - name: Run Android Unit Tests
+        working-directory: android
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Decode Keystore (Optional)
+        env:
+          BDS_KEYSTORE: ${{ secrets.BDS_KEYSTORE }}
+        run: |
+          if [ -n "$BDS_KEYSTORE" ]; then
+            echo "Decoding release keystore from secrets..."
+            echo "$BDS_KEYSTORE" | base64 --decode > android/ci-release.jks
+          else
+            echo "Notice: BDS_KEYSTORE secret not set; build will use fallback signing configuration."
+          fi
+
+      - name: Build Android Release APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease -PbdsBuildId=${{ github.run_number }}
+        env:
+          BDS_KEYSTORE_PASSWORD: ${{ secrets.BDS_KEYSTORE_PASSWORD }}
+          BDS_KEY_ALIAS: ${{ secrets.BDS_KEY_ALIAS }}
+          BDS_KEY_PASSWORD: ${{ secrets.BDS_KEY_PASSWORD }}
+
+      - name: Prepare APK and Compute Checksums
+        id: prep
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          APK_RAW=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_RAW" ]; then
+            echo "Error: No release APK found!"
+            exit 1
+          fi
+
+          # Output filename format
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            APK_NAME="better-deepseek-v${VERSION}.apk"
+          else
+            APK_NAME="better-deepseek-latest.apk"
+          fi
+
+          cp "$APK_RAW" "$APK_NAME"
+          sha256sum "$APK_NAME" > "${APK_NAME}.sha256"
+          
+          echo "apk_path=$APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "checksum_path=${APK_NAME}.sha256" >> "$GITHUB_OUTPUT"
+          
+          echo "--- Prepared Artifacts ---"
+          ls -lh "$APK_NAME" "${APK_NAME}.sha256"
+          cat "${APK_NAME}.sha256"
+
+      - name: Verify APK Signature
+        run: |
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose "${{ steps.prep.outputs.apk_path }}"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-deepseek-apk
+          path: |
+            ${{ steps.prep.outputs.apk_path }}
+            ${{ steps.prep.outputs.checksum_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish Release
+    needs: build-apk
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: better-deepseek-apk
+
+      - name: Determine Release Tag & Config
+        id: rel_cfg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "title=Better DeepSeek v${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "title=Better DeepSeek (Continuous Build #${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rel_cfg.outputs.tag }}
+          name: ${{ steps.rel_cfg.outputs.title }}
+          body: |
+            ### 🤖 Better DeepSeek Standalone Android App
+
+            **Version:** `${{ steps.rel_cfg.outputs.version }}`
+            **Build ID:** `${{ github.run_number }}`
+            **Commit:** `${{ github.sha }}`
+
+            #### 🚀 Highlights & Features:
+            - **Modern Mobile UI/UX**: Claude & ChatGPT style bottom-sheet drawer with smooth drag handle, segmented category navigation tabs, and instant filter search.
+            - **Full Custom MCP Server Support**: Native Android OkHttp client with JSON-RPC 2.0, Server-Sent Events (SSE), and cleartext LAN support (`http://10.0.2.2`, `http://192.168.x.x`, `http://localhost`).
+            - **Zero Feature Loss**: All custom prompts, prompt library, skills, system instructions, project workspaces, custom commands, and visualization charts are preserved and accessible.
+            - **Native YouTube Transcripts**: Integrated native video transcript extraction.
+
+            #### 📲 Installation:
+            1. Download the `.apk` file below.
+            2. Open on your Android device (Android 8.0+ / SDK 26+).
+            3. Verify SHA256 checksum against `${{ steps.rel_cfg.outputs.apk_path }}.sha256`.
+          files: |
+            *.apk
+            *.sha256
+          prerelease: ${{ steps.rel_cfg.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.rel_cfg.outputs.is_latest == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
