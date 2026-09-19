@@ -5392,3 +5392,76 @@ tr:hover .bds-row-hide-btn:hover {
   line-height: 1.4;
   color: var(--bds-text-secondary, #6b6b6b);
 }
+/* ── Redesigned Modern Settings Cards & Drawer Enhancements ── */
+.bds-card {
+  background: var(--bds-bg-elevated, #ffffff);
+  border: 1px solid var(--bds-border);
+  border-radius: 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color var(--bds-transition), box-shadow var(--bds-transition);
+}
+
+.bds-card:hover {
+  border-color: var(--bds-border-hover, rgba(128, 128, 128, 0.3));
+}
+
+.bds-card .bds-sub-toggle {
+  border-bottom: none !important;
+  padding: 12px 14px !important;
+  margin-top: 0 !important;
+  border-radius: 14px !important;
+  transition: background-color var(--bds-transition);
+}
+
+.bds-card .bds-sub-toggle:hover {
+  background: var(--bds-bg-hover, rgba(128, 128, 128, 0.05));
+}
+
+.bds-card .bds-sub-content {
+  border-top: 1px solid var(--bds-border);
+}
+
+.bds-card .bds-sub-inner {
+  padding: 12px 14px 14px;
+}
+
+.bds-card .bds-toggle-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bds-border);
+}
+
+.bds-card .bds-toggle-row:last-child,
+.bds-card .bds-toggle-row:last-of-type {
+  border-bottom: none;
+}
+
+@media (max-width: 600px) {
+  #bds-drawer {
+    width: 96vw;
+    padding: 16px 12px;
+    max-height: 88vh;
+    border-radius: 16px;
+  }
+  .bds-drawer-header {
+    margin-bottom: 12px;
+  }
+  .bds-tab-bar {
+    gap: 4px;
+    padding: 2px 0 8px;
+  }
+  .bds-tab-item {
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+  .bds-card {
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+  .bds-card .bds-sub-toggle {
+    padding: 10px 12px !important;
+  }
+  .bds-card .bds-sub-inner {
+    padding: 10px 12px 12px;
+  }
+}

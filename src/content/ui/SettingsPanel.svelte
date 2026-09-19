@@ -16,8 +16,11 @@
   import { encryptData, decryptData } from "../../lib/utils/crypto.js";
   import { makeId } from "../../lib/utils/helpers.js";
   import SnippetList from "./SnippetList.svelte";
+  import { triggerBlobDownload } from "../../lib/utils/download.js";
 
   let { onapiplayground, onimportdata, onsave, activeTab = "all", searchQuery = "" } = $props();
+
+  let activeCategory = $state("all");
 
   let customSystemPrompts = $state(appState.settings.customSystemPrompts || []);
   let activeSystemPromptId = $state(appState.settings.activeSystemPromptId || "default");
@@ -308,12 +311,8 @@
         blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       }
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bds_backup_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = `bds_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      triggerBlobDownload(blob, fileName);
 
       closeExportAllModal();
       if (appState.ui) appState.ui.showToast(t('drawer.exportDone'));
@@ -718,6 +717,11 @@
       subIntegrationsOpen = true;
       subLanguageOpen = true;
       subUtilitiesOpen = true;
+      subChatOpen = true;
+      subInjectionOpen = true;
+      subResearchOpen = true;
+      subMcpOpen = true;
+      subProjectsOpen = true;
     }
   });
 
@@ -729,7 +733,18 @@
     if (activeTab === "chat") return sectionKey === "systemPrompts" || sectionKey === "subInjection" || sectionKey === "subChat";
     if (activeTab === "prompts") return sectionKey === "systemPrompts";
     if (activeTab === "projects") return sectionKey === "subProjects";
-    if (activeTab === "settings") return sectionKey === "subCSS" || sectionKey === "subVoice" || sectionKey === "subIntegrations" || sectionKey === "subLanguage" || sectionKey === "subUtilities";
+    if (activeTab === "settings") {
+      if (activeCategory === "all") return true;
+      if (activeCategory === "general") return sectionKey === "subLanguage" || sectionKey === "subUtilities";
+      if (activeCategory === "chat") return sectionKey === "systemPrompts" || sectionKey === "subChat" || sectionKey === "subInjection";
+      if (activeCategory === "voice") return sectionKey === "subVoice";
+      if (activeCategory === "research") return sectionKey === "subResearch";
+      if (activeCategory === "mcp") return sectionKey === "subMcp";
+      if (activeCategory === "appearance") return sectionKey === "subCSS";
+      if (activeCategory === "integrations") return sectionKey === "subIntegrations";
+      if (activeCategory === "backup") return sectionKey === "subUtilities" || sectionKey === "subProjects";
+      return true;
+    }
     return false;
   }
 
@@ -1371,39 +1386,114 @@
   }
 </script>
 
-{#if isTabMatch('systemPrompts')}
-<div class="bds-section-title">
-  <span class="bds-icon-inline">
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+{#if (activeTab === "settings" || activeTab === "all") && !searchQuery}
+  <div class="bds-category-nav" role="tablist" aria-label="Settings categories">
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'all'}
+      onclick={() => activeCategory = 'all'}
     >
-      <g clip-path="url(#clip0_1450_63327)">
-        <path
-          d="M14.0861 5.51366C13.8717 5.0575 13.588 4.58542 13.2889 4.18108C13.208 4.07172 13.1596 4.04373 13.0243 4.03054C12.4277 3.97255 11.8245 4.05527 11.2269 3.9972C10.7224 3.94816 10.3133 3.71661 10.0115 3.30919C9.66986 2.84777 9.43973 2.31343 9.09824 1.85234C9.01771 1.74365 8.96805 1.71589 8.83354 1.70282C8.29432 1.65044 7.70402 1.65061 7.16656 1.70282C7.03205 1.71589 6.98239 1.74365 6.90186 1.85234C6.56067 2.31303 6.33025 2.84774 5.98855 3.30919C5.68681 3.71661 5.27774 3.94816 4.77317 3.9972C4.17564 4.05527 3.57239 3.97255 2.97585 4.03054C2.84046 4.04373 2.79208 4.07172 2.71115 4.18108C2.41212 4.58542 2.12835 5.0575 1.91403 5.51366C1.85299 5.64359 1.85286 5.7018 1.91403 5.8319C2.14865 6.33077 2.49748 6.76892 2.73237 7.26854C2.9594 7.7515 2.96041 8.24717 2.73338 8.73044C2.49837 9.23061 2.14891 9.66837 1.91403 10.1681C1.85291 10.2982 1.85299 10.3564 1.91403 10.4863C2.12856 10.9429 2.41185 11.4142 2.71115 11.8189C2.79208 11.9283 2.84046 11.9563 2.97585 11.9694C3.57239 12.0274 4.17564 11.9447 4.77317 12.0028C5.27774 12.0518 5.68681 12.2834 5.98855 12.6908C6.33024 13.1522 6.56037 13.6866 6.90186 14.1476C6.98239 14.2563 7.03205 14.2841 7.16656 14.2972C7.70402 14.3494 8.29432 14.3495 8.83354 14.2972C8.96805 14.2841 9.01771 14.2563 9.09824 14.1476C9.43944 13.687 9.66985 13.1522 10.0115 12.6908C10.3133 12.2834 10.7224 12.0518 11.2269 12.0028C11.8244 11.9447 12.4271 12.0275 13.0243 11.9694C13.1596 11.9563 13.208 11.9283 13.2889 11.8189C13.5891 11.4131 13.872 10.942 14.0861 10.4863C14.1471 10.3564 14.1472 10.2982 14.0861 10.1681C13.8513 9.66861 13.5017 9.23061 13.2667 8.73044C13.0397 8.24717 13.0407 7.7515 13.2677 7.26854C13.5026 6.7689 13.8513 6.33106 14.0861 5.8319C14.1472 5.7018 14.1471 5.64359 14.0861 5.51366ZM15.3035 6.40373C15.0685 6.90359 14.7188 7.34119 14.4841 7.84037C14.4231 7.97025 14.423 8.02855 14.4841 8.15861C14.7189 8.65833 15.0685 9.09611 15.3035 9.59626C15.5308 10.0801 15.5308 10.5744 15.3035 11.0582C15.052 11.5933 14.7225 12.1426 14.37 12.6191C14.0685 13.0265 13.6581 13.259 13.1536 13.3081C12.5566 13.366 11.9541 13.2835 11.3573 13.3414C11.2228 13.3545 11.1731 13.3823 11.0926 13.491C10.7511 13.9521 10.521 14.4864 10.1793 14.9478C9.87828 15.3542 9.46719 15.5869 8.96387 15.6358C8.34008 15.6964 7.66194 15.6966 7.03623 15.6358C6.53291 15.5869 6.12182 15.3542 5.82084 14.9478C5.47911 14.4863 5.24878 13.9517 4.90753 13.491C4.82701 13.3823 4.77734 13.3545 4.64284 13.3414C4.04647 13.2835 3.44373 13.366 2.84653 13.3081C2.34201 13.259 1.93164 13.0265 1.63013 12.6191C1.27867 12.144 0.948453 11.5941 0.696621 11.0582C0.469315 10.5744 0.469279 10.0801 0.696621 9.59626C0.931628 9.09613 1.2813 8.65807 1.51597 8.15861C1.57708 8.02855 1.57702 7.97025 1.51597 7.84037C1.28117 7.34095 0.931635 6.9036 0.696621 6.40373C0.469213 5.91992 0.469367 5.42562 0.696621 4.94183C0.948441 4.40587 1.27868 3.85598 1.63013 3.38092C1.93164 2.97349 2.34201 2.74095 2.84653 2.6919C3.44353 2.63397 4.04599 2.71649 4.64284 2.65856C4.77734 2.64549 4.82701 2.61774 4.90753 2.50904C5.24905 2.04792 5.47913 1.51362 5.82084 1.05219C6.12182 0.645806 6.53291 0.413119 7.03623 0.364178C7.66002 0.303556 8.33816 0.303369 8.96387 0.364178C9.46719 0.413119 9.87828 0.645806 10.1793 1.05219C10.521 1.51365 10.7513 2.04828 11.0926 2.50904C11.1731 2.61774 11.2228 2.64549 11.3573 2.65856C11.9541 2.71649 12.5566 2.63397 13.1536 2.6919C13.6581 2.74095 14.0685 2.97349 14.37 3.38092C14.7214 3.85598 15.0517 4.40587 15.3035 4.94183C15.5307 5.42562 15.5309 5.91992 15.3035 6.40373Z"
-          fill="currentColor"
-        ></path><path
-          d="M9.13764 7.99999C9.13764 7.3715 8.62855 6.8624 8.00005 6.8624C7.37155 6.8624 6.86246 7.3715 6.86246 7.99999C6.86246 8.62849 7.37155 9.13759 8.00005 9.13759C8.62855 9.13759 9.13764 8.62849 9.13764 7.99999ZM10.4834 7.99999C10.4834 9.37126 9.37132 10.4833 8.00005 10.4833C6.62878 10.4833 5.51674 9.37126 5.51674 7.99999C5.51674 6.62873 6.62878 5.51669 8.00005 5.51669C9.37132 5.51669 10.4834 6.62873 10.4834 7.99999Z"
-          fill="currentColor"
-        ></path>
-      </g>
-      <defs
-        ><clipPath id="clip0_1450_63327"
-          ><rect width="16" height="16" fill="currentColor"></rect></clipPath
-        ></defs
-      >
-    </svg>
-  </span>
-  {t('settings.generalSettings')}
-</div>
+      <span class="bds-pill-icon">✨</span>
+      <span>All Settings</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'general'}
+      onclick={() => activeCategory = 'general'}
+    >
+      <span class="bds-pill-icon">🌐</span>
+      <span>General & UI</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'chat'}
+      onclick={() => activeCategory = 'chat'}
+    >
+      <span class="bds-pill-icon">💬</span>
+      <span>Chat & Prompts</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'voice'}
+      onclick={() => activeCategory = 'voice'}
+    >
+      <span class="bds-pill-icon">🎙️</span>
+      <span>Voice & Audio</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'research'}
+      onclick={() => activeCategory = 'research'}
+    >
+      <span class="bds-pill-icon">🔍</span>
+      <span>Deep Research</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'mcp'}
+      onclick={() => activeCategory = 'mcp'}
+    >
+      <span class="bds-pill-icon">🔌</span>
+      <span>MCP & Tools</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'appearance'}
+      onclick={() => activeCategory = 'appearance'}
+    >
+      <span class="bds-pill-icon">🎨</span>
+      <span>Appearance & CSS</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'integrations'}
+      onclick={() => activeCategory = 'integrations'}
+    >
+      <span class="bds-pill-icon">⚡</span>
+      <span>Integrations & API</span>
+    </button>
+    <button
+      type="button"
+      class="bds-category-pill"
+      class:active={activeCategory === 'backup'}
+      onclick={() => activeCategory = 'backup'}
+    >
+      <span class="bds-pill-icon">💾</span>
+      <span>Backup & Storage</span>
+    </button>
+  </div>
+{/if}
 
-<div class="bds-section-title">
-  <label class="bds-label">{t('settings.systemPrompts')}</label>
-</div>
-
+{#if isTabMatch('systemPrompts')}
+<div class="bds-card bds-prompt-card-section open" style="margin-bottom: 14px;">
+  <div class="bds-card-header bds-static-header">
+    <div class="bds-card-header-left">
+      <span class="bds-card-icon-badge bds-icon--purple">🧠</span>
+      <div class="bds-card-title-group">
+        <span class="bds-card-title">{t('settings.systemPrompts')}</span>
+        <span class="bds-card-subtitle">Custom instructions and behavioral guidelines injected into model chats</span>
+      </div>
+    </div>
+    <div class="bds-card-header-right">
+      {#if !systemPromptMultiMode}
+        {@const activeName = activeSystemPromptId === "default" ? t('settings.defaultPromptName') : customSystemPrompts.find(p => p.id === activeSystemPromptId)?.name || "Custom"}
+        <span class="bds-card-badge bds-badge--active">{activeName}</span>
+      {:else}
+        {@const enabledCount = safeSystemPromptEntries.filter(e => e.enabled).length}
+        <span class="bds-card-badge bds-badge--active">{enabledCount} Active</span>
+      {/if}
+    </div>
+  </div>
+  <div class="bds-card-body">
+    <div class="bds-sub-inner">
 <div class="bds-toggle-row" style="margin-bottom: 8px;">
   <span class="bds-toggle-label" style="font-size: 12px;">{t('settings.multiPromptMode')}</span>
   <label class="bds-switch">
@@ -1488,6 +1578,9 @@
     </button>
   </div>
 {/if}
+    </div>
+  </div>
+</div>
 {/if}
 
 {#if showPromptEditor}
@@ -1648,16 +1741,25 @@
   <div class="bds-advanced-inner">
     <!-- Each sub-section visibility is controlled by isSectionMatch() when search is active -->
     {#if isSectionMatch('subLanguage')}
-    <button type="button" class="bds-sub-toggle" class:open={subLanguageOpen} onclick={() => subLanguageOpen = !subLanguageOpen} aria-expanded={subLanguageOpen}>
-      {t('settings.subLanguage')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subLanguageOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subLanguageOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subLanguageOpen} onclick={() => subLanguageOpen = !subLanguageOpen} aria-expanded={subLanguageOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--blue">🌐</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subLanguage')}</span>
+            <span class="bds-card-subtitle">Interface translation, deepseek synchronization, and preferred language</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subLanguageOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row">
           <span class="bds-toggle-label">{t('settings.syncLocale')}</span>
           <label class="bds-switch">
@@ -1702,19 +1804,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subChat')}
-    <button type="button" class="bds-sub-toggle" class:open={subChatOpen} onclick={() => subChatOpen = !subChatOpen} aria-expanded={subChatOpen}>
-      {t('settings.subChat')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subChatOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subChatOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subChatOpen} onclick={() => subChatOpen = !subChatOpen} aria-expanded={subChatOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--green">💬</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subChat')}</span>
+            <span class="bds-card-subtitle">Message display options, history sync, and session capacity</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subChatOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row">
           <span class="bds-toggle-label">{t('settings.collapseLongUserMessages')}</span>
           <label class="bds-switch">
@@ -1745,19 +1857,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subProjects')}
-    <button type="button" class="bds-sub-toggle" class:open={subProjectsOpen} onclick={() => subProjectsOpen = !subProjectsOpen} aria-expanded={subProjectsOpen}>
-      {t('settings.subProjects')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subProjectsOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subProjectsOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subProjectsOpen} onclick={() => subProjectsOpen = !subProjectsOpen} aria-expanded={subProjectsOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--teal">📁</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subProjects')}</span>
+            <span class="bds-card-subtitle">Context retrieval (RAG), .gitignore filtering, and file download behaviors</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subProjectsOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row">
           <span class="bds-toggle-label">{t('settings.projectAutoContext')}</span>
           <label class="bds-switch">
@@ -1806,19 +1928,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subInjection')}
-    <button type="button" class="bds-sub-toggle" class:open={subInjectionOpen} onclick={() => subInjectionOpen = !subInjectionOpen} aria-expanded={subInjectionOpen}>
-      {t('settings.subInjection')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subInjectionOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subInjectionOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subInjectionOpen} onclick={() => subInjectionOpen = !subInjectionOpen} aria-expanded={subInjectionOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--amber">⚡</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subInjection')}</span>
+            <span class="bds-card-subtitle">Prompt frequency, automated memory injection, and temporal context</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subInjectionOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row">
           <span class="bds-toggle-label">{t('settings.disableSystemPrompt')}</span>
           <label class="bds-switch">
@@ -1871,19 +2003,29 @@
         {/if}
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subResearch')}
-    <button type="button" class="bds-sub-toggle" class:open={subResearchOpen} onclick={() => subResearchOpen = !subResearchOpen} aria-expanded={subResearchOpen}>
-      {t('settings.subResearch')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subResearchOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subResearchOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subResearchOpen} onclick={() => subResearchOpen = !subResearchOpen} aria-expanded={subResearchOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--indigo">🔍</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subResearch')}</span>
+            <span class="bds-card-subtitle">Deep research page fetching, search providers, and context token guard</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subResearchOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
           <span class="bds-toggle-label">Deep Fetch per Search</span>
           <input id="bds-deep-research-deep-fetch" type="number" min="0" max="5" step="1" class="bds-input" style="width: 80px; box-sizing: border-box;" bind:value={deepResearchDeepFetch} />
@@ -1965,19 +2107,29 @@
         {/if}
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subVoice')}
-    <button type="button" class="bds-sub-toggle" class:open={subVoiceOpen} onclick={() => subVoiceOpen = !subVoiceOpen} aria-expanded={subVoiceOpen}>
-      {t('settings.subVoice')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subVoiceOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subVoiceOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subVoiceOpen} onclick={() => subVoiceOpen = !subVoiceOpen} aria-expanded={subVoiceOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--rose">🎙️</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subVoice')}</span>
+            <span class="bds-card-subtitle">Speech-to-text dictation, auto-submit, and silence detection</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subVoiceOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row">
           <span class="bds-toggle-label">{t('settings.voiceMode')}</span>
           <label class="bds-switch">
@@ -2019,19 +2171,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subIntegrations')}
-    <button type="button" class="bds-sub-toggle" class:open={subIntegrationsOpen} onclick={() => subIntegrationsOpen = !subIntegrationsOpen} aria-expanded={subIntegrationsOpen}>
-      {t('settings.subIntegrations')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subIntegrationsOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subIntegrationsOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subIntegrationsOpen} onclick={() => subIntegrationsOpen = !subIntegrationsOpen} aria-expanded={subIntegrationsOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--slate">⚡</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subIntegrations')}</span>
+            <span class="bds-card-subtitle">GitHub token access, markdown depth, and token pricing estimation</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subIntegrationsOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
           <span class="bds-toggle-label">{t('settings.markdownMaxDepth')}</span>
           <input id="bds-html-md-depth" type="number" min="10" step="10" class="bds-input" style="width: 120px; box-sizing: border-box;" bind:value={htmlToMarkdownMaxDepth} />
@@ -2081,19 +2243,29 @@
         </p>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subCSS')}
-    <button type="button" class="bds-sub-toggle" class:open={subCSSOpen} onclick={() => subCSSOpen = !subCSSOpen} aria-expanded={subCSSOpen}>
-      {t('settings.subCSS')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subCSSOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subCSSOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subCSSOpen} onclick={() => subCSSOpen = !subCSSOpen} aria-expanded={subCSSOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--pink">🎨</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subCSS')}</span>
+            <span class="bds-card-subtitle">Custom CSS theme overrides and reusable style snippets</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subCSSOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row" style="flex-direction: column; align-items: stretch; gap: 0;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
             {#if editingSnippetId}
@@ -2136,22 +2308,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subMcp')}
-    <button type="button" class="bds-sub-toggle" class:open={subMcpOpen} onclick={() => subMcpOpen = !subMcpOpen} aria-expanded={subMcpOpen}>
-      <span style="display: flex; align-items: center; gap: 8px;">
-        <span class="bds-icon-inline" style="font-size: 14px;">🔌</span>
-        <span>{t('mcp.sectionTitle')}</span>
-      </span>
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subMcpOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subMcpOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subMcpOpen} onclick={() => subMcpOpen = !subMcpOpen} aria-expanded={subMcpOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--violet">🔌</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('mcp.sectionTitle')}</span>
+            <span class="bds-card-subtitle">Model Context Protocol servers for tools and integrations</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subMcpOpen}>
+<div class="bds-sub-inner">
         <div class="bds-mcp-intro-box">
           <p style="font-size: 12px; margin: 0 0 4px; font-weight: 500; color: var(--bds-text-primary);">{t('mcp.description')}</p>
           <p style="font-size: 11px; opacity: 0.65; margin: 0 0 10px; line-height: 1.4;">{t('mcp.transportNote')}</p>
@@ -2231,19 +2410,29 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
 
     {#if isSectionMatch('subUtilities')}
-    <button type="button" class="bds-sub-toggle" class:open={subUtilitiesOpen} onclick={() => subUtilitiesOpen = !subUtilitiesOpen} aria-expanded={subUtilitiesOpen}>
-      {t('settings.subUtilities')}
-      <span class="bds-chevron">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-    <div class="bds-sub-content" class:open={subUtilitiesOpen}>
-      <div class="bds-sub-inner">
+    <div class="bds-card" class:open={subUtilitiesOpen}>
+      <button type="button" class="bds-card-header bds-sub-toggle" class:open={subUtilitiesOpen} onclick={() => subUtilitiesOpen = !subUtilitiesOpen} aria-expanded={subUtilitiesOpen}>
+        <div class="bds-card-header-left">
+          <span class="bds-card-icon-badge bds-icon--cyan">🛠️</span>
+          <div class="bds-card-title-group">
+            <span class="bds-card-title">{t('settings.subUtilities')}</span>
+            <span class="bds-card-subtitle">API playground workbench, tips, and full JSON backup & restore</span>
+          </div>
+        </div>
+        <div class="bds-card-header-right">
+          <span class="bds-chevron">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </div>
+      </button>
+      <div class="bds-card-body bds-sub-content" class:open={subUtilitiesOpen}>
+<div class="bds-sub-inner">
         <div class="bds-toggle-row" role="button" tabindex="0" onclick={onapiplayground} onkeydown={(e) => e.key === 'Enter' && onapiplayground?.()} style="cursor: pointer;">
           <span class="bds-toggle-label">API Playground</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -2274,6 +2463,7 @@
         </div>
       </div>
     </div>
+    </div>
     {/if}
   </div>
 </div>
@@ -2294,9 +2484,25 @@
     </div>
   </div>
 {/if}
-<button id="bds-save-settings" type="button" onclick={save}>
-  {t('settings.save')}
-</button>
+<div class="bds-save-bar">
+  <div class="bds-save-status">
+    {#if dirty}
+      <span class="bds-status-dot unsaved"></span>
+      <span>{t('settings.unsavedTitle') || 'Unsaved changes'}</span>
+    {:else}
+      <span class="bds-status-dot saved"></span>
+      <span>{t('settings.settingsSaved') || 'All settings saved'}</span>
+    {/if}
+  </div>
+  <button id="bds-save-settings" type="button" class="bds-btn bds-btn-save-primary" onclick={save}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/>
+      <polyline points="7 3 7 8 15 8"/>
+    </svg>
+    {t('settings.save')}
+  </button>
+</div>
 
 {#if showExportAllModal}
   <div class="bds-modal-overlay" role="dialog" onclick={closeExportAllModal}>
@@ -3082,4 +3288,211 @@
     opacity: 0.7;
     margin-top: 2px;
   }
+
+  /* Modern Category Pills Navigation */
+  .bds-category-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 2px 12px;
+    margin-bottom: 8px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .bds-category-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .bds-category-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--bds-text-secondary);
+    background: var(--bds-bg-hover, rgba(128, 128, 128, 0.08));
+    border: 1px solid var(--bds-border, rgba(128, 128, 128, 0.15));
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .bds-category-pill:hover {
+    background: var(--bds-bg-elevated);
+    color: var(--bds-text-primary);
+    border-color: var(--bds-border-hover, rgba(128, 128, 128, 0.3));
+  }
+  .bds-category-pill.active {
+    background: var(--bds-accent, #4d6bfe);
+    color: #ffffff;
+    border-color: var(--bds-accent, #4d6bfe);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(77, 107, 254, 0.25);
+  }
+  .bds-pill-icon {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  /* Section Cards */
+  .bds-card {
+    background: var(--bds-bg-elevated, #ffffff);
+    border: 1px solid var(--bds-border, rgba(128, 128, 128, 0.15));
+    border-radius: 14px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .bds-card:hover {
+    border-color: var(--bds-border-hover, rgba(128, 128, 128, 0.25));
+  }
+  .bds-card.open {
+    border-color: var(--bds-border-hover, rgba(128, 128, 128, 0.25));
+  }
+  .bds-card-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease;
+  }
+  .bds-card-header:hover {
+    background-color: var(--bds-bg-hover, rgba(128, 128, 128, 0.05));
+  }
+  .bds-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .bds-card-icon-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 16px;
+    flex-shrink: 0;
+    background: var(--bds-bg-hover, rgba(128, 128, 128, 0.1));
+  }
+  .bds-icon--purple { background: rgba(147, 51, 234, 0.12); }
+  .bds-icon--blue { background: rgba(59, 130, 246, 0.12); }
+  .bds-icon--green { background: rgba(16, 185, 129, 0.12); }
+  .bds-icon--teal { background: rgba(20, 184, 166, 0.12); }
+  .bds-icon--amber { background: rgba(245, 158, 11, 0.12); }
+  .bds-icon--indigo { background: rgba(99, 102, 241, 0.12); }
+  .bds-icon--rose { background: rgba(244, 63, 94, 0.12); }
+  .bds-icon--slate { background: rgba(100, 116, 139, 0.12); }
+  .bds-icon--pink { background: rgba(236, 72, 153, 0.12); }
+  .bds-icon--cyan { background: rgba(6, 182, 212, 0.12); }
+  .bds-icon--violet { background: rgba(139, 92, 246, 0.12); }
+
+  .bds-card-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .bds-card-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--bds-text-primary);
+    line-height: 1.3;
+  }
+  .bds-card-subtitle {
+    font-size: 11.5px;
+    color: var(--bds-text-secondary);
+    line-height: 1.35;
+    opacity: 0.9;
+  }
+  .bds-card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: 10px;
+  }
+  .bds-card-body {
+    padding: 0 14px 14px;
+    border-top: 1px solid var(--bds-border, rgba(128, 128, 128, 0.1));
+  }
+
+  /* Sticky Save Bar */
+  .bds-save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-top: 18px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--bds-bg-elevated, #ffffff);
+    border-top: 1px solid var(--bds-border, rgba(128, 128, 128, 0.2));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+  }
+  .bds-save-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--bds-text-secondary);
+  }
+  .bds-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .bds-status-dot.saved {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+  }
+  .bds-status-dot.unsaved {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+    animation: bds-pulse 1.8s infinite;
+  }
+  @keyframes bds-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .bds-btn-save-primary {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: var(--bds-accent, #4d6bfe) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 8px 20px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    box-shadow: 0 2px 8px rgba(77, 107, 254, 0.3) !important;
+  }
+  .bds-btn-save-primary:hover {
+    opacity: 0.92 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(77, 107, 254, 0.4) !important;
+  }
+  .bds-btn-save-primary:active {
+    transform: translateY(0) !important;
+  }
+
 </style>
