@@ -25,7 +25,8 @@ export function hideGetAppButton() {
   function hideButton() {
     const spans = document.querySelectorAll("span");
     for (const span of spans) {
-      if (span.textContent.trim() !== "Get App") continue;
+      const text = span.textContent.trim();
+      if (text !== "Get App" && text !== "অ্যাপ পান" && text !== "下载APP" && text !== "下载 APP") continue;
       const target = getHideTarget(span);
       if (target && !target.hasAttribute(HIDE_ATTR)) {
         target.setAttribute(HIDE_ATTR, "");

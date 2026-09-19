@@ -4,10 +4,7 @@
   import SkillList from "./SkillList.svelte";
   import MemoryList from "./MemoryList.svelte";
   import ProjectsManager from "./ProjectsManager.svelte";
-  import ProjectsCard from "./ProjectsCard.svelte";
-  import SavedItems from "./SavedItems.svelte";
   import CommandManager from "../commands/CommandManager.svelte";
-  import { COMMANDS } from "../commands/registry.js";
   import { findChatEditor, setChatInputText } from "../auto.js";
   import appState from "../state.js";
   import { i18n, t } from "../../lib/i18n.svelte.js";
@@ -17,11 +14,11 @@
 
   const extensionVersion = getExtensionVersion();
 
-  // Active top-level navigation tab: 'mcp' | 'chat' | 'prompts' | 'projects' | 'commands' | 'settings'
-  let activeNav = $state("mcp");
+  // Navigation section: 'overview' | 'prompts' | 'mcp' | 'deep_research' | 'memory' | 'commands' | 'data' | 'chat'
+  let currentSection = $state("overview");
 
-  // Sub-tab for Prompts: 'characters' | 'skills' | 'memory'
-  let promptSubTab = $state("characters");
+  // Sub-tab for Prompts: 'characters' | 'skills' | 'system'
+  let promptSubTab = $state("system");
 
   // Instant search query
   let searchQuery = $state("");
@@ -58,8 +55,6 @@
   let skillsRef = $state(null);
   let memoryRef = $state(null);
   let projectsManagerRef = $state(null);
-  let savedItemsRef = $state(null);
-  let showCmdManager = $state(false);
   let showProjectsManager = $state(false);
 
   export function refreshSettings() {
@@ -78,9 +73,7 @@
     if (projectsManagerRef) projectsManagerRef.refresh();
     if (settingsRef) settingsRef.refreshProject();
   }
-  export function refreshSavedItems() {
-    if (savedItemsRef) savedItemsRef.refresh();
-  }
+  export function refreshSavedItems() {}
   export function refreshCssSnippets() {
     if (settingsRef) settingsRef.refreshCssSnippets();
   }
@@ -113,6 +106,42 @@
   function clearSearch() {
     searchQuery = "";
   }
+
+  function toggleMemorySetting(e) {
+    e?.stopPropagation();
+    appState.settings.disableMemory = !appState.settings.disableMemory;
+    saveSettingDirectly();
+  }
+
+  function toggleVoiceSetting(e) {
+    e?.stopPropagation();
+    appState.settings.voiceMode = !appState.settings.voiceMode;
+    saveSettingDirectly();
+  }
+
+  function saveSettingDirectly() {
+    try {
+      if (typeof chrome !== "undefined" && chrome.storage?.local) {
+        chrome.storage.local.set({ bds_settings: JSON.parse(JSON.stringify(appState.settings)) });
+      }
+      appState.ui?.showToast?.(t("settings.saved") || "Settings saved.");
+    } catch (e) {
+      console.warn("[BDS] Direct save error:", e);
+    }
+  }
+
+  function getSectionTitle(section) {
+    switch (section) {
+      case "prompts": return "Personalization (সিস্টেম প্রম্পট)";
+      case "mcp": return "Plugins & Live MCP Tools";
+      case "deep_research": return "Deep Research & Context Guard";
+      case "memory": return "Persistent Memory (স্মৃতি)";
+      case "commands": return "Custom Commands & Shortcuts";
+      case "data": return "Data Controls & History";
+      case "chat": return "Chat & AI Settings";
+      default: return "সেটিংস (Settings)";
+    }
+  }
 </script>
 
 {#if open}
@@ -127,18 +156,34 @@
 
   <!-- Header -->
   <div class="bds-drawer-header">
-    <div class="bds-header-brand">
-      <span class="bds-brand-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-          <circle cx="12" cy="12" r="4"/>
+    {#if currentSection !== "overview" && !showProjectsManager}
+      <button
+        type="button"
+        class="bds-back-btn"
+        onclick={() => (currentSection = "overview")}
+        aria-label="Back to overview"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
         </svg>
-      </span>
-      <div class="bds-header-text">
-        <span class="bds-brand-title">Better DeepSeek</span>
-        <span class="bds-version-pill">v{extensionVersion}</span>
+        <span>ব্যাক</span>
+      </button>
+      <span class="bds-header-title">{getSectionTitle(currentSection)}</span>
+    {:else}
+      <div class="bds-header-brand">
+        <span class="bds-brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </span>
+        <div class="bds-header-text">
+          <span class="bds-brand-title">Better DeepSeek</span>
+          <span class="bds-version-pill">v{extensionVersion}</span>
+        </div>
       </div>
-    </div>
+    {/if}
 
     <button
       id="bds-close"
@@ -149,18 +194,15 @@
       <svg
         width="16"
         height="16"
-        viewBox="0 0 16 16"
+        viewBox="0 0 24 24"
         fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
       >
-        <path
-          d="M14.1871 13.1265L13.1265 14.1872L1.81275 2.87347L2.87341 1.81281L14.1871 13.1265Z"
-          fill="currentColor"
-        ></path>
-        <path
-          d="M13.1265 1.81282L14.1871 2.87348L2.8734 14.1872L1.81274 13.1265L13.1265 1.81282Z"
-          fill="currentColor"
-        ></path>
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>
     </button>
   </div>
@@ -175,7 +217,7 @@
     </span>
     <input
       type="text"
-      placeholder="Search settings, MCP, prompts, tools..."
+      placeholder="সার্চ সেটিংস, প্লাগইন, প্রম্পটস..."
       bind:value={searchQuery}
       class="bds-drawer-search-input"
     />
@@ -189,98 +231,6 @@
     {/if}
   </div>
 
-  <!-- Segmented Tab Navigation Bar (Claude / ChatGPT Style) -->
-  {#if !showProjectsManager && !searchQuery}
-    <div class="bds-tab-bar" role="tablist">
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'mcp'}
-        onclick={() => activeNav = 'mcp'}
-        role="tab"
-        aria-selected={activeNav === 'mcp'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-        </span>
-        <span class="bds-tab-label">MCP & Tools</span>
-        {#if appState.mcpServers?.some(s => s.enabled)}
-          <span class="bds-tab-badge">{appState.mcpServers.filter(s => s.enabled).length}</span>
-        {/if}
-      </button>
-
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'chat'}
-        onclick={() => activeNav = 'chat'}
-        role="tab"
-        aria-selected={activeNav === 'chat'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-        </span>
-        <span class="bds-tab-label">Chat & AI</span>
-      </button>
-
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'prompts'}
-        onclick={() => activeNav = 'prompts'}
-        role="tab"
-        aria-selected={activeNav === 'prompts'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
-        </span>
-        <span class="bds-tab-label">Prompts</span>
-      </button>
-
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'projects'}
-        onclick={() => activeNav = 'projects'}
-        role="tab"
-        aria-selected={activeNav === 'projects'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-        </span>
-        <span class="bds-tab-label">Projects</span>
-      </button>
-
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'commands'}
-        onclick={() => activeNav = 'commands'}
-        role="tab"
-        aria-selected={activeNav === 'commands'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-        </span>
-        <span class="bds-tab-label">Commands</span>
-      </button>
-
-      <button
-        type="button"
-        class="bds-tab-item"
-        class:active={activeNav === 'settings'}
-        onclick={() => activeNav = 'settings'}
-        role="tab"
-        aria-selected={activeNav === 'settings'}
-      >
-        <span class="bds-tab-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        </span>
-        <span class="bds-tab-label">Settings</span>
-      </button>
-    </div>
-  {/if}
-
   {#if showProjectsManager}
     <div class="bds-projects-body">
       <ProjectsManager
@@ -291,7 +241,7 @@
   {:else}
     <div class="bds-drawer-body">
       {#if searchQuery.trim().length > 0}
-        <!-- Unified search results view across settings and lists -->
+        <!-- Unified search results view -->
         <div class="bds-search-results-banner">
           <span>Search results for "<strong>{searchQuery}</strong>"</span>
         </div>
@@ -303,23 +253,368 @@
           onapiplayground={openApiPlayground}
           onimportdata={() => {
             refreshSettings();
-            refreshSkills();
             refreshCharacters();
+            refreshSkills();
             refreshMemories();
             refreshProjects();
-            refreshSavedItems();
           }}
         />
-      {:else if activeNav === 'mcp'}
-        <!-- MCP & Tools Tab -->
-        <div class="bds-tab-section-intro">
-          <div class="bds-intro-badge">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-            Custom MCP Engine Active
+
+      {:else if currentSection === "overview"}
+        <!-- ══════════════════════════════════════════════════════════════
+             ChatGPT Mobile Settings (Grouped Rounded Cards Layout)
+             ══════════════════════════════════════════════════════════════ -->
+        <div class="bds-settings-screen">
+          <!-- GROUP 1: My DeepSeek -->
+          <div class="bds-settings-group">
+            <div class="bds-settings-group-title">My DeepSeek (কাস্টমাইজেশন)</div>
+            <div class="bds-settings-card">
+              <!-- Personalization Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "prompts")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                      <line x1="9" y1="9" x2="15" y2="9"></line>
+                      <line x1="9" y1="13" x2="13" y2="13"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Personalization (সিস্টেম প্রম্পট)</span>
+                    <span class="bds-settings-row-sub">কাস্টম নির্দেশিকা ও আচরণ নির্ধারণ</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.settings.activeSystemPromptId === "default" ? "Default" : "Custom"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- Memory Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "memory")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Persistent Memory</span>
+                    <span class="bds-settings-row-sub">চ্যাট সেশন জুড়ে তথ্য মনে রাখা</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <label class="bds-ios-switch" onclick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={!appState.settings.disableMemory}
+                      onchange={toggleMemorySetting}
+                    />
+                    <span class="bds-ios-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Plugins & MCP Tools Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "mcp")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Plugins & Live MCP Tools</span>
+                    <span class="bds-settings-row-sub">লোকাল ও রিমোট সার্ভার টুলস যুক্তকরণ</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.mcpServers?.filter(s => s.enabled)?.length || 0} সক্রিয়</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+            </div>
           </div>
-          <h3>Model Context Protocol & Web Tools</h3>
-          <p>Connect local servers (LAN / HTTP), remote tools, search engines, and code execution environments.</p>
+
+          <!-- GROUP 2: App & Voice Settings -->
+          <div class="bds-settings-group">
+            <div class="bds-settings-group-title">অ্যাপ ও ভয়েস সেটিংস</div>
+            <div class="bds-settings-card">
+              <!-- Language Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">ভাষা (Primary Language)</span>
+                    <span class="bds-settings-row-sub">ইন্টারফেস ও ডিপসিক সিঙ্ক ভাষা</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.settings.preferredLang || "বাংলা"}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- Voice Mode Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                      <line x1="12" y1="19" x2="12" y2="23"></line>
+                      <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">ভয়েস মোড (Voice & Speech)</span>
+                    <span class="bds-settings-row-sub">ডিক্টেশন ও স্বয়ংক্রিয় সাবমিট নিয়ন্ত্রণ</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <label class="bds-ios-switch" onclick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(appState.settings.voiceMode)}
+                      onchange={toggleVoiceSetting}
+                    />
+                    <span class="bds-ios-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Appearance Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="5"></circle>
+                      <line x1="12" y1="1" x2="12" y2="3"></line>
+                      <line x1="12" y1="21" x2="12" y2="23"></line>
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                      <line x1="1" y1="12" x2="3" y2="12"></line>
+                      <line x1="21" y1="12" x2="23" y2="12"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">থিম ও রূপ (Appearance)</span>
+                    <span class="bds-settings-row-sub">ডার্ক মোড ও ইন্টারফেস প্রিফারেন্স</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">ডার্ক</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GROUP 3: Advanced Capabilities & Data -->
+          <div class="bds-settings-group">
+            <div class="bds-settings-group-title">অ্যাডভান্সড সক্ষমতা ও ডেটা</div>
+            <div class="bds-settings-card">
+              <!-- Deep Research Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "deep_research")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Deep Research & Context Guard</span>
+                    <span class="bds-settings-row-sub">টোকেন সীমা ও স্বয়ংক্রিয় গবেষণা গভীরতা</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.settings.deepResearchDeepFetch || 1} Fetch</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- Projects Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={openProjectsManager}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Projects Context & RAG Engine</span>
+                    <span class="bds-settings-row-sub">ওয়ার্কস্পেস ফাইল ও লোকাল সোর্স কোড</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <span class="bds-badge-value">{appState.projects?.length || 0} Projects</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- Custom Commands Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "commands")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Custom Commands & Shortcuts</span>
+                    <span class="bds-settings-row-sub">/slash কমান্ড ও প্রম্পট প্রিসেটস</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- Data Controls Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={() => (currentSection = "data")}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Data Controls & Chat History</span>
+                    <span class="bds-settings-row-sub">সেশন সীমা, মেসেজ সংক্ষেপ ও ব্যাকআপ</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+
+              <!-- API Playground Row -->
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div class="bds-settings-row" onclick={openApiPlayground}>
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">API Playground</span>
+                    <span class="bds-settings-row-sub">ইন্টারঅ্যাক্টিভ API ও লাইভ MCP টুলস টেস্ট</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GROUP 4: About -->
+          <div class="bds-settings-group">
+            <div class="bds-settings-group-title">সম্পর্কিত (About)</div>
+            <div class="bds-settings-card">
+              <a
+                href="https://github.com/EdgeTypE/better-deepseek"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="bds-settings-row"
+                style="text-decoration: none;"
+              >
+                <div class="bds-settings-row-left">
+                  <div class="bds-settings-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  </div>
+                  <div class="bds-settings-row-text">
+                    <span class="bds-settings-row-title">Better DeepSeek</span>
+                    <span class="bds-settings-row-sub">সংস্করণ v{extensionVersion} • Android Edition</span>
+                  </div>
+                </div>
+                <div class="bds-settings-row-right">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+              </a>
+            </div>
+          </div>
         </div>
+
+      {:else if currentSection === "prompts"}
+        <!-- Sub-View: Prompts & Personas -->
+        <div class="bds-sub-segment-bar">
+          <button
+            type="button"
+            class="bds-sub-segment-btn"
+            class:active={promptSubTab === 'system'}
+            onclick={() => (promptSubTab = 'system')}
+          >
+            System Prompts
+          </button>
+          <button
+            type="button"
+            class="bds-sub-segment-btn"
+            class:active={promptSubTab === 'characters'}
+            onclick={() => (promptSubTab = 'characters')}
+          >
+            Personas
+          </button>
+          <button
+            type="button"
+            class="bds-sub-segment-btn"
+            class:active={promptSubTab === 'skills'}
+            onclick={() => (promptSubTab = 'skills')}
+          >
+            Skills
+          </button>
+        </div>
+
+        {#if promptSubTab === 'system'}
+          <SettingsPanel
+            bind:this={settingsRef}
+            activeTab="prompts"
+            onsave={handleSettingsSaved}
+            onapiplayground={openApiPlayground}
+            onimportdata={() => {
+              refreshSettings();
+              refreshCharacters();
+              refreshSkills();
+              refreshMemories();
+              refreshProjects();
+            }}
+          />
+        {:else if promptSubTab === 'characters'}
+          <CharacterList bind:this={charactersRef} />
+        {:else if promptSubTab === 'skills'}
+          <SkillList bind:this={skillsRef} />
+        {/if}
+
+      {:else if currentSection === "mcp"}
+        <!-- Sub-View: MCP Tools & Plugins -->
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="mcp"
@@ -327,16 +622,15 @@
           onapiplayground={openApiPlayground}
           onimportdata={() => {
             refreshSettings();
-            refreshSkills();
             refreshCharacters();
+            refreshSkills();
             refreshMemories();
             refreshProjects();
-            refreshSavedItems();
           }}
         />
 
-      {:else if activeNav === 'chat'}
-        <!-- Chat & AI Tab -->
+      {:else if currentSection === "deep_research"}
+        <!-- Sub-View: Deep Research & Context Guard -->
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="chat"
@@ -344,126 +638,23 @@
           onapiplayground={openApiPlayground}
           onimportdata={() => {
             refreshSettings();
-            refreshSkills();
             refreshCharacters();
+            refreshSkills();
             refreshMemories();
             refreshProjects();
-            refreshSavedItems();
           }}
         />
 
-      {:else if activeNav === 'prompts'}
-        <!-- Prompts & Skills Tab -->
-        <div class="bds-sub-segment-bar">
-          <button
-            type="button"
-            class="bds-sub-segment-btn"
-            class:active={promptSubTab === 'characters'}
-            onclick={() => promptSubTab = 'characters'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
-            Characters & Personas
-          </button>
-          <button
-            type="button"
-            class="bds-sub-segment-btn"
-            class:active={promptSubTab === 'skills'}
-            onclick={() => promptSubTab = 'skills'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-            Assistant Skills
-          </button>
-          <button
-            type="button"
-            class="bds-sub-segment-btn"
-            class:active={promptSubTab === 'memory'}
-            onclick={() => promptSubTab = 'memory'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-            Persistent Memory
-          </button>
-        </div>
+      {:else if currentSection === "memory"}
+        <!-- Sub-View: Persistent Memory -->
+        <MemoryList bind:this={memoryRef} />
 
-        {#if promptSubTab === 'characters'}
-          <CharacterList bind:this={charactersRef} />
-        {:else if promptSubTab === 'skills'}
-          <SkillList bind:this={skillsRef} />
-        {:else if promptSubTab === 'memory'}
-          <MemoryList bind:this={memoryRef} />
-        {/if}
+      {:else if currentSection === "commands"}
+        <!-- Sub-View: Custom Commands -->
+        <CommandManager onselect={(cmd) => insertCommand(cmd.id)} />
 
-      {:else if activeNav === 'projects'}
-        <!-- Projects & Files Tab -->
-        <ProjectsCard onmanage={openProjectsManager} />
-
-        <div style="margin-top: 14px;">
-          <SettingsPanel
-            bind:this={settingsRef}
-            activeTab="projects"
-            onsave={handleSettingsSaved}
-            onapiplayground={openApiPlayground}
-            onimportdata={() => {
-              refreshSettings();
-              refreshSkills();
-              refreshCharacters();
-              refreshMemories();
-              refreshProjects();
-              refreshSavedItems();
-            }}
-          />
-        </div>
-
-        <div style="margin-top: 14px;">
-          <SavedItems bind:this={savedItemsRef} />
-        </div>
-
-      {:else if activeNav === 'commands'}
-        <!-- Slash Commands Tab -->
-        <div class="bds-section-title">
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="bds-icon-inline">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              </span>
-              <span>{t("commands.title")}</span>
-            </div>
-            <button
-              type="button"
-              class="bds-btn-outlined"
-              style="font-size:12px;padding:4px 10px;"
-              onclick={() => (showCmdManager = !showCmdManager)}
-            >
-              {showCmdManager ? t("commands.done") : t("commands.manage")}
-            </button>
-          </div>
-        </div>
-
-        {#if !showCmdManager}
-          <div class="bds-featured-list">
-            <h4>{t("commands.builtinCommands")}</h4>
-            {#each COMMANDS as cmd}
-              <button
-                type="button"
-                class="bds-featured-item"
-                onclick={() => insertCommand(cmd.id)}
-              >
-                <span class="bds-cmd-icon">{@html cmd.icon}</span>
-                <span class="bds-cmd-info">
-                  <span class="bds-cmd-name">/{cmd.id}</span>
-                  <span class="bds-cmd-desc">{t(cmd.descKey)}</span>
-                </span>
-                <span class="bds-cmd-usage">{t(cmd.usageKey)}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-
-        {#if showCmdManager}
-          <CommandManager onclose={() => (showCmdManager = false)} />
-        {/if}
-
-      {:else if activeNav === 'settings'}
-        <!-- Global Settings Tab -->
+      {:else if currentSection === "data"}
+        <!-- Sub-View: Data Controls & Exports -->
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="settings"
@@ -471,57 +662,40 @@
           onapiplayground={openApiPlayground}
           onimportdata={() => {
             refreshSettings();
-            refreshSkills();
             refreshCharacters();
+            refreshSkills();
             refreshMemories();
             refreshProjects();
-            refreshSavedItems();
+          }}
+        />
+
+      {:else if currentSection === "chat"}
+        <!-- Sub-View: Chat & General Settings -->
+        <SettingsPanel
+          bind:this={settingsRef}
+          activeTab="chat"
+          onsave={handleSettingsSaved}
+          onapiplayground={openApiPlayground}
+          onimportdata={() => {
+            refreshSettings();
+            refreshCharacters();
+            refreshSkills();
+            refreshMemories();
+            refreshProjects();
           }}
         />
       {/if}
     </div>
 
-    <!-- Drawer Footer -->
-    <div class="bds-drawer-bottom">
-      {#if TIP_COUNT > 0 && !disableTipBox && currentTipIndex >= 0}
-        <div class="bds-tip-bar">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          ><path d="M9 18h6" /><path d="M10 22h4" /><path
-            d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"
-          /></svg>
-          <span>{@html t("tips." + currentTipIndex)}</span>
-        </div>
-      {/if}
-
-      <div class="bds-drawer-footer">
-        <a
-          href="https://github.com/EdgeTypE/better-deepseek"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="bds-github-link"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-            ></path>
-          </svg>
-          <span>Android Edition <small style="opacity: 0.6; margin-left: 4px;">v{extensionVersion}</small></span>
-        </a>
+    <!-- Clean Unobtrusive Tip Indicator (if enabled) -->
+    {#if TIP_COUNT > 0 && !disableTipBox && currentTipIndex >= 0}
+      <div class="bds-tip-bar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18h6" /><path d="M10 22h4" />
+          <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" />
+        </svg>
+        <span>{@html t("tips." + currentTipIndex)}</span>
       </div>
-    </div>
+    {/if}
   {/if}
 </aside>

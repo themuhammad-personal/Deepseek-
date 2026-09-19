@@ -1079,7 +1079,7 @@
     >
       <div class="bds-sheet-handle" aria-hidden="true"></div>
       <div class="bds-sheet-header">
-        <span class="bds-sheet-title">{t('attachMenu.buttonTitle')}</span>
+        <span class="bds-sheet-title">টুলস ও সংযুক্তি (Tools & Actions)</span>
         <button type="button" class="bds-sheet-close" onclick={() => (isOpen = false)} aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1124,7 +1124,9 @@
           <span class="bds-item-title">{t('attachMenu.uploadFile')}</span>
           <span class="bds-item-desc">PDF, images, documents & code</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
       {/if}
 
@@ -1150,7 +1152,9 @@
           <span class="bds-item-title">ক্যামেরা ও ছবি</span>
           <span class="bds-item-desc">Take photos or upload images</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
 
       <button type="button" class="bds-attach-item" onclick={toggleNativeWebSearch}>
@@ -1176,7 +1180,9 @@
           <span class="bds-item-title">ওয়েব সার্চ মোড</span>
           <span class="bds-item-desc">Search the live web for real-time answers</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
 
       <button type="button" class="bds-attach-item" onclick={toggleNativeDeepThink}>
@@ -1201,7 +1207,9 @@
           <span class="bds-item-title">ডিপথিঙ্ক আর১</span>
           <span class="bds-item-desc">Deep reasoning and chain of thought</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
 
       {#if shouldShowUploadFolder && supportsFolderUpload}
@@ -1232,7 +1240,9 @@
             <span class="bds-item-title">{t('attachMenu.uploadFolder')}</span>
             <span class="bds-item-desc">Read directory files via picker</span>
           </span>
-          <span class="bds-item-arrow">›</span>
+          <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
         </button>
       {/if}
 
@@ -1258,7 +1268,9 @@
             <span class="bds-item-title">{t('attachMenu.attachProject')}</span>
             <span class="bds-item-desc">{panelActiveProjectId ? (panelProjects.find(p => p.id === panelActiveProjectId)?.name || "Active Project") : "Attach project files & context"}</span>
           </span>
-          <span class="bds-item-arrow">›</span>
+          <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
         </button>
       {/if}
 
@@ -1305,7 +1317,9 @@
           </span>
           <span class="bds-item-desc">Clone and inspect repo files</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
       {/if}
 
@@ -1337,7 +1351,9 @@
           <span class="bds-item-title">{t('attachMenu.fetchWebPage')}</span>
           <span class="bds-item-desc">Extract text and content from URL</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
       {/if}
 
@@ -1354,7 +1370,9 @@
           <span class="bds-item-title">প্লাগইন ও সেটিংস</span>
           <span class="bds-item-desc">Advanced Settings & MCP Tools</span>
         </span>
-        <span class="bds-item-arrow">›</span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
       </button>
     </div>
   {/if}
@@ -2451,66 +2469,97 @@
       top: auto !important;
       width: 100% !important;
       max-width: 100% !important;
-      border-radius: 24px 24px 0 0 !important;
-      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5) !important;
+      max-height: 85vh !important;
+      overflow-y: auto !important;
+      background: #18181b !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-bottom: none !important;
+      border-radius: 28px 28px 0 0 !important;
+      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6) !important;
       animation: bds-sheet-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
     }
 
     .bds-attach-item {
-      padding: 12px !important;
+      padding: 12px 14px !important;
       border-radius: 14px !important;
-      gap: 12px !important;
+      gap: 14px !important;
       white-space: normal !important;
+      background: #242428 !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      margin-bottom: 8px !important;
+      text-align: left !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      transition: background-color 0.15s ease, border-color 0.15s ease !important;
+    }
+
+    .bds-attach-item:hover,
+    .bds-attach-item:active {
+      background: #2a2a30 !important;
+      border-color: rgba(255, 255, 255, 0.18) !important;
     }
 
     .bds-item-icon-box {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: var(--bds-bg-elevated);
-      border: 1px solid var(--bds-border);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--bds-accent);
-      flex-shrink: 0;
+      width: 38px !important;
+      height: 38px !important;
+      min-width: 38px !important;
+      border-radius: 10px !important;
+      background: #1c1c1f !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: var(--bds-accent, #4d6bfe) !important;
+      flex-shrink: 0 !important;
     }
 
     .bds-item-icon-accent {
-      background: var(--bds-accent-glow);
-      border-color: var(--bds-accent);
+      background: rgba(77, 107, 254, 0.15) !important;
+      border-color: var(--bds-accent, #4d6bfe) !important;
     }
 
     .bds-item-content {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      flex: 1;
-      min-width: 0;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      text-align: left !important;
+      gap: 2px !important;
+      flex: 1 !important;
+      min-width: 0 !important;
     }
 
     .bds-item-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--bds-text-primary);
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      color: #f4f4f5 !important;
+      text-align: left !important;
+      line-height: 1.3 !important;
     }
 
     .bds-item-desc {
-      display: block;
-      font-size: 11px;
-      color: var(--bds-text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      display: block !important;
+      font-size: 11.5px !important;
+      font-weight: 400 !important;
+      color: #a1a1aa !important;
+      text-align: left !important;
+      line-height: 1.3 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
     .bds-item-arrow {
-      display: block;
-      color: var(--bds-text-tertiary);
-      font-size: 18px;
-      margin-left: auto;
-      opacity: 0.6;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      color: #71717a !important;
+      margin-left: auto !important;
+      flex-shrink: 0 !important;
+      opacity: 0.7 !important;
     }
 
     .bds-project-panel {

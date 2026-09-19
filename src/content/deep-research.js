@@ -356,6 +356,7 @@ function isRunInteractive(run) {
 
 function emitRunState(run) {
   if (!run) return;
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
   const exec = run.execution;
   const managed = Boolean(exec && exec.managed);
   const steps = exec ? exec.steps : [];

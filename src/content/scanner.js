@@ -604,6 +604,10 @@ export function scanInputArea() {
     markComposerControlsMounted(deepResearchWrapper);
   }
 
+  if (wrapper) {
+    wrapper.classList.add("bds-composer-controls");
+  }
+
   const mountPoint = ensureComposerMount(
     wrapper,
     "bds-attach-menu-mount",

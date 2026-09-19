@@ -3462,21 +3462,18 @@
     border-top: 1px solid var(--bds-border, rgba(128, 128, 128, 0.1));
   }
 
-  /* Sticky Save Bar */
+  /* Save Bar */
   .bds-save-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-    margin-top: 18px;
-    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: var(--bds-bg-elevated, #ffffff);
-    border-top: 1px solid var(--bds-border, rgba(128, 128, 128, 0.2));
+    position: static;
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: var(--bds-bg-card, #1c1c1f);
+    border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08));
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
-    border-bottom-left-radius: 12px;
-    border-bottom-right-radius: 12px;
+    box-shadow: none;
   }
   .bds-save-status {
     display: flex;

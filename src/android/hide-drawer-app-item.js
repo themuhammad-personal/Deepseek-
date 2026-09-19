@@ -25,7 +25,8 @@ export function hideDrawerAppItem() {
     for (const opt of options) {
       if (opt.hasAttribute(HIDE_ATTR)) continue;
       const label = opt.querySelector(".ds-dropdown-menu-option__label");
-      if (label?.textContent.trim().includes(DRAWER_APP_ITEM_TEXT)) {
+      const text = label?.textContent?.trim() || "";
+      if (text.includes(DRAWER_APP_ITEM_TEXT) || text.includes("মোবাইল অ্যাপ ডাউনলোড করুন") || text.includes("下载APP")) {
         opt.setAttribute(HIDE_ATTR, "");
         devLog("HideDrawer", "Hidden drawer app item");
       }

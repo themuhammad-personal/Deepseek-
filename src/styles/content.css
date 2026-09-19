@@ -2145,6 +2145,77 @@ textarea.bds-input,
     display: none !important;
   }
 
+  /* Clean ChatGPT / Claude mobile composer layout */
+  .bds-composer-controls,
+  div:has(> .bds-attach-menu-mount) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+  }
+
+  /* Place Plus (+) button on the far left */
+  .bds-attach-menu-mount {
+    order: -999 !important;
+    margin-right: auto !important;
+  }
+
+  .bds-plus-btn {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: var(--bds-accent, #4d6bfe) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: background-color 0.18s ease, transform 0.15s ease !important;
+    padding: 0 !important;
+  }
+
+  .bds-plus-btn:active {
+    transform: scale(0.92) !important;
+    background: rgba(77, 107, 254, 0.2) !important;
+  }
+
+  /* Keep send & stop buttons on the far right */
+  .bds-composer-controls > button:has(.ds-icon-send),
+  .bds-composer-controls > div[role="button"]:has(.ds-icon-send),
+  .bds-composer-controls > button[class*="send"],
+  .bds-composer-controls > button:has(svg path[d*="M8.3125"]),
+  .bds-composer-controls > button:has(.ds-icon-stop),
+  .bds-composer-controls > div[role="button"]:has(.ds-icon-stop),
+  div:has(> .bds-attach-menu-mount) > button:has(.ds-icon-send),
+  div:has(> .bds-attach-menu-mount) > div[role="button"]:has(.ds-icon-send),
+  div:has(> .bds-attach-menu-mount) > button[class*="send"],
+  div:has(> .bds-attach-menu-mount) > button:has(svg path[d*="M8.3125"]),
+  div:has(> .bds-attach-menu-mount) > button:has(.ds-icon-stop),
+  div:has(> .bds-attach-menu-mount) > div[role="button"]:has(.ds-icon-stop) {
+    order: 999 !important;
+    margin-left: auto !important;
+    display: inline-flex !important;
+  }
+
+  /* Hide cluttered bubbles under the text input on mobile */
+  .bds-composer-controls > .ds-toggle-button,
+  .bds-composer-controls > .bds-deep-research-mount,
+  .bds-composer-controls > .bds-deep-code-mount,
+  .bds-composer-controls > .bds-expand-toggle-mount,
+  .bds-composer-controls > .bds-project-btn,
+  .bds-composer-controls > div[role="button"]:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
+  .bds-composer-controls > button:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
+  div:has(> .bds-attach-menu-mount) > .ds-toggle-button,
+  div:has(> .bds-attach-menu-mount) > .bds-deep-research-mount,
+  div:has(> .bds-attach-menu-mount) > .bds-deep-code-mount,
+  div:has(> .bds-attach-menu-mount) > .bds-expand-toggle-mount,
+  div:has(> .bds-attach-menu-mount) > .bds-project-btn,
+  div:has(> .bds-attach-menu-mount) > div[role="button"]:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
+  div:has(> .bds-attach-menu-mount) > button:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount) {
+    display: none !important;
+  }
+
   /* Drawer: modern slide-up bottom sheet on mobile (Claude/ChatGPT style) */
   #bds-drawer {
     position: fixed;
@@ -5471,5 +5542,208 @@ tr:hover .bds-row-hide-btn:hover {
   }
   .bds-card .bds-sub-inner {
     padding: 10px 12px 12px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ChatGPT Mobile Settings Grouped Cards Layout (Match Screenshot 4)
+   ══════════════════════════════════════════════════════════════ */
+.bds-settings-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 8px 0 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+.bds-settings-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.bds-settings-group-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--bds-text-tertiary, #71717a);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-left: 10px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.bds-settings-card {
+  background: var(--bds-bg-card, #1c1c1f);
+  border-radius: 18px;
+  border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+
+.bds-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--bds-border, rgba(255, 255, 255, 0.06));
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.bds-settings-row:last-child {
+  border-bottom: none;
+}
+
+.bds-settings-row:hover,
+.bds-settings-row:active {
+  background: var(--bds-bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.bds-settings-row-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.bds-settings-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 9px;
+  background: var(--bds-bg-elevated, #242428);
+  border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bds-accent, #4d6bfe);
+  flex-shrink: 0;
+}
+
+.bds-settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.bds-settings-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bds-text-primary, #f4f4f5);
+  line-height: 1.3;
+  text-align: left;
+}
+
+.bds-settings-row-sub {
+  font-size: 11.5px;
+  color: var(--bds-text-secondary, #a1a1aa);
+  line-height: 1.3;
+  text-align: left;
+}
+
+.bds-settings-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--bds-text-tertiary, #71717a);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.bds-badge-value {
+  font-size: 12px;
+  color: var(--bds-text-muted, #a1a1aa);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* iOS Switch Component */
+.bds-ios-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  display: inline-block;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bds-ios-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.bds-ios-slider {
+  position: absolute;
+  inset: 0;
+  background: #3f3f46;
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.bds-ios-slider::before {
+  content: "";
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.bds-ios-switch input:checked + .bds-ios-slider {
+  background: #10b981;
+}
+
+.bds-ios-switch input:checked + .bds-ios-slider::before {
+  transform: translateX(18px);
+}
+
+/* Back Button */
+.bds-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--bds-accent, #4d6bfe);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.bds-back-btn:hover {
+  background: rgba(77, 107, 254, 0.12);
+}
+
+.bds-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bds-text-primary, #f4f4f5);
+}
+
+/* On mobile, remove the giant sticky save button overlay */
+@media (max-width: 768px) {
+  .bds-floating-save-bar,
+  .bds-sticky-save-bar {
+    position: static !important;
+    box-shadow: none !important;
+    border-top: none !important;
+    padding: 12px 0 !important;
   }
 }
