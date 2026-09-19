@@ -28,7 +28,7 @@
   import { pushConfigToPage } from "../bridge.js";
   import appState from "../state.js";
   import { BRIDGE_EVENTS } from "../../lib/constants.js";
-  import { t } from "../../lib/i18n.svelte.js";
+  import { t, i18n } from "../../lib/i18n.svelte.js";
   import { getFlag, getConfig, REMOTE_CONFIG_EVENT, detectModelType } from "../../lib/remote-config.svelte.js";
   import { VADProcessor } from "../vad-processor.js";
   import { findActiveFileInput } from "../scanner.js";
@@ -460,7 +460,8 @@
 
   function updatePosition() {
     if (!menuRef) return;
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
+    const isMobile = isAndroidTarget || (typeof window !== "undefined" && (Boolean(window.AndroidBridge) || window.innerWidth < 768));
+    if (isMobile) {
       dropdownStyle = "";
       return;
     }
@@ -595,13 +596,21 @@
           for (const file of files) {
             injectFile(pickedEntryToFile(file));
           }
+          return;
         }
       } catch (err) {
-        if (cameraInputRef) cameraInputRef.click();
+        console.warn("[AttachMenu] nativePickFiles images error:", err);
       }
-      return;
     }
-    if (cameraInputRef) cameraInputRef.click();
+    // Fallback: click hidden file input or trigger platform picker
+    if (cameraInputRef) {
+      cameraInputRef.click();
+    } else {
+      const target = resolveNativeInput();
+      if (target) {
+        openNativeFilePicker(target, { preferSingle: isAndroidTarget });
+      }
+    }
   }
 
   function handleCameraFileChange(e) {
@@ -1119,7 +1128,7 @@
     >
       <div class="bds-sheet-handle" aria-hidden="true"></div>
       <div class="bds-sheet-header">
-        <span class="bds-sheet-title">টুলস ও সংযুক্তি (Tools & Actions)</span>
+        <span class="bds-sheet-title">{i18n.locale === "bn" ? "টুলস ও সংযুক্তি" : "Tools & Actions"}</span>
         <button type="button" class="bds-sheet-close" onclick={() => (isOpen = false)} aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1164,9 +1173,6 @@
           <span class="bds-item-title">{t('attachMenu.uploadFile')}</span>
           <span class="bds-item-desc">{t('attachMenu.uploadFileDesc') || 'PDF, images, documents & code'}</span>
         </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
       </button>
       {/if}
 
@@ -1191,9 +1197,6 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.cameraPhoto') || 'Camera & Photos'}</span>
           <span class="bds-item-desc">{t('attachMenu.cameraPhotoDesc') || 'Take photos or upload images'}</span>
-        </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
       </button>
 
@@ -1220,9 +1223,6 @@
           <span class="bds-item-title">{t('attachMenu.webSearchMode') || 'Web Search Mode'}</span>
           <span class="bds-item-desc">{t('attachMenu.webSearchModeDesc') || 'Search the live web for real-time answers'}</span>
         </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
       </button>
 
       <button type="button" class="bds-attach-item" onclick={toggleNativeDeepThink}>
@@ -1247,9 +1247,6 @@
           <span class="bds-item-title">{t('attachMenu.deepThinkR1') || 'DeepThink (R1)'}</span>
           <span class="bds-item-desc">{t('attachMenu.deepThinkR1Desc') || 'Deep reasoning and chain of thought'}</span>
         </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
       </button>
 
       <button type="button" class="bds-attach-item" onclick={toggleDeepResearch}>
@@ -1272,9 +1269,6 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.deepResearch') || 'Deep Research'} {isDeepResearchActive ? '✓' : ''}</span>
           <span class="bds-item-desc">{t('attachMenu.deepResearchDesc') || 'Autonomous multi-step web investigation'}</span>
-        </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
       </button>
 
@@ -1299,9 +1293,6 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.customCommands') || 'Commands & Prompts'}</span>
           <span class="bds-item-desc">{t('attachMenu.customCommandsDesc') || 'Quick shortcuts, snippets & tools'}</span>
-        </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
       </button>
 
@@ -1333,9 +1324,6 @@
             <span class="bds-item-title">{t('attachMenu.uploadFolder')}</span>
             <span class="bds-item-desc">{t('attachMenu.uploadFolderDesc') || 'Read directory files via picker'}</span>
           </span>
-          <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
         </button>
       {/if}
 
@@ -1361,9 +1349,6 @@
             <span class="bds-item-title">{t('attachMenu.attachProject')}</span>
             <span class="bds-item-desc">{panelActiveProjectId ? (panelProjects.find(p => p.id === panelActiveProjectId)?.name || "Active Project") : (t('attachMenu.attachProjectDesc') || "Attach project files & context")}</span>
           </span>
-          <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
         </button>
       {/if}
 
@@ -1410,9 +1395,6 @@
           </span>
           <span class="bds-item-desc">{t('attachMenu.githubRepoDesc') || 'Clone and inspect repo files'}</span>
         </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
       </button>
       {/if}
 
@@ -1443,9 +1425,6 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.fetchWebPage')}</span>
           <span class="bds-item-desc">{t('attachMenu.fetchWebPageDesc') || 'Extract text and content from URL'}</span>
-        </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
       </button>
       {/if}
@@ -2542,8 +2521,10 @@
       left: 0 !important;
       right: 0 !important;
       top: auto !important;
-      width: 100% !important;
-      max-width: 100% !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      box-sizing: border-box !important;
+      margin: 0 !important;
       max-height: 85vh !important;
       overflow-y: auto !important;
       background: #18181b !important;

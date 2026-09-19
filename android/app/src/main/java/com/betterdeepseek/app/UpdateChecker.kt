@@ -86,16 +86,22 @@ internal fun compareVersions(a: List<Int>, b: List<Int>): Int {
  */
 internal fun pickApkAsset(assets: JSONArray?): JSONObject? {
     if (assets == null) return null
+    var fallbackAsset: JSONObject? = null
     for (index in 0 until assets.length()) {
         val asset = assets.optJSONObject(index) ?: continue
         val name = asset.optString("name")
-        if (!name.startsWith(APK_ASSET_PREFIX) || !name.endsWith(APK_ASSET_SUFFIX)) continue
+        if (!name.endsWith(".apk", ignoreCase = true) || name.endsWith(".sha256", ignoreCase = true)) continue
         val state = asset.optString("state", "uploaded")
         if (state != "uploaded") continue
         if (asset.optString("browser_download_url").isBlank()) continue
-        return asset
+        if (name.startsWith("super-deepseek", ignoreCase = true)) {
+            return asset
+        }
+        if (fallbackAsset == null) {
+            fallbackAsset = asset
+        }
     }
-    return null
+    return fallbackAsset
 }
 
 /**

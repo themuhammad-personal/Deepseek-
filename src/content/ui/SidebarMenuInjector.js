@@ -200,7 +200,7 @@ function injectOptions(menu) {
 function injectSettingsDrawerOptions(menu) {
   if (menu.querySelector(".bds-whats-new-option")) return;
 
-  const targetLabels = ["Download mobile App", "Get App"];
+  const targetLabels = ["Download mobile App", "Get App", "মোবাইল অ্যাপ", "অ্যাপ ডাউনলোড করুন"];
   let targetOption = null;
   for (const label of targetLabels) {
     targetOption = Array.from(
@@ -245,14 +245,24 @@ function injectAdvancedSettingsOption(menu) {
     menu.querySelectorAll(".ds-dropdown-menu-option")
   ).find((opt) => {
     const text = (opt.querySelector(".ds-dropdown-menu-option__label")?.textContent || "").toLowerCase();
-    return text.includes("setting") || text.includes("সেটিংস") || text.includes("设置");
+    return (
+      text.includes("setting") ||
+      text.includes("সেটিংস") ||
+      text.includes("设置") ||
+      text.includes("تنظیمات") ||
+      text.includes("настройк") ||
+      text.includes("ayar")
+    );
   });
 
   if (!settingsOption) return;
 
-  const label = i18n.locale === "bn" ? "অ্যাডভান্স সেটিংস" : (i18n.t("sidebarMenu.advancedSettings") || "Advanced Settings");
+  const isBn = i18n.locale === "bn" || (typeof document !== "undefined" && document.documentElement.lang?.startsWith("bn"));
+  const advText = i18n.t("sidebarMenu.advancedSettings");
+  const advLabel = isBn ? "অ্যাডভান্স সেটিংস" : ((!advText || advText.startsWith("sidebarMenu.")) ? "Advance Settings" : advText);
+
   const advOption = createMenuOption(
-    label,
+    advLabel,
     ADVANCED_SETTINGS_ICON,
     "bds-advanced-settings-option",
     () => {
@@ -262,6 +272,23 @@ function injectAdvancedSettingsOption(menu) {
   );
 
   settingsOption.parentNode.insertBefore(advOption, settingsOption.nextSibling);
+
+  // Inject What's New right after Advance Settings consistently across all languages
+  if (!menu.querySelector(".bds-whats-new-option")) {
+    const wnText = i18n.t("sidebarMenu.whatsNew");
+    const whatsNewLabel = isBn ? "নতুন কী আছে?" : ((!wnText || wnText.startsWith("sidebarMenu.")) ? "What's New?" : wnText);
+    const whatsNewOption = createMenuOption(
+      whatsNewLabel,
+      WHATS_NEW_ICON,
+      "bds-whats-new-option",
+      () => {
+        document.body.click();
+        appState.whatsNewPending = true;
+        if (appState.ui) appState.ui.refreshWhatsNew();
+      }
+    );
+    advOption.parentNode.insertBefore(whatsNewOption, advOption.nextSibling);
+  }
 }
 
 function createMenuOption(label, iconHtml, className, onClick) {

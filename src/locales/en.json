@@ -417,7 +417,13 @@
       "uploadFolderDesc": "Read directory files via picker",
       "attachProjectDesc": "Attach project files & context",
       "githubRepoDesc": "Clone and inspect repo files",
-      "fetchWebPageDesc": "Extract text and content from URL"
+      "fetchWebPageDesc": "Extract text and content from URL",
+      "deepResearch": "Deep Research",
+      "deepResearchDesc": "Autonomous multi-step web investigation",
+      "deepResearchEnabled": "Deep Research enabled",
+      "deepResearchDisabled": "Deep Research disabled",
+      "customCommands": "Commands & Prompts",
+      "customCommandsDesc": "Quick shortcuts, snippets & tools"
     },
     "codeRunner": {
       "pythonRunner": "Python Runner",
@@ -788,7 +794,8 @@
       "tags": "Tags (BDS)",
       "exportChat": "Export Chat (BDS)",
       "getBdsApp": "Get BDS App",
-      "whatsNew": "What's New?"
+      "whatsNew": "What's New?",
+      "advancedSettings": "Advance Settings"
     },
     "savedItems": {
       "title": "Saved Items",

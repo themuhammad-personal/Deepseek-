@@ -557,24 +557,28 @@ export function scanInputArea() {
     nativeButton.style.setProperty("display", "none", "important");
   }
 
-  const deepResearchMountPoint = ensureComposerMount(
-    deepResearchWrapper,
-    "bds-deep-research-mount",
-    ".bds-deep-research-toggle",
-    insertBeforeNode,
-  );
-  if (!deepResearchMountPoint.dataset.bdsMounted) {
-    mount(DeepResearchToggle, {
-      target: deepResearchMountPoint,
-      props: {
-        enabled: state.deepResearch.enabled,
-        onToggle: (enabled) => setDeepResearchEnabled(enabled),
-      },
-    });
-    deepResearchMountPoint.dataset.bdsMounted = "1";
+  const isAndroidTarget = process.env.BDS_TARGET === "android";
+  const isMobileContext = isAndroidTarget || (typeof window !== "undefined" && (Boolean(window.AndroidBridge) || window.innerWidth < 768));
+
+  if (!isMobileContext) {
+    const deepResearchMountPoint = ensureComposerMount(
+      deepResearchWrapper,
+      "bds-deep-research-mount",
+      ".bds-deep-research-toggle",
+      insertBeforeNode,
+    );
+    if (!deepResearchMountPoint.dataset.bdsMounted) {
+      mount(DeepResearchToggle, {
+        target: deepResearchMountPoint,
+        props: {
+          enabled: state.deepResearch.enabled,
+          onToggle: (enabled) => setDeepResearchEnabled(enabled),
+        },
+      });
+      deepResearchMountPoint.dataset.bdsMounted = "1";
+    }
   }
 
-  const isAndroidTarget = process.env.BDS_TARGET === "android";
   if (!isAndroidTarget) {
     const deepCodeMountPoint = ensureComposerMount(
       deepResearchWrapper,

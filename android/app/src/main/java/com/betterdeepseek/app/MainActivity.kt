@@ -352,6 +352,7 @@ class MainActivity : ComponentActivity() {
                     pendingPickFilesMode = mode
                     when (mode) {
                         "folder", "folder+images" -> folderPickerLauncher.launch(null)
+                        "images" -> multiFileLauncher.launch(arrayOf("image/*"))
                         else -> multiFileLauncher.launch(arrayOf("*/*"))
                     }
                     bridge.deliverPickStatus(requestId, "opened")

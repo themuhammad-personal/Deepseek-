@@ -161,8 +161,9 @@ class WebViewBridgePickerTest {
         bridge.pickFiles("files+images", "req-1")
         bridge.pickFiles("folder+images", "req-2")
         bridge.pickFiles("banana", "req-3")
+        bridge.pickFiles("images", "req-4")
 
-        assertEquals(listOf("files+images", "folder+images", "files"), modes)
+        assertEquals(listOf("files+images", "folder+images", "files", "images"), modes)
     }
 
     @Test

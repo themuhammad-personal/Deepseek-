@@ -617,4 +617,25 @@ Please consider the issue and regenerate the <BDS:VISUALIZER> code.
     background: #27272a;
     color: #f4f4f5;
   }
+
+  @media (max-width: 767px) {
+    .bds-visualizer-card {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      height: 480px !important;
+      padding: 10px !important;
+      margin: 8px 0 !important;
+    }
+
+    .bds-visualizer-header {
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+    }
+
+    .bds-visualizer-header-actions {
+      flex-wrap: wrap !important;
+      gap: 4px !important;
+    }
+  }
 </style>

@@ -97,7 +97,11 @@
     display: block;
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 767px) {
+    :global(.bds-deep-research-mount),
+    .bds-deep-research-toggle {
+      display: none !important;
+    }
     .bds-deep-research-toggle span._6dbc175 {
       display: none !important;
     }

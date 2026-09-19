@@ -201,15 +201,15 @@
     "attachMenu": {
       "buttonTitle": "সংযুক্তি ও মোড মেনু",
       "uploadFile": "ফাইল আপলোড",
-      "uploadFileDesc": "পিডিএফ, ডকুমেন্ট, ছবি ও কোড",
+      "uploadFileDesc": "পিডিএফ, ছবি, ডকুমেন্ট ও কোড",
       "cameraPhoto": "ক্যামেরা ও ছবি",
-      "cameraPhotoDesc": "ছবি তুলুন বা ফাইল নির্বাচন করুন",
+      "cameraPhotoDesc": "ছবি তুলুন বা ইমেজ আপলোড করুন",
       "webSearchMode": "ওয়েব সার্চ মোড",
-      "webSearchModeDesc": "সরাসরি ইন্টারনেট থেকে রিয়েল-টাইম তথ্য",
-      "deepThinkR1": "ডিপথিঙ্ক (R1)",
-      "deepThinkR1Desc": "গভীর যুক্তি ও চিন্তাধারার মাধ্যমে বিশ্লেষণ",
+      "webSearchModeDesc": "রিয়েল-টাইম তথ্যের জন্য ওয়েব সার্চ",
+      "deepThinkR1": "ডিপথিংক (R1)",
+      "deepThinkR1Desc": "গভীর যুক্তি ও চিন্তার ধারাবাহিকতা",
       "uploadFolder": "ফোল্ডার আপলোড",
-      "uploadFolderDesc": "সম্পূর্ণ ডিরেক্টরি ফাইল রিড করুন",
+      "uploadFolderDesc": "ফোল্ডারের ফাইল নির্বাচন করুন",
       "attachProject": "প্রজেক্ট ফাইল যুক্ত করুন",
       "attachProjectDesc": "প্রজেক্ট ফাইল ও কনটেক্সট যুক্ত করুন",
       "githubRepo": "গিটহাব রেপোজিটরি",
@@ -256,7 +256,13 @@
       "commitsFailed": "কমিট সংগ্রহ ব্যর্থ: {{msg}}",
       "repoFailed": "রেপো সংগ্রহ ব্যর্থ: {{msg}}",
       "invalidWebUrl": "সঠিক লিঙ্ক লিখুন (http/https সহ)।",
-      "webFetchFailed": "পেজ সংগ্রহ করা যায়নি: {{msg}}"
+      "webFetchFailed": "পেজ সংগ্রহ করা যায়নি: {{msg}}",
+      "deepResearch": "ডিপ রিসার্চ",
+      "deepResearchDesc": "স্বয়ংক্রিয় বহুমুখী ওয়েব অনুসন্ধান",
+      "deepResearchEnabled": "ডিপ রিসার্চ সক্রিয় করা হয়েছে",
+      "deepResearchDisabled": "ডিপ রিসার্চ নিষ্ক্রিয় করা হয়েছে",
+      "customCommands": "কমান্ড ও প্রম্পট",
+      "customCommandsDesc": "শর্টকাট, স্নিপেট ও টুলস"
     },
     "mcp": {
       "title": "এমসিপি সার্ভার",
@@ -810,8 +816,9 @@
     "sidebarMenu": {
       "tags": "Tags (BDS)",
       "exportChat": "Export Chat (BDS)",
-      "getBdsApp": "Get BDS App",
-      "whatsNew": "What's New?"
+      "getBdsApp": "সুপার ডিপসিক অ্যাপ",
+      "whatsNew": "নতুন কী আছে?",
+      "advancedSettings": "অ্যাডভান্স সেটিংস"
     },
     "savedItems": {
       "title": "Saved Items",

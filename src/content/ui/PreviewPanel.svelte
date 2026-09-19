@@ -32,6 +32,9 @@
 
   $effect(() => {
     if (visible) {
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        panelWidth = window.innerWidth;
+      }
       hasError = false;
       errorDetails = null;
       showMenu = false;
@@ -692,5 +695,25 @@ Please consider the issue and regenerate the <BDS:VISUALIZER> code.
   :global(.dark) .bds-menu-cancel:hover {
     background: #27272a;
     color: #f4f4f5;
+  }
+
+  @media (max-width: 767px) {
+    .bds-preview-panel {
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      border-left: none !important;
+      border-radius: 0 !important;
+      box-sizing: border-box !important;
+    }
+
+    .bds-preview-resize-handle {
+      display: none !important;
+    }
   }
 </style>

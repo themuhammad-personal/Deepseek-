@@ -140,10 +140,7 @@ jobs:
           fi
 
           cp "$APK_RAW" "$APK_NAME"
-          # Also keep better-deepseek-latest.apk for backward compatibility with older updaters
-          cp "$APK_RAW" "better-deepseek-latest.apk"
           sha256sum "$APK_NAME" > "${APK_NAME}.sha256"
-          sha256sum "better-deepseek-latest.apk" > "better-deepseek-latest.apk.sha256"
           
           echo "apk_path=$APK_NAME" >> "$GITHUB_OUTPUT"
           echo "checksum_path=${APK_NAME}.sha256" >> "$GITHUB_OUTPUT"
@@ -159,7 +156,7 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: better-deepseek-apk
+          name: super-deepseek-apk
           path: |
             *.apk
             *.sha256
@@ -178,7 +175,7 @@ jobs:
       - name: Download Built APK
         uses: actions/download-artifact@v4
         with:
-          name: better-deepseek-apk
+          name: super-deepseek-apk
 
       - name: Determine Release Tag & Config
         id: rel_cfg
@@ -192,8 +189,8 @@ jobs:
             echo "title=Super DeepSeek v${VERSION}" >> "$GITHUB_OUTPUT"
           else
             echo "tag=latest" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
             echo "title=Super DeepSeek (Continuous Build #${{ github.run_number }})" >> "$GITHUB_OUTPUT"
           fi
 
@@ -217,13 +214,13 @@ jobs:
             - **Deep Research & Custom Commands**: Integrated autonomous web research and slash commands inside the native Plus (+) sheet.
 
             #### 📲 Installation:
-            1. Download the `super-deepseek-latest.apk` (or `better-deepseek-latest.apk`) below.
+            1. Download the `super-deepseek-latest.apk` below.
             2. Open on your Android device (Android 8.0+ / SDK 26+).
             3. Verify SHA256 checksum with the attached `.sha256` file.
           files: |
             *.apk
             *.sha256
-          prerelease: ${{ steps.rel_cfg.outputs.is_prerelease == 'true' }}
-          make_latest: ${{ steps.rel_cfg.outputs.is_latest == 'true' }}
+          prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

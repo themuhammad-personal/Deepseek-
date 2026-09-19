@@ -300,7 +300,7 @@ class WebViewBridge(
 
         val safeMode =
                 when (mode) {
-                    "folder", "folder+images", "files+images" -> mode
+                    "images", "folder", "folder+images", "files+images" -> mode
                     else -> "files"
                 }
         val handler = onPickFiles
