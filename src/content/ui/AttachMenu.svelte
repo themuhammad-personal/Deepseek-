@@ -1122,7 +1122,7 @@
         </span>
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.uploadFile')}</span>
-          <span class="bds-item-desc">PDF, images, documents & code</span>
+          <span class="bds-item-desc">{t('attachMenu.uploadFileDesc') || 'PDF, images, documents & code'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1149,8 +1149,8 @@
           </svg>
         </span>
         <span class="bds-item-content">
-          <span class="bds-item-title">ক্যামেরা ও ছবি</span>
-          <span class="bds-item-desc">Take photos or upload images</span>
+          <span class="bds-item-title">{t('attachMenu.cameraPhoto') || 'Camera & Photos'}</span>
+          <span class="bds-item-desc">{t('attachMenu.cameraPhotoDesc') || 'Take photos or upload images'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1177,8 +1177,8 @@
           </svg>
         </span>
         <span class="bds-item-content">
-          <span class="bds-item-title">ওয়েব সার্চ মোড</span>
-          <span class="bds-item-desc">Search the live web for real-time answers</span>
+          <span class="bds-item-title">{t('attachMenu.webSearchMode') || 'Web Search Mode'}</span>
+          <span class="bds-item-desc">{t('attachMenu.webSearchModeDesc') || 'Search the live web for real-time answers'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1204,8 +1204,8 @@
           </svg>
         </span>
         <span class="bds-item-content">
-          <span class="bds-item-title">ডিপথিঙ্ক আর১</span>
-          <span class="bds-item-desc">Deep reasoning and chain of thought</span>
+          <span class="bds-item-title">{t('attachMenu.deepThinkR1') || 'DeepThink (R1)'}</span>
+          <span class="bds-item-desc">{t('attachMenu.deepThinkR1Desc') || 'Deep reasoning and chain of thought'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1238,7 +1238,7 @@
           </span>
           <span class="bds-item-content">
             <span class="bds-item-title">{t('attachMenu.uploadFolder')}</span>
-            <span class="bds-item-desc">Read directory files via picker</span>
+            <span class="bds-item-desc">{t('attachMenu.uploadFolderDesc') || 'Read directory files via picker'}</span>
           </span>
           <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1266,7 +1266,7 @@
           </span>
           <span class="bds-item-content">
             <span class="bds-item-title">{t('attachMenu.attachProject')}</span>
-            <span class="bds-item-desc">{panelActiveProjectId ? (panelProjects.find(p => p.id === panelActiveProjectId)?.name || "Active Project") : "Attach project files & context"}</span>
+            <span class="bds-item-desc">{panelActiveProjectId ? (panelProjects.find(p => p.id === panelActiveProjectId)?.name || "Active Project") : (t('attachMenu.attachProjectDesc') || "Attach project files & context")}</span>
           </span>
           <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1315,7 +1315,7 @@
               </span>
             {/if}
           </span>
-          <span class="bds-item-desc">Clone and inspect repo files</span>
+          <span class="bds-item-desc">{t('attachMenu.githubRepoDesc') || 'Clone and inspect repo files'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -1349,31 +1349,13 @@
         </span>
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.fetchWebPage')}</span>
-          <span class="bds-item-desc">Extract text and content from URL</span>
+          <span class="bds-item-desc">{t('attachMenu.fetchWebPageDesc') || 'Extract text and content from URL'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
       </button>
       {/if}
-
-      <div class="bds-attach-divider"></div>
-
-      <button type="button" class="bds-attach-item bds-attach-item-bds" onclick={() => { isOpen = false; window.dispatchEvent(new CustomEvent('bds:toggle-drawer')); }}>
-        <span class="bds-item-icon-box bds-item-icon-accent">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </span>
-        <span class="bds-item-content">
-          <span class="bds-item-title">প্লাগইন ও সেটিংস</span>
-          <span class="bds-item-desc">Advanced Settings & MCP Tools</span>
-        </span>
-        <span class="bds-item-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </span>
-      </button>
     </div>
   {/if}
 </div>

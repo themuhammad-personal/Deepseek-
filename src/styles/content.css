@@ -828,13 +828,15 @@ textarea.bds-input,
   white-space: nowrap;
 }
 
-/* The toggle switch track */
+/* The toggle switch track (modern iOS style) */
 .bds-switch {
   position: relative;
-  width: 40px;
-  height: 22px;
-  min-width: 40px;
+  width: 44px;
+  height: 26px;
+  min-width: 44px;
   cursor: pointer;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .bds-switch input {
@@ -847,13 +849,13 @@ textarea.bds-input,
 .bds-switch .bds-switch-track {
   position: absolute;
   inset: 0;
-  background: var(--bds-bg-hover);
+  background: #3f3f46;
   border-radius: 999px;
-  transition: background var(--bds-transition);
+  transition: background-color 0.2s ease;
 }
 
 .bds-switch input:checked + .bds-switch-track {
-  background: var(--bds-accent);
+  background: #10b981;
 }
 
 .bds-switch .bds-switch-track::after {
@@ -861,12 +863,12 @@ textarea.bds-input,
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   background: #ffffff;
   border-radius: 50%;
-  transition: transform var(--bds-transition);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .bds-switch input:checked + .bds-switch-track::after {
@@ -2115,26 +2117,11 @@ textarea.bds-input,
     pointer-events: auto;
   }
 
-  /* Toggle: minimal 34px icon capsule docked cleanly at top right */
-  #bds-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    padding: 0;
-    border-radius: 50%;
-    background: var(--bds-bg-elevated);
-    border: 1px solid var(--bds-border);
-    color: var(--bds-accent);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    opacity: 0.95;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-  }
-
-  #bds-toggle:active {
-    transform: scale(0.92);
+  /* Toggle pill & header buttons permanently hidden */
+  #bds-toggle,
+  #bds-header-btn,
+  #bds-sidebar-search-container {
+    display: none !important;
   }
 
   .bds-toggle-full { display: none !important; }
@@ -2145,25 +2132,27 @@ textarea.bds-input,
     display: none !important;
   }
 
-  /* Clean ChatGPT / Claude mobile composer layout */
-  .bds-composer-controls,
+  /* Clean mobile composer action buttons: Natural inline layout, no overlap with DeepSeek native icons */
   div:has(> .bds-attach-menu-mount) {
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
+    gap: 8px !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
   }
 
-  /* Place Plus (+) button on the far left */
   .bds-attach-menu-mount {
-    order: -999 !important;
-    margin-right: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
   }
 
   .bds-plus-btn {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
     border-radius: 50% !important;
     background: rgba(255, 255, 255, 0.08) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -2180,39 +2169,11 @@ textarea.bds-input,
     background: rgba(77, 107, 254, 0.2) !important;
   }
 
-  /* Keep send & stop buttons on the far right */
-  .bds-composer-controls > button:has(.ds-icon-send),
-  .bds-composer-controls > div[role="button"]:has(.ds-icon-send),
-  .bds-composer-controls > button[class*="send"],
-  .bds-composer-controls > button:has(svg path[d*="M8.3125"]),
-  .bds-composer-controls > button:has(.ds-icon-stop),
-  .bds-composer-controls > div[role="button"]:has(.ds-icon-stop),
-  div:has(> .bds-attach-menu-mount) > button:has(.ds-icon-send),
-  div:has(> .bds-attach-menu-mount) > div[role="button"]:has(.ds-icon-send),
-  div:has(> .bds-attach-menu-mount) > button[class*="send"],
-  div:has(> .bds-attach-menu-mount) > button:has(svg path[d*="M8.3125"]),
-  div:has(> .bds-attach-menu-mount) > button:has(.ds-icon-stop),
-  div:has(> .bds-attach-menu-mount) > div[role="button"]:has(.ds-icon-stop) {
-    order: 999 !important;
-    margin-left: auto !important;
-    display: inline-flex !important;
-  }
-
-  /* Hide cluttered bubbles under the text input on mobile */
-  .bds-composer-controls > .ds-toggle-button,
-  .bds-composer-controls > .bds-deep-research-mount,
-  .bds-composer-controls > .bds-deep-code-mount,
-  .bds-composer-controls > .bds-expand-toggle-mount,
-  .bds-composer-controls > .bds-project-btn,
-  .bds-composer-controls > div[role="button"]:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
-  .bds-composer-controls > button:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
-  div:has(> .bds-attach-menu-mount) > .ds-toggle-button,
-  div:has(> .bds-attach-menu-mount) > .bds-deep-research-mount,
-  div:has(> .bds-attach-menu-mount) > .bds-deep-code-mount,
-  div:has(> .bds-attach-menu-mount) > .bds-expand-toggle-mount,
-  div:has(> .bds-attach-menu-mount) > .bds-project-btn,
-  div:has(> .bds-attach-menu-mount) > div[role="button"]:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount),
-  div:has(> .bds-attach-menu-mount) > button:not(:has(.ds-icon-send)):not(:has(.ds-icon-stop)):not(.bds-attach-menu-mount) {
+  /* Hide BDS desktop-specific injected pills on mobile so composer remains clean (all available in Plus sheet) */
+  .bds-deep-research-mount,
+  .bds-deep-code-mount,
+  .bds-expand-toggle-mount,
+  .bds-project-btn {
     display: none !important;
   }
 
@@ -5737,7 +5698,7 @@ tr:hover .bds-row-hide-btn:hover {
   color: var(--bds-text-primary, #f4f4f5);
 }
 
-/* On mobile, remove the giant sticky save button overlay */
+/* On mobile, remove the giant sticky save button overlay and hide redundant category pill nav */
 @media (max-width: 768px) {
   .bds-floating-save-bar,
   .bds-sticky-save-bar {
@@ -5746,4 +5707,122 @@ tr:hover .bds-row-hide-btn:hover {
     border-top: none !important;
     padding: 12px 0 !important;
   }
+
+  .bds-category-nav {
+    display: none !important;
+  }
+
+  .bds-advanced-search-wrapper {
+    margin-bottom: 12px !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Inner Settings Panel Grouped Cards & Modern UI Enhancements
+   ══════════════════════════════════════════════════════════════ */
+.bds-card {
+  background: var(--bds-bg-card, #1c1c1f) !important;
+  border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08)) !important;
+  border-radius: 16px !important;
+  margin-bottom: 14px !important;
+  overflow: hidden !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.bds-card .bds-sub-toggle {
+  border-bottom: none !important;
+  padding: 14px 16px !important;
+  margin-top: 0 !important;
+  border-radius: 16px !important;
+  transition: background-color 0.15s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+}
+
+.bds-card .bds-sub-toggle:hover {
+  background: var(--bds-bg-hover, rgba(255, 255, 255, 0.05)) !important;
+}
+
+.bds-card .bds-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.bds-card-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.bds-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bds-text-primary, #f4f4f5);
+  line-height: 1.3;
+}
+
+.bds-card-subtitle {
+  font-size: 11.5px;
+  color: var(--bds-text-secondary, #a1a1aa);
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.bds-card-icon-badge {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 9px;
+  background: var(--bds-bg-elevated, #242428);
+  border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bds-accent, #4d6bfe);
+  flex-shrink: 0;
+}
+
+.bds-card .bds-sub-content {
+  border-top: 1px solid var(--bds-border, rgba(255, 255, 255, 0.06)) !important;
+}
+
+.bds-card .bds-sub-inner {
+  padding: 14px 16px 16px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bds-card .bds-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 !important;
+  border-bottom: 1px solid var(--bds-border, rgba(255, 255, 255, 0.06)) !important;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.bds-card .bds-toggle-row:last-child,
+.bds-card .bds-toggle-row:last-of-type {
+  border-bottom: none !important;
+}
+
+.bds-toggle-label {
+  font-size: 13.5px !important;
+  color: var(--bds-text-primary, #f4f4f5) !important;
+  line-height: 1.4 !important;
+  font-weight: 400 !important;
+  text-align: left !important;
 }

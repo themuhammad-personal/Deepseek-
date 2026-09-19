@@ -100,6 +100,12 @@ describe("hideDrawerAppItem", () => {
     expect(document.querySelector('[data-testid="item"]').hasAttribute("data-bds-hide")).toBe(true);
   });
 
+  it("hides the Bengali version 'মোবাইল অ্যাপ ডাউনলোড করুন'", () => {
+    makeMenu([{ text: "মোবাইল অ্যাপ ডাউনলোড করুন", testid: "item-bn" }]);
+    hideDrawerAppItem();
+    expect(document.querySelector('[data-testid="item-bn"]').hasAttribute("data-bds-hide")).toBe(true);
+  });
+
   it("does not hide options with unrelated text", () => {
     makeMenu([{ text: "Mobile settings", testid: "item" }]);
     hideDrawerAppItem();

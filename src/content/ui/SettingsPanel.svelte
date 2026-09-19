@@ -707,6 +707,20 @@
       advancedOpen = true;
       subInjectionOpen = true;
       subChatOpen = true;
+      subVoiceOpen = true;
+      subLanguageOpen = true;
+      subCSSOpen = true;
+    } else if (activeTab === "data") {
+      advancedOpen = true;
+      subIntegrationsOpen = true;
+      subUtilitiesOpen = true;
+    } else if (activeTab === "deep_research") {
+      advancedOpen = true;
+      subResearchOpen = true;
+    } else if (activeTab === "appearance") {
+      advancedOpen = true;
+      subCSSOpen = true;
+      subLanguageOpen = true;
     } else if (activeTab === "projects") {
       advancedOpen = true;
       subProjectsOpen = true;
@@ -729,8 +743,11 @@
     const q = (searchQuery || advancedSearchQuery || "").trim();
     if (q.length > 0) return true;
     if (activeTab === "all") return true;
-    if (activeTab === "mcp") return sectionKey === "subMcp" || sectionKey === "subResearch";
-    if (activeTab === "chat") return sectionKey === "systemPrompts" || sectionKey === "subInjection" || sectionKey === "subChat";
+    if (activeTab === "mcp") return sectionKey === "subMcp";
+    if (activeTab === "deep_research") return sectionKey === "subResearch";
+    if (activeTab === "data") return sectionKey === "subIntegrations" || sectionKey === "subUtilities";
+    if (activeTab === "appearance") return sectionKey === "subCSS" || sectionKey === "subLanguage";
+    if (activeTab === "chat") return sectionKey === "subChat" || sectionKey === "subVoice" || sectionKey === "subCSS" || sectionKey === "subLanguage" || sectionKey === "subInjection";
     if (activeTab === "prompts") return sectionKey === "systemPrompts";
     if (activeTab === "projects") return sectionKey === "subProjects";
     if (activeTab === "settings") {

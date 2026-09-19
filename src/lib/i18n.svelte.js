@@ -25,6 +25,13 @@ for (const [path, mod] of Object.entries(localeModules)) {
   }
 }
 
+// Ensure 'en' is first in availableLocaleCodes as the canonical default/fallback
+const enIndex = availableLocaleCodes.indexOf("en");
+if (enIndex > 0) {
+  availableLocaleCodes.splice(enIndex, 1);
+  availableLocaleCodes.unshift("en");
+}
+
 function getSystemLanguageCode() {
   let rawLocale = null;
 
@@ -44,13 +51,13 @@ function getSystemLanguageCode() {
     rawLocale = navigator.language;
   }
 
-  return String(rawLocale || availableLocaleCodes[0] || "en").replace("_", "-").split("-")[0];
+  return String(rawLocale || "en").replace("_", "-").split("-")[0];
 }
 
 class I18nManager {
-  locale = $state(availableLocaleCodes[0] || "en");
+  locale = $state("en");
 
-  messages = $derived(locales[this.locale] || locales[availableLocaleCodes[0]]);
+  messages = $derived(locales[this.locale] || locales["en"] || locales[availableLocaleCodes[0]]);
 
   /**
    * Initializes the locale from chrome.storage.local, cookies, or falls back to system preferences.

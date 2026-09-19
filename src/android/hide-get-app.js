@@ -23,11 +23,20 @@ export function hideGetAppButton() {
   }
 
   function hideButton() {
-    const spans = document.querySelectorAll("span");
-    for (const span of spans) {
-      const text = span.textContent.trim();
-      if (text !== "Get App" && text !== "অ্যাপ পান" && text !== "下载APP" && text !== "下载 APP") continue;
-      const target = getHideTarget(span);
+    const candidates = document.querySelectorAll("span, .ds-button__content, .ds-button, button, [role='button']");
+    for (const el of candidates) {
+      const text = el.textContent.replace(/\s+/g, " ").trim();
+      if (
+        text !== "Get App" &&
+        text !== "অ্যাপ পান" &&
+        text !== "下载APP" &&
+        text !== "下载 APP" &&
+        !text.includes("অ্যাপ পান") &&
+        !text.includes("下载APP")
+      ) {
+        continue;
+      }
+      const target = getHideTarget(el) || el;
       if (target && !target.hasAttribute(HIDE_ATTR)) {
         target.setAttribute(HIDE_ATTR, "");
         devLog("HideGetApp", "Hidden Get App container");

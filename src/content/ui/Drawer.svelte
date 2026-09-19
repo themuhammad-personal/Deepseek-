@@ -132,14 +132,15 @@
 
   function getSectionTitle(section) {
     switch (section) {
-      case "prompts": return "Personalization (সিস্টেম প্রম্পট)";
-      case "mcp": return "Plugins & Live MCP Tools";
-      case "deep_research": return "Deep Research & Context Guard";
-      case "memory": return "Persistent Memory (স্মৃতি)";
-      case "commands": return "Custom Commands & Shortcuts";
-      case "data": return "Data Controls & History";
-      case "chat": return "Chat & AI Settings";
-      default: return "সেটিংস (Settings)";
+      case "prompts": return t("drawer.sectionPrompts") || "System Prompts";
+      case "mcp": return t("drawer.sectionMcpServers") || "MCP Servers & Tools";
+      case "deep_research": return t("settings.subResearch") || "Deep Research";
+      case "memory": return t("drawer.sectionMemories") || "Stored Memories";
+      case "commands": return t("drawer.sectionSavedItems") || "Custom Commands";
+      case "data": return t("settings.subIntegrations") || "Data Controls";
+      case "chat": return t("settings.subChat") || "Chat & Messages";
+      case "projects": return t("drawer.sectionProjects") || "Projects & Workspaces";
+      default: return t("drawer.sectionSettings") || "Settings";
     }
   }
 </script>
@@ -265,9 +266,9 @@
              ChatGPT Mobile Settings (Grouped Rounded Cards Layout)
              ══════════════════════════════════════════════════════════════ -->
         <div class="bds-settings-screen">
-          <!-- GROUP 1: My DeepSeek -->
+          <!-- GROUP 1: Core -->
           <div class="bds-settings-group">
-            <div class="bds-settings-group-title">My DeepSeek (কাস্টমাইজেশন)</div>
+            <div class="bds-settings-group-title">{t("drawer.sectionSettings") || "Settings"}</div>
             <div class="bds-settings-card">
               <!-- Personalization Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -281,12 +282,12 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Personalization (সিস্টেম প্রম্পট)</span>
-                    <span class="bds-settings-row-sub">কাস্টম নির্দেশিকা ও আচরণ নির্ধারণ</span>
+                    <span class="bds-settings-row-title">{t("settings.systemPrompts") || "System Prompts"}</span>
+                    <span class="bds-settings-row-sub">{t("drawer.sectionPrompts") || "Custom system prompts & rules"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
-                  <span class="bds-badge-value">{appState.settings.activeSystemPromptId === "default" ? "Default" : "Custom"}</span>
+                  <span class="bds-badge-value">{appState.settings.activeSystemPromptId === "default" ? (t("settings.defaultPromptName") || "Default") : (t("settings.customPromptStatus") || "Custom")}</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
               </div>
@@ -301,8 +302,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Persistent Memory</span>
-                    <span class="bds-settings-row-sub">চ্যাট সেশন জুড়ে তথ্য মনে রাখা</span>
+                    <span class="bds-settings-row-title">{t("drawer.sectionMemories") || "Stored Memories"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.disableMemory") ? (!appState.settings.disableMemory ? (t("settings.enabled") || "Enabled") : "Disabled") : "Remember across chats"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -330,12 +331,12 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Plugins & Live MCP Tools</span>
-                    <span class="bds-settings-row-sub">লোকাল ও রিমোট সার্ভার টুলস যুক্তকরণ</span>
+                    <span class="bds-settings-row-title">{t("drawer.sectionMcpServers") || "MCP Servers & Tools"}</span>
+                    <span class="bds-settings-row-sub">{t("mcp.title") || "External tools & local server integration"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
-                  <span class="bds-badge-value">{appState.mcpServers?.filter(s => s.enabled)?.length || 0} সক্রিয়</span>
+                  <span class="bds-badge-value">{appState.mcpServers?.filter(s => s.enabled)?.length || 0}</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
               </div>
@@ -344,7 +345,7 @@
 
           <!-- GROUP 2: App & Voice Settings -->
           <div class="bds-settings-group">
-            <div class="bds-settings-group-title">অ্যাপ ও ভয়েস সেটিংস</div>
+            <div class="bds-settings-group-title">{t("settings.generalSettings") || "General Settings"}</div>
             <div class="bds-settings-card">
               <!-- Language Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -358,8 +359,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">ভাষা (Primary Language)</span>
-                    <span class="bds-settings-row-sub">ইন্টারফেস ও ডিপসিক সিঙ্ক ভাষা</span>
+                    <span class="bds-settings-row-title">{t("settings.languageSettings") || "Language"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.preferredLang") || "Response language"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -381,8 +382,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">ভয়েস মোড (Voice & Speech)</span>
-                    <span class="bds-settings-row-sub">ডিক্টেশন ও স্বয়ংক্রিয় সাবমিট নিয়ন্ত্রণ</span>
+                    <span class="bds-settings-row-title">{t("settings.voiceMode") || "Voice Mode"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.autoSubmitVoice") || "Automatic voice readout"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -413,12 +414,12 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">থিম ও রূপ (Appearance)</span>
-                    <span class="bds-settings-row-sub">ডার্ক মোড ও ইন্টারফেস প্রিফারেন্স</span>
+                    <span class="bds-settings-row-title">{t("settings.subCSS") || "Appearance"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.presetCompact") || "Theme & display preferences"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
-                  <span class="bds-badge-value">ডার্ক</span>
+                  <span class="bds-badge-value">Dark</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
               </div>
@@ -427,7 +428,7 @@
 
           <!-- GROUP 3: Advanced Capabilities & Data -->
           <div class="bds-settings-group">
-            <div class="bds-settings-group-title">অ্যাডভান্সড সক্ষমতা ও ডেটা</div>
+            <div class="bds-settings-group-title">{t("settings.advancedSettings") || "Advanced Settings"}</div>
             <div class="bds-settings-card">
               <!-- Deep Research Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -440,8 +441,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Deep Research & Context Guard</span>
-                    <span class="bds-settings-row-sub">টোকেন সীমা ও স্বয়ংক্রিয় গবেষণা গভীরতা</span>
+                    <span class="bds-settings-row-title">{t("settings.subResearch") || "Deep Research"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.deepResearchContextGuard") || "Multi-step automated web research"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -460,12 +461,12 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Projects Context & RAG Engine</span>
-                    <span class="bds-settings-row-sub">ওয়ার্কস্পেস ফাইল ও লোকাল সোর্স কোড</span>
+                    <span class="bds-settings-row-title">{t("drawer.sectionProjects") || "Projects & Workspaces"}</span>
+                    <span class="bds-settings-row-sub">{t("settings.projectAutoContext") || "Local files & code context"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
-                  <span class="bds-badge-value">{appState.projects?.length || 0} Projects</span>
+                  <span class="bds-badge-value">{appState.projects?.length || 0}</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </div>
               </div>
@@ -480,8 +481,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Custom Commands & Shortcuts</span>
-                    <span class="bds-settings-row-sub">/slash কমান্ড ও প্রম্পট প্রিসেটস</span>
+                    <span class="bds-settings-row-title">{t("drawer.sectionSavedItems") || "Custom Commands"}</span>
+                    <span class="bds-settings-row-sub">{t("drawer.sectionSavedItems") || "Slash (/) shortcuts & prompts"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -501,8 +502,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Data Controls & Chat History</span>
-                    <span class="bds-settings-row-sub">সেশন সীমা, মেসেজ সংক্ষেপ ও ব্যাকআপ</span>
+                    <span class="bds-settings-row-title">{t("settings.subIntegrations") || "Data Controls"}</span>
+                    <span class="bds-settings-row-sub">{t("drawer.exportAll") || "Data backup, cache & storage"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -522,7 +523,7 @@
                   </div>
                   <div class="bds-settings-row-text">
                     <span class="bds-settings-row-title">API Playground</span>
-                    <span class="bds-settings-row-sub">ইন্টারঅ্যাক্টিভ API ও লাইভ MCP টুলস টেস্ট</span>
+                    <span class="bds-settings-row-sub">{t("mcp.tools", { count: "" }) || "Interactive API & live tool testing"}</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -534,7 +535,7 @@
 
           <!-- GROUP 4: About -->
           <div class="bds-settings-group">
-            <div class="bds-settings-group-title">সম্পর্কিত (About)</div>
+            <div class="bds-settings-group-title">{t("settings.about") || "About"}</div>
             <div class="bds-settings-card">
               <a
                 href="https://github.com/EdgeTypE/better-deepseek"
@@ -553,7 +554,7 @@
                   </div>
                   <div class="bds-settings-row-text">
                     <span class="bds-settings-row-title">Better DeepSeek</span>
-                    <span class="bds-settings-row-sub">সংস্করণ v{extensionVersion} • Android Edition</span>
+                    <span class="bds-settings-row-sub">v{extensionVersion} • Android Edition</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
@@ -633,7 +634,7 @@
         <!-- Sub-View: Deep Research & Context Guard -->
         <SettingsPanel
           bind:this={settingsRef}
-          activeTab="chat"
+          activeTab="deep_research"
           onsave={handleSettingsSaved}
           onapiplayground={openApiPlayground}
           onimportdata={() => {
@@ -657,7 +658,7 @@
         <!-- Sub-View: Data Controls & Exports -->
         <SettingsPanel
           bind:this={settingsRef}
-          activeTab="settings"
+          activeTab="data"
           onsave={handleSettingsSaved}
           onapiplayground={openApiPlayground}
           onimportdata={() => {

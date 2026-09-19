@@ -145,6 +145,18 @@ describe("hideGetAppButton", () => {
     expect(container.hasAttribute("data-bds-hide")).toBe(true);
   });
 
+  it("hides Bengali version 'অ্যাপ পান'", () => {
+    const container = document.createElement("div");
+    const button = document.createElement("button");
+    const span = document.createElement("span");
+    span.textContent = "অ্যাপ পান";
+    button.appendChild(span);
+    container.appendChild(button);
+    document.body.appendChild(container);
+    hideGetAppButton();
+    expect(container.hasAttribute("data-bds-hide")).toBe(true);
+  });
+
   it("does not hide when text is 'Get App' cased differently", () => {
     const container = document.createElement("div");
     const button = document.createElement("button");
