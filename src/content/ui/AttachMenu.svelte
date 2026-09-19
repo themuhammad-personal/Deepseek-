@@ -41,17 +41,21 @@
   // input node after the first successful upload (device layout re-renders);
   // the original prop reference then points at a detached node. Every use
   // site re-resolves through this instead of reading `nativeInput` directly.
-  let inputEl = $state(nativeInput);
+  let inputEl = $state(null);
 
   function resolveNativeInput() {
     if (inputEl?.isConnected) return inputEl;
+    if (nativeInput?.isConnected) {
+      inputEl = nativeInput;
+      return inputEl;
+    }
     const fresh = findActiveFileInput();
     if (fresh) inputEl = fresh;
     return fresh;
   }
 
   let isOpen = $state(false);
-  let menuRef;
+  let menuRef = $state(null);
   let dropdownStyle = $state("");
 
   // GitHub dialog state
@@ -70,13 +74,13 @@
   let webLoading = $state(false);
   let webError = $state("");
 
-  let dialogRef;
+  let dialogRef = $state(null);
 
   // Project panel (folder button) state
   let showProjectPanel = $state(false);
   let projectPanelStyle = $state("");
-  let projectBtnRef;
-  let projectPanelRef;
+  let projectBtnRef = $state(null);
+  let projectPanelRef = $state(null);
   let panelProjects = $state([...appState.projects]);
   let panelActiveProjectId = $state("");
   let panelFiles = $state([]);
@@ -568,7 +572,7 @@
     }
   }
 
-  let cameraInputRef = null;
+  let cameraInputRef = $state(null);
 
   async function handleCameraClick() {
     closeMenu();

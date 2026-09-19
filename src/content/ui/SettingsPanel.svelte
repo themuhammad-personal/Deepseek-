@@ -556,7 +556,7 @@
   }
 
   let activeProject = $state(getActiveProject());
-  let projectInstructions = $state(activeProject?.customInstructions || "");
+  let projectInstructions = $state(getActiveProject()?.customInstructions || "");
   let projectSaveTimer = null;
   const GITHUB_TOKEN_MASK_CHAR = "\u25cf";
 
@@ -2849,11 +2849,6 @@
     line-height: 1.45;
   }
 
-  .bds-token-help code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.95em;
-  }
-
   .bds-prompt-info {
     flex: 1;
     display: flex;
@@ -3288,12 +3283,6 @@
     font-size: 11px;
     background: transparent;
     padding: 0;
-  }
-
-  .bds-mcp-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
   }
 
   .bds-mcp-tools-details {
