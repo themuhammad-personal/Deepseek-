@@ -251,7 +251,7 @@ class MainActivity : ComponentActivity() {
     private val multiFileLauncher: ActivityResultLauncher<Array<String>> =
             registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
                 val requestId = pendingPickFilesRequestId ?: return@registerForActivityResult
-                val acceptImages = pendingPickFilesMode?.endsWith("+images") == true
+                val acceptImages = pendingPickFilesMode == "images" || pendingPickFilesMode?.endsWith("+images") == true
                 pendingPickFilesRequestId = null
                 pendingPickFilesMode = null
                 if (uris.isEmpty()) {
@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
     private val folderPickerLauncher: ActivityResultLauncher<Uri?> =
             registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
                 val requestId = pendingPickFilesRequestId ?: return@registerForActivityResult
-                val acceptImages = pendingPickFilesMode?.endsWith("+images") == true
+                val acceptImages = pendingPickFilesMode == "images" || pendingPickFilesMode?.endsWith("+images") == true
                 pendingPickFilesRequestId = null
                 pendingPickFilesMode = null
                 if (treeUri == null) {

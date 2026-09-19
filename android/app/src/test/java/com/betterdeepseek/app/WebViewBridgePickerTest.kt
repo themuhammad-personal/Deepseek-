@@ -43,7 +43,7 @@ class WebViewBridgePickerTest {
         val result =
                 classifyPickedFile(
                         "notes.md",
-                        3L * 1024 * 1024,
+                        WebViewBridge.MAX_PICKED_FILE_SIZE + 1024,
                         "# hi",
                         requireKnownExtension = false,
                 )

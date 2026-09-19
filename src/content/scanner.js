@@ -650,7 +650,7 @@ export function scanInputArea() {
 }
 
 export function findActiveFileInput() {
-  const inputs = Array.from(document.querySelectorAll('input[type="file"][multiple]'))
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'))
     .filter((input) => !input.closest("#bds-root"));
 
   return inputs.find((input) =>

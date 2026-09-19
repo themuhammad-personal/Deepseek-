@@ -33,6 +33,7 @@
   import { VADProcessor } from "../vad-processor.js";
   import { findActiveFileInput } from "../scanner.js";
   import { sendFileWithMessage } from "../auto.js";
+  import { setDeepResearchEnabled } from "../deep-research.js";
 
   // The native input[type="file"] reference passed from scanner
   let { nativeInput } = $props();
@@ -513,11 +514,17 @@
     const onConfigOrStateUpdate = () => { recheckModelType(); };
     window.addEventListener(REMOTE_CONFIG_EVENT, onConfigOrStateUpdate);
 
+    const onDeepResearchChanged = () => {
+      isDeepResearchActive = Boolean(appState.deepResearch?.enabled);
+    };
+    window.addEventListener("bds:deep-research-config-changed", onDeepResearchChanged);
+
     return () => {
       destroyed = true;
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
       window.removeEventListener(REMOTE_CONFIG_EVENT, onConfigOrStateUpdate);
+      window.removeEventListener("bds:deep-research-config-changed", onDeepResearchChanged);
       if (appState.heroBarRef?.refresh === refreshProjectPanel) {
         appState.heroBarRef = null;
       }
@@ -624,7 +631,7 @@
     closeMenu();
     const allButtons = Array.from(document.querySelectorAll('button, div[role="button"], .ds-toggle-button'));
     const dtBtn = allButtons.find(b => {
-      if (b.closest('#bds-root')) return false;
+      if (b.closest('#bds-root') || b.closest('.bds-attach-wrapper')) return false;
       const txt = (b.textContent || '').toLowerCase();
       const label = (b.getAttribute('aria-label') || '').toLowerCase();
       const title = (b.getAttribute('title') || '').toLowerCase();
@@ -633,6 +640,36 @@
     });
     if (dtBtn) {
       dtBtn.click();
+    } else if (appState.ui) {
+      appState.ui.showToast('DeepThink (R1) toggled');
+    }
+  }
+
+  let isDeepResearchActive = $state(Boolean(appState.deepResearch?.enabled));
+
+  function toggleDeepResearch() {
+    closeMenu();
+    const next = !Boolean(appState.deepResearch?.enabled);
+    setDeepResearchEnabled(next);
+    isDeepResearchActive = next;
+    if (appState.ui) {
+      appState.ui.showToast(next ? (t('attachMenu.deepResearchEnabled') || 'Deep Research enabled') : (t('attachMenu.deepResearchDisabled') || 'Deep Research disabled'));
+    }
+  }
+
+  function handleCustomCommands() {
+    closeMenu();
+    window.dispatchEvent(new CustomEvent("bds:show-help"));
+    const textarea =
+      document.querySelector("textarea#chat-input") ||
+      document.querySelector(".ds-textarea textarea") ||
+      document.querySelector("textarea");
+    if (textarea) {
+      textarea.focus();
+      if (!textarea.value.startsWith("/")) {
+        textarea.value = "/" + textarea.value;
+      }
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }
 
@@ -1206,6 +1243,59 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.deepThinkR1') || 'DeepThink (R1)'}</span>
           <span class="bds-item-desc">{t('attachMenu.deepThinkR1Desc') || 'Deep reasoning and chain of thought'}</span>
+        </span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
+      </button>
+
+      <button type="button" class="bds-attach-item" onclick={toggleDeepResearch}>
+        <span class="bds-item-icon-box" class:bds-item-icon-accent={isDeepResearchActive}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <path d="M2 12h5l3 7 4-14 3 7h5"/>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">{t('attachMenu.deepResearch') || 'Deep Research'} {isDeepResearchActive ? '✓' : ''}</span>
+          <span class="bds-item-desc">{t('attachMenu.deepResearchDesc') || 'Autonomous multi-step web investigation'}</span>
+        </span>
+        <span class="bds-item-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </span>
+      </button>
+
+      <button type="button" class="bds-attach-item" onclick={handleCustomCommands}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">{t('attachMenu.customCommands') || 'Commands & Prompts'}</span>
+          <span class="bds-item-desc">{t('attachMenu.customCommandsDesc') || 'Quick shortcuts, snippets & tools'}</span>
         </span>
         <span class="bds-item-arrow">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>

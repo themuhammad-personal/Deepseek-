@@ -140,6 +140,31 @@ internal fun mimeForImageName(name: String): String {
     return WebViewBridge.IMAGE_MIME_TYPES[ext] ?: "application/octet-stream"
 }
 
+internal fun hasDocumentFileExtension(name: String): Boolean =
+        WebViewBridge.DOCUMENT_MIME_TYPES.containsKey(fileExtension(name))
+
+internal fun mimeForDocumentName(name: String): String =
+        WebViewBridge.DOCUMENT_MIME_TYPES[fileExtension(name)] ?: "application/octet-stream"
+
+internal fun encodePickedDocument(
+        name: String,
+        bytes: ByteArray,
+        mime: String,
+        capBytes: Long = WebViewBridge.MAX_PICKED_FILE_SIZE,
+): PickedItemResult {
+    if (bytes.size.toLong() > capBytes) {
+        return PickedItemResult.Skipped(name, "too-large")
+    }
+    return PickedItemResult.Ok(
+            PickedFile(
+                    name = name,
+                    content = java.util.Base64.getEncoder().encodeToString(bytes),
+                    encoding = "base64",
+                    mime = mime,
+            )
+    )
+}
+
 internal fun classifyFolderImageCap(name: String, acceptedImageCount: Int): PickedItemResult? {
     return if (acceptedImageCount >= WebViewBridge.MAX_FOLDER_IMAGES) {
         PickedItemResult.Skipped(name, "image-cap-exceeded")
@@ -361,6 +386,10 @@ class WebViewBridge(
             return readPickedImageUri(uri, name)
         }
 
+        if (hasDocumentFileExtension(name)) {
+            return readPickedDocumentUri(uri, name, mimeForDocumentName(name))
+        }
+
         val length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
         if (length > MAX_PICKED_FILE_SIZE) {
             return PickedItemResult.Skipped(name, "too-large")
@@ -380,6 +409,28 @@ class WebViewBridge(
                     null
                 }
         return classifyPickedFile(name, length, content, requireKnownExtension = false)
+    }
+
+    internal fun readPickedDocumentUri(uri: Uri, name: String, mime: String): PickedItemResult {
+        val length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
+        if (length > MAX_PICKED_FILE_SIZE) {
+            return PickedItemResult.Skipped(name, "too-large")
+        }
+        val bytes =
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        val read = readBoundedBytes(stream, MAX_PICKED_FILE_SIZE)
+                        if (read.overflowed) {
+                            return PickedItemResult.Skipped(name, "too-large")
+                        }
+                        read.bytes
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "readPickedDocumentUri failed for $uri", t)
+                    null
+                } ?: return PickedItemResult.Skipped(name, "unreadable")
+
+        return encodePickedDocument(name, bytes, mime)
     }
 
     internal fun readPickedFolderTree(treeUri: Uri, acceptImages: Boolean = false): PickReadResult {
@@ -1482,11 +1533,11 @@ class WebViewBridge(
         // so getLastKnownIsDark() and the polyfill share the same SharedPreferences key.
         internal const val KEY_LAST_PAGE_DARK = "bds_page_is_dark"
 
-        /** Max bytes per native-picked text file. */
-        internal const val MAX_PICKED_FILE_SIZE = 2L * 1024 * 1024
+        /** Max bytes per native-picked text file or document. */
+        internal const val MAX_PICKED_FILE_SIZE = 50L * 1024 * 1024
 
         /** Max bytes per native-picked image file. */
-        internal const val MAX_PICKED_IMAGE_SIZE = 8L * 1024 * 1024
+        internal const val MAX_PICKED_IMAGE_SIZE = 25L * 1024 * 1024
 
         internal const val MAX_FOLDER_IMAGES = 10
 
@@ -1513,6 +1564,22 @@ class WebViewBridge(
                         "webp" to "image/webp",
                         "gif" to "image/gif",
                         "bmp" to "image/bmp",
+                )
+
+        internal val DOCUMENT_MIME_TYPES =
+                mapOf(
+                        "pdf" to "application/pdf",
+                        "doc" to "application/msword",
+                        "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "xls" to "application/vnd.ms-excel",
+                        "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "ppt" to "application/vnd.ms-powerpoint",
+                        "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        "zip" to "application/zip",
+                        "tar" to "application/x-tar",
+                        "gz" to "application/gzip",
+                        "7z" to "application/x-7z-compressed",
+                        "rar" to "application/vnd.rar"
                 )
 
         private val SKIP_DIRS =
