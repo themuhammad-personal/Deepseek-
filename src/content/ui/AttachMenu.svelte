@@ -568,6 +568,70 @@
     }
   }
 
+  let cameraInputRef = null;
+
+  async function handleCameraClick() {
+    closeMenu();
+    if (isAndroidTarget && isNativeFilePickerAvailable()) {
+      try {
+        const result = await nativePickFiles("images");
+        if (result?.cancelled) return;
+        const files = result?.files || [];
+        if (files.length > 0) {
+          for (const file of files) {
+            injectFile(pickedEntryToFile(file));
+          }
+        }
+      } catch (err) {
+        if (cameraInputRef) cameraInputRef.click();
+      }
+      return;
+    }
+    if (cameraInputRef) cameraInputRef.click();
+  }
+
+  function handleCameraFileChange(e) {
+    const files = Array.from(e.target?.files || []);
+    for (const file of files) {
+      injectFile(file);
+    }
+    if (e.target) e.target.value = "";
+  }
+
+  function toggleNativeWebSearch() {
+    closeMenu();
+    const allButtons = Array.from(document.querySelectorAll('button, div[role="button"], .ds-toggle-button'));
+    const searchBtn = allButtons.find(b => {
+      if (b.closest('#bds-root')) return false;
+      const txt = (b.textContent || '').toLowerCase();
+      const label = (b.getAttribute('aria-label') || '').toLowerCase();
+      const title = (b.getAttribute('title') || '').toLowerCase();
+      const hasSvg = b.querySelector('svg path[d*="M12 2a15.3"]') || b.querySelector('circle[cx="11"]');
+      return hasSvg || txt.includes('search') || label.includes('search') || title.includes('search') || txt.includes('সার্চ') || label.includes('সার্চ');
+    });
+    if (searchBtn) {
+      searchBtn.click();
+    } else {
+      handleWebImport();
+    }
+  }
+
+  function toggleNativeDeepThink() {
+    closeMenu();
+    const allButtons = Array.from(document.querySelectorAll('button, div[role="button"], .ds-toggle-button'));
+    const dtBtn = allButtons.find(b => {
+      if (b.closest('#bds-root')) return false;
+      const txt = (b.textContent || '').toLowerCase();
+      const label = (b.getAttribute('aria-label') || '').toLowerCase();
+      const title = (b.getAttribute('title') || '').toLowerCase();
+      const hasSvg = b.querySelector('svg path[d*="M7.0643"]') || b.querySelector('.ds-toggle-button');
+      return hasSvg || txt.includes('deepthink') || label.includes('deepthink') || title.includes('deepthink') || txt.includes('think') || txt.includes('থিঙ্ক');
+    });
+    if (dtBtn) {
+      dtBtn.click();
+    }
+  }
+
   async function handleUploadFile() {
     closeMenu();
     if (isAndroidTarget && isNativeFilePickerAvailable()) {
@@ -1012,8 +1076,22 @@
       <div class="bds-sheet-handle" aria-hidden="true"></div>
       <div class="bds-sheet-header">
         <span class="bds-sheet-title">{t('attachMenu.buttonTitle')}</span>
-        <button type="button" class="bds-sheet-close" onclick={() => (isOpen = false)}>✕</button>
+        <button type="button" class="bds-sheet-close" onclick={() => (isOpen = false)} aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
+
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        bind:this={cameraInputRef}
+        onchange={handleCameraFileChange}
+        style="display: none;"
+      />
 
       {#if shouldShowUploadFile}
       <button type="button" class="bds-attach-item" onclick={handleUploadFile}>
@@ -1045,6 +1123,82 @@
         <span class="bds-item-arrow">›</span>
       </button>
       {/if}
+
+      <button type="button" class="bds-attach-item" onclick={handleCameraClick}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">ক্যামেরা ও ছবি</span>
+          <span class="bds-item-desc">Take photos or upload images</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
+      </button>
+
+      <button type="button" class="bds-attach-item" onclick={toggleNativeWebSearch}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">ওয়েব সার্চ মোড</span>
+          <span class="bds-item-desc">Search the live web for real-time answers</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
+      </button>
+
+      <button type="button" class="bds-attach-item" onclick={toggleNativeDeepThink}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            <circle cx="12" cy="12" r="4"/>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">ডিপথিঙ্ক আর১</span>
+          <span class="bds-item-desc">Deep reasoning and chain of thought</span>
+        </span>
+        <span class="bds-item-arrow">›</span>
+      </button>
 
       {#if shouldShowUploadFolder && supportsFolderUpload}
         <button type="button" class="bds-attach-item" onclick={handleUploadFolder}>
@@ -1187,13 +1341,14 @@
 
       <button type="button" class="bds-attach-item bds-attach-item-bds" onclick={() => { isOpen = false; window.dispatchEvent(new CustomEvent('bds:toggle-drawer')); }}>
         <span class="bds-item-icon-box bds-item-icon-accent">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </span>
         <span class="bds-item-content">
-          <span class="bds-item-title">Settings & MCP Tools</span>
-          <span class="bds-item-desc">Live MCP servers, prompts & rules</span>
+          <span class="bds-item-title">প্লাগইন ও সেটিংস</span>
+          <span class="bds-item-desc">Advanced Settings & MCP Tools</span>
         </span>
         <span class="bds-item-arrow">›</span>
       </button>
@@ -1360,7 +1515,12 @@
           <option value={p.id}>{p.name}</option>
         {/each}
       </select>
-      <button type="button" class="bds-pp-close" onclick={() => (showProjectPanel = false)}>✕</button>
+      <button type="button" class="bds-pp-close" onclick={() => (showProjectPanel = false)} aria-label="Close Project Panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
     </div>
 
     <p class="bds-pp-hint">

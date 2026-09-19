@@ -103,12 +103,20 @@ html.dark, body.dark, .dark :root {
   font-family: inherit;
 }
 
-/* ── Toggle Text Visibility ── */
+/* ── Toggle Pill & Header Star Button (Hidden per user requirement) ── */
+#bds-toggle,
+#bds-header-btn,
+#bds-sidebar-search-container {
+  display: none !important;
+}
+
 .bds-toggle-full { display: inline; }
 .bds-toggle-short { display: none; }
 
 /* ── Toggle Pill ── */
 #bds-toggle {
+  display: none !important;
+
   display: inline-flex;
   align-items: center;
   gap: 8px;

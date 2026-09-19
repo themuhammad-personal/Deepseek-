@@ -130,7 +130,8 @@
     <div class="bds-header-brand">
       <span class="bds-brand-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+          <circle cx="12" cy="12" r="4"/>
         </svg>
       </span>
       <div class="bds-header-text">
@@ -166,7 +167,12 @@
 
   <!-- Quick Filter / Search Bar -->
   <div class="bds-drawer-search-bar">
-    <span class="bds-search-icon">🔍</span>
+    <span class="bds-search-icon">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    </span>
     <input
       type="text"
       placeholder="Search settings, MCP, prompts, tools..."
@@ -174,7 +180,12 @@
       class="bds-drawer-search-input"
     />
     {#if searchQuery}
-      <button class="bds-clear-search-btn" type="button" onclick={clearSearch}>✕</button>
+      <button class="bds-clear-search-btn" type="button" onclick={clearSearch} aria-label="Clear Search">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
     {/if}
   </div>
 
@@ -189,7 +200,9 @@
         role="tab"
         aria-selected={activeNav === 'mcp'}
       >
-        <span class="bds-tab-icon">🔌</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        </span>
         <span class="bds-tab-label">MCP & Tools</span>
         {#if appState.mcpServers?.some(s => s.enabled)}
           <span class="bds-tab-badge">{appState.mcpServers.filter(s => s.enabled).length}</span>
@@ -204,7 +217,9 @@
         role="tab"
         aria-selected={activeNav === 'chat'}
       >
-        <span class="bds-tab-icon">💬</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+        </span>
         <span class="bds-tab-label">Chat & AI</span>
       </button>
 
@@ -216,7 +231,9 @@
         role="tab"
         aria-selected={activeNav === 'prompts'}
       >
-        <span class="bds-tab-icon">🧠</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+        </span>
         <span class="bds-tab-label">Prompts</span>
       </button>
 
@@ -228,7 +245,9 @@
         role="tab"
         aria-selected={activeNav === 'projects'}
       >
-        <span class="bds-tab-icon">📁</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        </span>
         <span class="bds-tab-label">Projects</span>
       </button>
 
@@ -240,7 +259,9 @@
         role="tab"
         aria-selected={activeNav === 'commands'}
       >
-        <span class="bds-tab-icon">⚡</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        </span>
         <span class="bds-tab-label">Commands</span>
       </button>
 
@@ -252,7 +273,9 @@
         role="tab"
         aria-selected={activeNav === 'settings'}
       >
-        <span class="bds-tab-icon">⚙️</span>
+        <span class="bds-tab-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </span>
         <span class="bds-tab-label">Settings</span>
       </button>
     </div>
@@ -290,7 +313,10 @@
       {:else if activeNav === 'mcp'}
         <!-- MCP & Tools Tab -->
         <div class="bds-tab-section-intro">
-          <div class="bds-intro-badge">🔌 Custom MCP Engine Active</div>
+          <div class="bds-intro-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            Custom MCP Engine Active
+          </div>
           <h3>Model Context Protocol & Web Tools</h3>
           <p>Connect local servers (LAN / HTTP), remote tools, search engines, and code execution environments.</p>
         </div>
@@ -335,7 +361,8 @@
             class:active={promptSubTab === 'characters'}
             onclick={() => promptSubTab = 'characters'}
           >
-            🎭 Characters & Personas
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
+            Characters & Personas
           </button>
           <button
             type="button"
@@ -343,7 +370,8 @@
             class:active={promptSubTab === 'skills'}
             onclick={() => promptSubTab = 'skills'}
           >
-            🪄 Assistant Skills
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+            Assistant Skills
           </button>
           <button
             type="button"
@@ -351,7 +379,8 @@
             class:active={promptSubTab === 'memory'}
             onclick={() => promptSubTab = 'memory'}
           >
-            🧠 Persistent Memory
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+            Persistent Memory
           </button>
         </div>
 
@@ -393,7 +422,9 @@
         <div class="bds-section-title">
           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="bds-icon-inline">⚡</span>
+              <span class="bds-icon-inline">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              </span>
               <span>{t("commands.title")}</span>
             </div>
             <button

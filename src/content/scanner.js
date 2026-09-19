@@ -1042,77 +1042,9 @@ function linkifyNewChatButton() {
  */
 function injectHeaderBdsButton() {
   const existingBtn = document.getElementById("bds-header-btn");
-  if (existingBtn && document.contains(existingBtn)) {
-    document.body.classList.add("bds-has-header-btn");
-    const dot = existingBtn.querySelector(".bds-header-dot");
-    const mcpActive = state.mcpServers?.some((s) => s.enabled);
-    if (mcpActive && !dot) {
-      const newDot = document.createElement("span");
-      newDot.className = "bds-header-dot";
-      newDot.title = "MCP Active";
-      existingBtn.appendChild(newDot);
-    } else if (!mcpActive && dot) {
-      dot.remove();
-    }
-    return;
+  if (existingBtn) {
+    existingBtn.remove();
   }
-
-  // Look for header navigation targets:
-  // 1. New Chat button container
-  const allSvgs = document.querySelectorAll("svg");
-  let newChatSvg = null;
-  for (const svg of allSvgs) {
-    if (svg.querySelector('path[d*="M8 0.599609"]')) {
-      newChatSvg = svg;
-      break;
-    }
-  }
-
-  const newChatBtn = newChatSvg
-    ? newChatSvg.closest('div[tabindex="0"]') || newChatSvg.closest("button") || newChatSvg.parentElement
-    : null;
-
-  // 2. Fallbacks: Conversation title container or main header element
-  const headerTitle = document.querySelector("._7436101");
-  const headerContainer =
-    newChatBtn?.parentElement ||
-    document.querySelector("._2be88ba") ||
-    headerTitle?.closest("header") ||
-    headerTitle?.parentElement?.parentElement ||
-    document.querySelector("header");
-
-  if (!headerContainer) return;
-
-  const btn = document.createElement("button");
-  btn.id = "bds-header-btn";
-  btn.type = "button";
-  btn.className = "bds-header-tool-btn";
-  btn.setAttribute("aria-label", "Better DeepSeek");
-  btn.setAttribute("title", "Better DeepSeek Settings & MCP Tools");
-
-  const mcpActive = state.mcpServers?.some((s) => s.enabled);
-  btn.innerHTML = `
-    <span class="bds-header-icon" aria-hidden="true">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-      </svg>
-    </span>
-    ${mcpActive ? '<span class="bds-header-dot" title="MCP Active" aria-hidden="true"></span>' : ""}
-  `;
-
-  btn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    window.dispatchEvent(new CustomEvent("bds:toggle-drawer"));
-  });
-
-  if (newChatBtn && newChatBtn.parentElement === headerContainer) {
-    headerContainer.insertBefore(btn, newChatBtn);
-  } else {
-    headerContainer.appendChild(btn);
-  }
-
-  document.body.classList.add("bds-has-header-btn");
 }
 
 /**

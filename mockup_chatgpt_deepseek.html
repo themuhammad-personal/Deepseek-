@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek + BDS Native Mobile Redesign (Claude & ChatGPT Style)</title>
+  <style>
+    :root {
+      --bg-canvas: #09090b;
+      --bg-phone: #121214;
+      --bg-card: #1c1c1f;
+      --bg-card-elevated: #242428;
+      --bg-hover: rgba(255, 255, 255, 0.08);
+      --bg-input: #1a1a1d;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-card: rgba(255, 255, 255, 0.12);
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent: #4d6bfe;
+      --accent-glow: rgba(77, 107, 254, 0.2);
+      --accent-green: #10b981;
+      --danger: #ef4444;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 60px;
+    }
+
+    /* Top Navigation bar between mockup screens */
+    .mockup-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+      background: #18181b;
+      padding: 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      max-width: 900px;
+      justify-content: center;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+
+    /* Phone Shell Container */
+    .phone-stage {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .phone-frame {
+      width: 390px;
+      height: 800px;
+      background: var(--bg-phone);
+      border-radius: 46px;
+      border: 8px solid #27272a;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      height: 38px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e4e4e7;
+      z-index: 50;
+      background: transparent;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Screen View Wrappers */
+    .screen-view {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .screen-view.active {
+      display: flex;
+    }
+
+    /* Generic Header */
+    .app-header {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-phone);
+      z-index: 20;
+    }
+
+    .header-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .header-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .header-title-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .header-model-badge {
+      font-size: 11px;
+      background: rgba(77, 107, 254, 0.15);
+      color: var(--accent);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    /* ── SCREEN 1: Main Chat Screen ── */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 88%;
+    }
+
+    .message-row.user {
+      align-self: flex-end;
+    }
+
+    .message-row.assistant {
+      align-self: flex-start;
+      max-width: 100%;
+    }
+
+    .msg-bubble {
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14.5px;
+      line-height: 1.5;
+    }
+
+    .user .msg-bubble {
+      background: #27272a;
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .assistant .msg-bubble {
+      background: transparent;
+      color: var(--text-main);
+      padding-left: 0;
+    }
+
+    .assistant-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .ai-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .ai-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .reasoning-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* Clean Composer Bar (ChatGPT / Claude Style) */
+    .composer-container {
+      padding: 10px 14px 20px;
+      background: var(--bg-phone);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .composer-capsule {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 28px;
+      padding: 5px 6px 5px 8px;
+      transition: border-color 0.2s;
+    }
+
+    .composer-capsule:focus-within {
+      border-color: rgba(77, 107, 254, 0.4);
+    }
+
+    .composer-plus-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #27272a;
+      border: none;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.15s;
+    }
+
+    .composer-plus-btn:hover {
+      background: #3f3f46;
+    }
+
+    .composer-plus-btn:active {
+      transform: scale(0.92);
+    }
+
+    .composer-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-size: 14.5px;
+      outline: none;
+      padding: 6px 4px;
+    }
+
+    .composer-input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .composer-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .composer-icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .composer-icon-btn:hover {
+      color: var(--text-main);
+    }
+
+    .composer-send-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .composer-send-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* ── SCREEN 2: Sidebar (Screenshot 2 Match) ── */
+    .sidebar-view {
+      background: #141416;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .sidebar-top-bar {
+      height: 56px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .sidebar-brand {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sidebar-top-search-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .sidebar-top-search-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-hover);
+    }
+
+    .new-chat-pill {
+      margin: 14px 16px 8px;
+      padding: 12px 18px;
+      background: #222226;
+      border: 1px solid var(--border-subtle);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #ffffff;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .new-chat-pill:hover {
+      background: #2a2a30;
+    }
+
+    .chat-history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .history-group-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 0 10px 4px;
+    }
+
+    .history-item {
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .history-item:hover, .history-item.active {
+      background: var(--bg-hover);
+      color: #ffffff;
+    }
+
+    .history-item-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .sidebar-profile-card {
+      padding: 14px 16px 20px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      background: #141416;
+      transition: background 0.15s;
+    }
+
+    .sidebar-profile-card:hover {
+      background: var(--bg-hover);
+    }
+
+    .profile-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4d6bfe, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .profile-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .profile-plan {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── SCREEN 3: Profile Dropdown Menu (Screenshot 3 Match) ── */
+    .profile-menu-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .profile-menu-card {
+      background: var(--bg-card);
+      border-radius: 24px 24px 0 0;
+      border-top: 1px solid var(--border-card);
+      padding: 12px 14px 28px;
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.8);
+      animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .sheet-handle {
+      width: 38px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      margin: 4px auto 14px;
+    }
+
+    .profile-menu-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 13px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: var(--text-main);
+    }
+
+    .profile-menu-row:hover {
+      background: var(--bg-hover);
+    }
+
+    .profile-menu-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--bg-card-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .profile-menu-row.highlight .profile-menu-icon {
+      background: rgba(77, 107, 254, 0.15);
+      color: var(--accent);
+    }
+
+    .profile-menu-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .profile-menu-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .profile-menu-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .profile-menu-row.danger {
+      color: var(--danger);
+    }
+
+    .profile-menu-row.danger .profile-menu-icon {
+      background: rgba(239, 68, 68, 0.12);
+      color: var(--danger);
+    }
+
+    .menu-divider {
+      height: 1px;
+      background: var(--border-subtle);
+      margin: 6px 10px;
+    }
+
+    /* ── SCREEN 4: Settings (Screenshot 4 Match - ChatGPT Grouped Cards) ── */
+    .settings-screen {
+      background: #121214;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .settings-header {
+      height: 52px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #121214;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .settings-header-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .settings-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .settings-group-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding-left: 8px;
+      margin-bottom: 8px;
+    }
+
+    .settings-card {
+      background: var(--bg-card);
+      border-radius: 18px;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+
+    .settings-row:hover {
+      background: var(--bg-hover);
+    }
+
+    .settings-row-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .settings-icon {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .settings-row-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .settings-row-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+
+    .settings-row-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .settings-row-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    /* Switch Component */
+    .ios-switch {
+      position: relative;
+      width: 44px;
+      height: 26px;
+      display: inline-block;
+    }
+
+    .ios-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .ios-slider {
+      position: absolute;
+      inset: 0;
+      background: #3f3f46;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .ios-slider:before {
+      content: "";
+      position: absolute;
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .ios-switch input:checked + .ios-slider {
+      background: var(--accent);
+    }
+
+    .ios-switch input:checked + .ios-slider:before {
+      transform: translateX(18px);
+    }
+
+    /* ── SCREEN 5: Plus (+) Bottom Sheet (Screenshot 5 Match) ── */
+    .plus-sheet-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .plus-sheet {
+      background: var(--bg-card);
+      border-radius: 26px 26px 0 0;
+      border-top: 1px solid var(--border-card);
+      padding: 12px 14px 30px;
+      box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.8);
+      animation: slideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .plus-sheet-title {
+      font-size: 15px;
+      font-weight: 700;
+      padding: 6px 14px 12px;
+      color: #ffffff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .plus-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .plus-action-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .plus-action-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .plus-action-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--bg-card-elevated);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .plus-action-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .plus-action-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .plus-action-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .plus-action-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    /* Explanation Banner */
+    .design-spec-box {
+      margin-top: 24px;
+      max-width: 900px;
+      background: #18181b;
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 20px 24px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+
+    .design-spec-box h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .spec-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .spec-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .spec-check {
+      color: var(--accent-green);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Screen Navigation Tabs -->
+  <div class="mockup-controls">
+    <button class="tab-btn active" onclick="switchScreen('chat')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      ১. মূল চ্যাট (Main Chat)
+    </button>
+    <button class="tab-btn" onclick="switchScreen('plus-sheet')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      ২. প্লাস (+) সংযুক্তি শিট
+    </button>
+    <button class="tab-btn" onclick="switchScreen('sidebar')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      ৩. সাইডবার (Clean Sidebar)
+    </button>
+    <button class="tab-btn" onclick="switchScreen('profile-menu')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      ৪. প্রোফাইল মেনু
+    </button>
+    <button class="tab-btn" onclick="switchScreen('settings')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      ৫. সেটিংস (ChatGPT কার্ড)
+    </button>
+  </div>
+
+  <!-- Phone Stage -->
+  <div class="phone-stage">
+    <div class="phone-frame">
+      <!-- Status bar -->
+      <div class="status-bar">
+        <span>09:41</span>
+        <div class="status-icons">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="16" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
+        </div>
+      </div>
+
+      <!-- SCREEN 1: Main Chat -->
+      <div id="screen-chat" class="screen-view active">
+        <div class="app-header">
+          <button class="header-btn" onclick="switchScreen('sidebar')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="header-title-box">
+            <span>DeepSeek-V3</span>
+            <span class="header-model-badge">v0.1.14</span>
+          </div>
+          <button class="header-btn" onclick="alert('নতুন চ্যাট শুরু করা হচ্ছে...')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
+        </div>
+
+        <div class="chat-messages">
+          <div class="message-row assistant">
+            <div class="assistant-header">
+              <div class="ai-avatar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+              </div>
+              <span class="ai-name">DeepSeek AI</span>
+            </div>
+            <div class="reasoning-badge">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>চিন্তাভাবনা সম্পন্ন (1.4 সেকেন্ড)</span>
+            </div>
+            <div class="msg-bubble">
+              স্বাগতম! আমি আপনার এআই সহকারী। কোনো প্রশ্ন থাকলে লিখুন অথবা বাম পাশের <strong>প্লাস (+) বোতাম</strong> চাপুন ফাইল, ক্যামেরা, ওয়েব সার্চ বা ডিপথিঙ্ক যুক্ত করতে।
+            </div>
+          </div>
+
+          <div class="message-row user">
+            <div class="msg-bubble">
+              ChatGPT এবং Claude এর মতো নিখুঁত মোবাইল ইন্টারফেস তৈরি হয়েছে কিনা দেখাও।
+            </div>
+          </div>
+
+          <div class="message-row assistant">
+            <div class="assistant-header">
+              <div class="ai-avatar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+              </div>
+              <span class="ai-name">DeepSeek AI</span>
+            </div>
+            <div class="msg-bubble">
+              হ্যাঁ! এখন ইনপুট বক্সে কোনো বিশৃঙ্খল বাবল নেই। শুধুমাত্র একটি বাম পাশের প্লাস (+) বোতাম রয়েছে, যা ট্যাপ করলেই চমৎকার শিট খুলে যায়।
+            </div>
+          </div>
+        </div>
+
+        <!-- Clean ChatGPT-style Composer -->
+        <div class="composer-container">
+          <div class="composer-capsule">
+            <button class="composer-plus-btn" onclick="switchScreen('plus-sheet')" title="সংযুক্তি ও মোড মেনু">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <input type="text" class="composer-input" placeholder="DeepSeek-এ বার্তা দিন..." />
+            <div class="composer-right-actions">
+              <button class="composer-icon-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
+              <button class="composer-send-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 5: Plus (+) Bottom Sheet -->
+      <div id="screen-plus-sheet" class="screen-view">
+        <div class="plus-sheet-overlay" onclick="switchScreen('chat')">
+          <div class="plus-sheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="plus-sheet-title">
+              <span>টুলস ও সংযুক্তি</span>
+              <button class="header-btn" onclick="switchScreen('chat')" style="width:28px;height:28px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="plus-grid">
+              <div class="plus-action-item" onclick="alert('ক্যামেরা চালু করা হচ্ছে...')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">ক্যামেরা ও ছবি</span>
+                  <span class="plus-action-desc">ছবি তুলুন বা গ্যালারি থেকে আপলোড করুন</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+
+              <div class="plus-action-item" onclick="alert('ফাইল পিকার খোলা হচ্ছে...')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">ফাইল ও ডকুমেন্টস</span>
+                  <span class="plus-action-desc">PDF, TXT, কোড ও ডকুমেন্টস আপলোড</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+
+              <div class="plus-action-item" onclick="alert('ওয়েব সার্চ মোড টগল করা হলো')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">ওয়েব সার্চ মোড</span>
+                  <span class="plus-action-desc">রিয়েল-টাইম অনলাইন তথ্য অনুসন্ধান</span>
+                </div>
+                <span class="plus-action-badge">সক্রিয়</span>
+              </div>
+
+              <div class="plus-action-item" onclick="alert('ডিপথিঙ্ক আর১ মোড টগল করা হলো')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">ডিপথিঙ্ক আর১ (DeepThink)</span>
+                  <span class="plus-action-desc">উন্নত যুক্তি ও জটিল সমস্যা সমাধান</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+
+              <div class="plus-action-item" onclick="alert('প্রজেক্ট প্যানেল খোলা হচ্ছে...')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">প্রজেক্ট কনটেক্সট (RAG)</span>
+                  <span class="plus-action-desc">কাস্টম ফাইল ও নলেজবেস যুক্ত করুন</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+
+              <div class="plus-action-item" onclick="switchScreen('settings')">
+                <div class="plus-action-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </div>
+                <div class="plus-action-info">
+                  <span class="plus-action-name">প্লাগইন ও অ্যাডভান্স সেটিংস</span>
+                  <span class="plus-action-desc">লাইভ MCP টুলস, প্রম্পট ও সিস্টেম রুলস</span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: Sidebar -->
+      <div id="screen-sidebar" class="screen-view">
+        <div class="sidebar-view">
+          <div class="sidebar-top-bar">
+            <div class="sidebar-brand">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+              <span>deepseek</span>
+            </div>
+            <!-- Clean Small Search Icon Only - NO Big Search Box Below -->
+            <button class="sidebar-top-search-btn" onclick="alert('চ্যাট অনুসন্ধান চালু হচ্ছে...')" title="অনুসন্ধান">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+          </div>
+
+          <div class="new-chat-pill" onclick="switchScreen('chat')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>নতুন চ্যাট</span>
+          </div>
+
+          <div class="chat-history-list">
+            <div class="history-group-title">আজকের চ্যাট</div>
+            <div class="history-item active" onclick="switchScreen('chat')">
+              <span class="history-item-title">DeepSeek UI রিডিজাইন আলোচনা</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+            <div class="history-item" onclick="switchScreen('chat')">
+              <span class="history-item-title">Android WebView পারফরম্যান্স অপ্টিমাইজেশন</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+
+            <div class="history-group-title">গত ৭ দিন</div>
+            <div class="history-item" onclick="switchScreen('chat')">
+              <span class="history-item-title">SVG আইকন ও ভেক্টর রেন্ডারিং</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+            <div class="history-item" onclick="switchScreen('chat')">
+              <span class="history-item-title">Svelte 5 Runes মাইগ্রেশন গাইড</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+            <div class="history-item" onclick="switchScreen('chat')">
+              <span class="history-item-title">MCP লাইভ সার্ভার কনফিগারেশন</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+          </div>
+
+          <!-- Bottom Profile Row - NO STAR BUTTON -->
+          <div class="sidebar-profile-card" onclick="switchScreen('profile-menu')">
+            <div class="profile-info">
+              <div class="profile-avatar">U</div>
+              <div>
+                <div class="profile-name">User Account</div>
+                <div class="profile-plan">Free Plan</div>
+              </div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 3: Profile Menu Dropdown -->
+      <div id="screen-profile-menu" class="screen-view">
+        <div class="profile-menu-overlay" onclick="switchScreen('sidebar')">
+          <div class="profile-menu-card" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            
+            <div class="profile-menu-row" onclick="alert('মূল সেটিংস খোলা হচ্ছে...')">
+              <div class="profile-menu-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </div>
+              <div class="profile-menu-content">
+                <span class="profile-menu-title">সেটিংস</span>
+                <span class="profile-menu-desc">অ্যাকাউন্ট ও মূল ডিপসিক পছন্দসমূহ</span>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+
+            <!-- Injected Advanced Settings (BDS) Entry with Clean SVG Icon -->
+            <div class="profile-menu-row highlight" onclick="switchScreen('settings')">
+              <div class="profile-menu-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+              </div>
+              <div class="profile-menu-content">
+                <span class="profile-menu-title" style="color:var(--accent);">অ্যাডভান্স সেটিংস (BDS)</span>
+                <span class="profile-menu-desc">সিস্টেম প্রম্পট, MCP প্লাগইন, ভয়েস ও RAG</span>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+
+            <div class="menu-divider"></div>
+
+            <div class="profile-menu-row danger" onclick="alert('লগ আউট সম্পন্ন হচ্ছে...')">
+              <div class="profile-menu-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </div>
+              <div class="profile-menu-content">
+                <span class="profile-menu-title">লগ আউট</span>
+                <span class="profile-menu-desc">সেশন শেষ করে প্রস্থান করুন</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: Settings (ChatGPT Grouped Cards Match) -->
+      <div id="screen-settings" class="screen-view">
+        <div class="settings-screen">
+          <div class="settings-header">
+            <button class="header-btn" onclick="switchScreen('chat')">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            </button>
+            <span class="settings-header-title">সেটিংস (Settings)</span>
+            <button class="header-btn" onclick="switchScreen('chat')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div class="settings-body">
+            <!-- GROUP 1: My DeepSeek -->
+            <div>
+              <div class="settings-group-title">My DeepSeek (কাস্টমাইজেশন)</div>
+              <div class="settings-card">
+                <div class="settings-row" onclick="alert('সিস্টেম প্রম্পট পরিচালনা...')">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="13" y2="13"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Personalization (সিস্টেম প্রম্পট)</span>
+                      <span class="settings-row-sub">কাস্টম নির্দেশিকা ও আচরণ নির্ধারণ</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>Default</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Persistent Memory</span>
+                      <span class="settings-row-sub">চ্যাট সেশন জুড়ে তথ্য মনে রাখা</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <label class="ios-switch">
+                      <input type="checkbox" checked />
+                      <span class="ios-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-row" onclick="alert('MCP প্লাগইন তালিকা...')">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Plugins & Live MCP Tools</span>
+                      <span class="settings-row-sub">লোকাল ও রিমোট সার্ভার টুলস যুক্তকরণ</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>3 সক্রিয়</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- GROUP 2: App & Voice Settings -->
+            <div>
+              <div class="settings-group-title">অ্যাপ ও ভয়েস সেটিংস</div>
+              <div class="settings-card">
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">ভাষা (Primary Language)</span>
+                      <span class="settings-row-sub">ইন্টারফেস ও ডিপসিক সিঙ্ক ভাষা</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>বাংলা</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">ভয়েস মোড (Voice & Speech)</span>
+                      <span class="settings-row-sub">ডিক্টেশন ও অটো-সাবমিট নিয়ন্ত্রণ</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <label class="ios-switch">
+                      <input type="checkbox" checked />
+                      <span class="ios-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">থিম ও রূপ (Appearance)</span>
+                      <span class="settings-row-sub">ডার্ক মোড ও অ্যাকসেন্ট রঙ</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>ডার্ক</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- GROUP 3: Advanced Capabilities -->
+            <div>
+              <div class="settings-group-title">অ্যাডভান্সড সক্ষমতা ও ডেটা</div>
+              <div class="settings-card">
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Deep Research & Context Guard</span>
+                      <span class="settings-row-sub">টোকেন সীমা ও স্বয়ংক্রিয় গবেষণা গভীরতা</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>80%</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Projects Context & RAG Engine</span>
+                      <span class="settings-row-sub">স্বয়ংক্রিয় কনটেক্সট ইনজেকশন ও চাঙ্কিং</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <span>Active</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div class="settings-row-left">
+                    <div class="settings-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    </div>
+                    <div class="settings-row-text">
+                      <span class="settings-row-title">Data Controls & Backup</span>
+                      <span class="settings-row-sub">সম্পূর্ণ ডেটা এক্সপোর্ট ও ইমপোর্ট</span>
+                    </div>
+                  </div>
+                  <div class="settings-row-right">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- About Section -->
+            <div style="text-align: center; padding: 12px 0 20px;">
+              <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Better DeepSeek Android Edition</div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">Version 0.1.14 (Build 2026.09.19)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Implementation Notes & Spec Verification -->
+  <div class="design-spec-box">
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      ব্যবহারকারীর নির্দেশনাসমূহ শতভাগ পূরণ করা হয়েছে:
+    </h3>
+    <ul class="spec-list">
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>ইমোজি সম্পূর্ণ নিষিদ্ধ:</strong> সব ধরনের ইমোজি বাদ দিয়ে Claude ও ChatGPT নেটিভ অ্যাপের মতো ঝকঝকে SVG ভেক্টর লাইন আইকন দেওয়া হয়েছে।</span>
+      </li>
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>সাইডবার সার্চ ডুপ্লিকেশন দূরীকরণ:</strong> নিচে কোনো বড় সার্চ বার নেই; স্ক্রিনশট ২ এর মতো শুধুমাত্র উপরে ছোট সার্চ আইকন রাখা হয়েছে।</span>
+      </li>
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>স্টার (⭐) আইকন চিরতরে সরানো হয়েছে:</strong> হেডার বা সাইডবারে কোনো অবাঞ্ছিত স্টার আইকন নেই।</span>
+      </li>
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>প্রোফাইল মেনু পরিচ্ছন্ন করা হয়েছে:</strong> অপ্রয়োজনীয় Tags, Export ও মোবাইল অ্যাপ ডাউনলোড বাদ দিয়ে শুধুমাত্র মূল সেটিংস এবং ঝকঝকে SVG সহ 'অ্যাডভান্স সেটিংস' রাখা হয়েছে।</span>
+      </li>
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>চ্যাট কম্পোজার বাবল মুক্ত:</strong> নিচের অতিরিক্ত বাবল বাদ দিয়ে বামে একক প্লাস (+) বোতাম দেওয়া হয়েছে যা ট্যাপ করলে ক্যামেরা, ফাইল, সার্চ, থিংকিং ও প্লাগইন অপশন খোলে।</span>
+      </li>
+      <li>
+        <span class="spec-check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>ChatGPT কার্ড সেটিংস:</strong> সেটিংস স্ক্রিনটি স্ক্রিনশট ৪ এর মতো ১৮px রাউন্ডেড গ্রুপ কার্ড ফরমেটে সাজানো হয়েছে।</span>
+      </li>
+    </ul>
+  </div>
+
+  <script>
+    function switchScreen(screenName) {
+      document.querySelectorAll('.screen-view').forEach(s => s.classList.remove('active'));
+      const target = document.getElementById('screen-' + screenName);
+      if (target) {
+        target.classList.add('active');
+      }
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (
+          (screenName === 'chat' && btn.innerText.includes('মূল চ্যাট')) ||
+          (screenName === 'plus-sheet' && btn.innerText.includes('প্লাস (+)')) ||
+          (screenName === 'sidebar' && btn.innerText.includes('সাইডবার')) ||
+          (screenName === 'profile-menu' && btn.innerText.includes('প্রোফাইল')) ||
+          (screenName === 'settings' && btn.innerText.includes('সেটিংস'))
+        ) {
+          btn.classList.add('active');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

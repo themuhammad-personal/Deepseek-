@@ -36,6 +36,13 @@ const WHATS_NEW_ICON = `
   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
 </svg>`;
 
+// Settings Icon for Advanced Settings (Stroke SVG - Claude/ChatGPT native style)
+const ADVANCED_SETTINGS_ICON = `
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="3"/>
+  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+</svg>`;
+
 export function initSidebarMenuInjector() {
   // Capture the chat URL from any click inside a sidebar chat link.
   // The three-dot menu button is a descendant of the <a> element, so this
@@ -68,6 +75,7 @@ export function initSidebarMenuInjector() {
       document.querySelectorAll(".ds-dropdown-menu").forEach((menu) => {
         injectOptions(menu);
         injectSettingsDrawerOptions(menu);
+        injectAdvancedSettingsOption(menu);
       });
     }, 100);
   }
@@ -82,11 +90,13 @@ export function initSidebarMenuInjector() {
           if (node.classList.contains("ds-dropdown-menu")) {
             injectOptions(node);
             injectSettingsDrawerOptions(node);
+            injectAdvancedSettingsOption(node);
           } else {
             const menu = node.querySelector(".ds-dropdown-menu");
             if (menu) {
               injectOptions(menu);
               injectSettingsDrawerOptions(menu);
+              injectAdvancedSettingsOption(menu);
             }
           }
         }
@@ -134,6 +144,23 @@ async function handleExportAction(format) {
 
 function injectOptions(menu) {
   if (menu.querySelector(".bds-export-option")) return;
+
+  const isProfileMenu = Array.from(
+    menu.querySelectorAll(".ds-dropdown-menu-option")
+  ).some((opt) => {
+    const text = (opt.querySelector(".ds-dropdown-menu-option__label")?.textContent || "").toLowerCase();
+    return (
+      text.includes("log out") ||
+      text.includes("logout") ||
+      text.includes("লগ আউট") ||
+      text.includes("sign out") ||
+      text.includes("download mobile app") ||
+      text.includes("মোবাইল অ্যাপ")
+    );
+  });
+
+  // Never inject chat tags or export options into the profile menu!
+  if (isProfileMenu) return;
 
   const deleteOption = Array.from(
     menu.querySelectorAll(".ds-dropdown-menu-option")
@@ -208,6 +235,33 @@ function injectSettingsDrawerOptions(menu) {
   );
 
   bdsOption.parentNode.insertBefore(whatsNewOption, bdsOption.nextSibling);
+}
+
+function injectAdvancedSettingsOption(menu) {
+  if (menu.querySelector(".bds-advanced-settings-option")) return;
+
+  // Locate the native settings entry in the profile dropdown
+  const settingsOption = Array.from(
+    menu.querySelectorAll(".ds-dropdown-menu-option")
+  ).find((opt) => {
+    const text = (opt.querySelector(".ds-dropdown-menu-option__label")?.textContent || "").toLowerCase();
+    return text.includes("setting") || text.includes("সেটিংস") || text.includes("设置");
+  });
+
+  if (!settingsOption) return;
+
+  const label = i18n.locale === "bn" ? "অ্যাডভান্স সেটিংস" : (i18n.t("sidebarMenu.advancedSettings") || "Advanced Settings");
+  const advOption = createMenuOption(
+    label,
+    ADVANCED_SETTINGS_ICON,
+    "bds-advanced-settings-option",
+    () => {
+      document.body.click();
+      window.dispatchEvent(new CustomEvent("bds:open-drawer"));
+    }
+  );
+
+  settingsOption.parentNode.insertBefore(advOption, settingsOption.nextSibling);
 }
 
 function createMenuOption(label, iconHtml, className, onClick) {

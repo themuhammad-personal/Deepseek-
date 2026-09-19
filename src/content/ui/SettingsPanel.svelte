@@ -1394,7 +1394,9 @@
       class:active={activeCategory === 'all'}
       onclick={() => activeCategory = 'all'}
     >
-      <span class="bds-pill-icon">✨</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </span>
       <span>All Settings</span>
     </button>
     <button
@@ -1403,7 +1405,9 @@
       class:active={activeCategory === 'general'}
       onclick={() => activeCategory = 'general'}
     >
-      <span class="bds-pill-icon">🌐</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+      </span>
       <span>General & UI</span>
     </button>
     <button
@@ -1412,7 +1416,9 @@
       class:active={activeCategory === 'chat'}
       onclick={() => activeCategory = 'chat'}
     >
-      <span class="bds-pill-icon">💬</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+      </span>
       <span>Chat & Prompts</span>
     </button>
     <button
@@ -1421,7 +1427,9 @@
       class:active={activeCategory === 'voice'}
       onclick={() => activeCategory = 'voice'}
     >
-      <span class="bds-pill-icon">🎙️</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+      </span>
       <span>Voice & Audio</span>
     </button>
     <button
@@ -1430,7 +1438,9 @@
       class:active={activeCategory === 'research'}
       onclick={() => activeCategory = 'research'}
     >
-      <span class="bds-pill-icon">🔍</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
       <span>Deep Research</span>
     </button>
     <button
@@ -1439,7 +1449,9 @@
       class:active={activeCategory === 'mcp'}
       onclick={() => activeCategory = 'mcp'}
     >
-      <span class="bds-pill-icon">🔌</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      </span>
       <span>MCP & Tools</span>
     </button>
     <button
@@ -1448,7 +1460,9 @@
       class:active={activeCategory === 'appearance'}
       onclick={() => activeCategory = 'appearance'}
     >
-      <span class="bds-pill-icon">🎨</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </span>
       <span>Appearance & CSS</span>
     </button>
     <button
@@ -1457,7 +1471,9 @@
       class:active={activeCategory === 'integrations'}
       onclick={() => activeCategory = 'integrations'}
     >
-      <span class="bds-pill-icon">⚡</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      </span>
       <span>Integrations & API</span>
     </button>
     <button
@@ -1466,7 +1482,9 @@
       class:active={activeCategory === 'backup'}
       onclick={() => activeCategory = 'backup'}
     >
-      <span class="bds-pill-icon">💾</span>
+      <span class="bds-pill-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+      </span>
       <span>Backup & Storage</span>
     </button>
   </div>
@@ -1476,7 +1494,9 @@
 <div class="bds-card bds-prompt-card-section open" style="margin-bottom: 14px;">
   <div class="bds-card-header bds-static-header">
     <div class="bds-card-header-left">
-      <span class="bds-card-icon-badge bds-icon--purple">🧠</span>
+      <span class="bds-card-icon-badge bds-icon--purple">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+      </span>
       <div class="bds-card-title-group">
         <span class="bds-card-title">{t('settings.systemPrompts')}</span>
         <span class="bds-card-subtitle">Custom instructions and behavioral guidelines injected into model chats</span>
@@ -1744,7 +1764,9 @@
     <div class="bds-card" class:open={subLanguageOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subLanguageOpen} onclick={() => subLanguageOpen = !subLanguageOpen} aria-expanded={subLanguageOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--blue">🌐</span>
+          <span class="bds-card-icon-badge bds-icon--blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subLanguage')}</span>
             <span class="bds-card-subtitle">Interface translation, deepseek synchronization, and preferred language</span>
@@ -1811,7 +1833,9 @@
     <div class="bds-card" class:open={subChatOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subChatOpen} onclick={() => subChatOpen = !subChatOpen} aria-expanded={subChatOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--green">💬</span>
+          <span class="bds-card-icon-badge bds-icon--green">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subChat')}</span>
             <span class="bds-card-subtitle">Message display options, history sync, and session capacity</span>
@@ -1864,7 +1888,9 @@
     <div class="bds-card" class:open={subProjectsOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subProjectsOpen} onclick={() => subProjectsOpen = !subProjectsOpen} aria-expanded={subProjectsOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--teal">📁</span>
+          <span class="bds-card-icon-badge bds-icon--teal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subProjects')}</span>
             <span class="bds-card-subtitle">Context retrieval (RAG), .gitignore filtering, and file download behaviors</span>
@@ -1935,7 +1961,9 @@
     <div class="bds-card" class:open={subInjectionOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subInjectionOpen} onclick={() => subInjectionOpen = !subInjectionOpen} aria-expanded={subInjectionOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--amber">⚡</span>
+          <span class="bds-card-icon-badge bds-icon--amber">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subInjection')}</span>
             <span class="bds-card-subtitle">Prompt frequency, automated memory injection, and temporal context</span>
@@ -2010,7 +2038,9 @@
     <div class="bds-card" class:open={subResearchOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subResearchOpen} onclick={() => subResearchOpen = !subResearchOpen} aria-expanded={subResearchOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--indigo">🔍</span>
+          <span class="bds-card-icon-badge bds-icon--indigo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subResearch')}</span>
             <span class="bds-card-subtitle">Deep research page fetching, search providers, and context token guard</span>
@@ -2114,7 +2144,9 @@
     <div class="bds-card" class:open={subVoiceOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subVoiceOpen} onclick={() => subVoiceOpen = !subVoiceOpen} aria-expanded={subVoiceOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--rose">🎙️</span>
+          <span class="bds-card-icon-badge bds-icon--rose">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subVoice')}</span>
             <span class="bds-card-subtitle">Speech-to-text dictation, auto-submit, and silence detection</span>
@@ -2178,7 +2210,9 @@
     <div class="bds-card" class:open={subIntegrationsOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subIntegrationsOpen} onclick={() => subIntegrationsOpen = !subIntegrationsOpen} aria-expanded={subIntegrationsOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--slate">⚡</span>
+          <span class="bds-card-icon-badge bds-icon--slate">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subIntegrations')}</span>
             <span class="bds-card-subtitle">GitHub token access, markdown depth, and token pricing estimation</span>
@@ -2250,7 +2284,9 @@
     <div class="bds-card" class:open={subCSSOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subCSSOpen} onclick={() => subCSSOpen = !subCSSOpen} aria-expanded={subCSSOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--pink">🎨</span>
+          <span class="bds-card-icon-badge bds-icon--pink">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subCSS')}</span>
             <span class="bds-card-subtitle">Custom CSS theme overrides and reusable style snippets</span>
@@ -2315,7 +2351,9 @@
     <div class="bds-card" class:open={subMcpOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subMcpOpen} onclick={() => subMcpOpen = !subMcpOpen} aria-expanded={subMcpOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--violet">🔌</span>
+          <span class="bds-card-icon-badge bds-icon--violet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('mcp.sectionTitle')}</span>
             <span class="bds-card-subtitle">Model Context Protocol servers for tools and integrations</span>
@@ -2365,19 +2403,23 @@
             <div class="bds-prompt-actions" style="margin-top: 8px;">
               <button type="button" class="bds-btn-outlined" style="font-size: 11px; padding: 4px 10px;" onclick={() => testMcpServer(i)} disabled={mcpTestingIndex === i}>
                 {#if mcpTestingIndex === i}
-                  ⏳ {t('mcp.testLoading')}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> {t('mcp.testLoading')}
                 {:else}
-                  ⚡ {t('mcp.test')}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> {t('mcp.test')}
                 {/if}
               </button>
-              <button type="button" class="bds-btn-outlined" style="font-size: 11px; padding: 4px 10px;" onclick={() => openMcpEditor(server)}>✏️ {t('mcp.edit')}</button>
-              <button type="button" class="bds-btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick={() => deleteMcpServer(server.id)}>🗑️</button>
+              <button type="button" class="bds-btn-outlined" style="font-size: 11px; padding: 4px 10px;" onclick={() => openMcpEditor(server)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg> {t('mcp.edit')}
+              </button>
+              <button type="button" class="bds-btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick={() => deleteMcpServer(server.id)} aria-label="Delete MCP Server">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
             </div>
 
             {#if server.tools && server.tools.length > 0}
               <details class="bds-mcp-tools-details">
                 <summary class="bds-mcp-tools-summary">
-                  🔍 View {server.tools.length} available tools
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:4px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> View {server.tools.length} available tools
                 </summary>
                 <div class="bds-mcp-tools-grid">
                   {#each server.tools as tool}
@@ -2417,7 +2459,9 @@
     <div class="bds-card" class:open={subUtilitiesOpen}>
       <button type="button" class="bds-card-header bds-sub-toggle" class:open={subUtilitiesOpen} onclick={() => subUtilitiesOpen = !subUtilitiesOpen} aria-expanded={subUtilitiesOpen}>
         <div class="bds-card-header-left">
-          <span class="bds-card-icon-badge bds-icon--cyan">🛠️</span>
+          <span class="bds-card-icon-badge bds-icon--cyan">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          </span>
           <div class="bds-card-title-group">
             <span class="bds-card-title">{t('settings.subUtilities')}</span>
             <span class="bds-card-subtitle">API playground workbench, tips, and full JSON backup & restore</span>
