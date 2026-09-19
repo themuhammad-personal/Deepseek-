@@ -7,8 +7,8 @@ Better DeepSeek supports multiple languages through a lightweight built-in i18n 
 Start by cloning the repository and installing dependencies:
 
 ```bash
-git clone https://github.com/EdgeTypE/better-deepseek.git
-cd better-deepseek
+git clone https://github.com/themuhammad-personal/Deepseek-.git
+cd Deepseek-
 npm install
 ```
 

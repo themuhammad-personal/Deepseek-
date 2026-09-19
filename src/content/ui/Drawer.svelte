@@ -538,7 +538,7 @@
             <div class="bds-settings-group-title">{t("settings.about") || "About"}</div>
             <div class="bds-settings-card">
               <a
-                href="https://github.com/EdgeTypE/better-deepseek"
+                href="https://github.com/themuhammad-personal/Deepseek-"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="bds-settings-row"
@@ -553,8 +553,8 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">Better DeepSeek</span>
-                    <span class="bds-settings-row-sub">v{extensionVersion} • Android Edition</span>
+                    <span class="bds-settings-row-title">DeepSeek Mobile</span>
+                    <span class="bds-settings-row-sub">v{extensionVersion} • Standalone Edition</span>
                   </div>
                 </div>
                 <div class="bds-settings-row-right">
