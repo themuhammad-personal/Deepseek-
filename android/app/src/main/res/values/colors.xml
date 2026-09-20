@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="launcher_background">#021026</color>
+    <color name="launcher_background">#000000</color>
     <color name="bds_splash_bg">#021026</color>
-    <color name="bds_accent">#4D6BFE</color>
-    <color name="bds_electric">#00E5FF</color>
+    <color name="bds_accent">#6EC9D4</color>
+    <color name="bds_electric">#3F86FF</color>
 </resources>
