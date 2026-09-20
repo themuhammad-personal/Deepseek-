@@ -7,8 +7,15 @@
 
   let panelElement = $state(null);
   let isGenerating = $state(false);
+  let isOffline = $state(typeof navigator !== "undefined" ? !navigator.onLine : false);
 
   onMount(() => {
+    const handleOnline = () => { isOffline = false; };
+    const handleOffline = () => { isOffline = true; };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     // Intercept Enter keydown in prompt box while AI is generating
     const handleKeyDown = (e) => {
       if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
@@ -17,12 +24,12 @@
       if (!isChatInput(activeEl)) return;
 
       const generating = isSystemGenerating();
-      if (!generating) return;
+      if (!generating && !isOffline) return;
 
       const text = getInputValue(activeEl).trim();
       if (!text) return;
 
-      // Intercept Enter key when generating: queue the prompt!
+      // Intercept Enter key when generating or offline: queue the prompt!
       e.preventDefault();
       e.stopPropagation();
 
@@ -42,6 +49,8 @@
     }, 400);
 
     return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       window.removeEventListener("keydown", handleKeyDown, true);
       clearInterval(interval);
     };
@@ -139,7 +148,9 @@
       <h3>{t("queue.title")}</h3>
       <div class="bds-header-controls">
         <span class="bds-pagination">
-          {#if isGenerating}
+          {#if isOffline}
+            Offline Mode
+          {:else if isGenerating}
             {t("queue.waitingForAI")}
           {:else if queueState.isAutoSending}
             {t("queue.sendingNext")}
@@ -157,6 +168,21 @@
         </button>
       </div>
     </div>
+
+    {#if isOffline}
+      <div class="bds-offline-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+        <span>Offline: Prompts are saved in queue and sent when connection returns.</span>
+      </div>
+    {/if}
 
     <!-- Body -->
     <div class="bds-question-body">
@@ -282,6 +308,19 @@
 
   .bds-close-btn:hover {
     color: var(--bds-text-primary, #ececec);
+  }
+
+  .bds-offline-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
+    color: #ef4444;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .bds-question-body {

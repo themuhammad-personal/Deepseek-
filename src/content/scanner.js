@@ -149,13 +149,23 @@ function armScanTimer() {
 export function collectMessageNodes() {
   const set = new Set();
 
-  for (const node of document.querySelectorAll("div.ds-message._63c77b1")) {
-    set.add(node);
-  }
+  const selectors = [
+    "div.ds-message._63c77b1",
+    "div.ds-message",
+    "div[data-message-author-role]",
+    "div[class*='message-item']",
+    "div[class*='chat-message']",
+  ];
 
-  if (!set.size) {
-    for (const node of document.querySelectorAll("div.ds-message")) {
-      set.add(node);
+  for (const sel of selectors) {
+    const found = document.querySelectorAll(sel);
+    if (found.length > 0) {
+      for (const node of found) {
+        if (!node.closest("#bds-root") && !node.classList.contains("bds-toast")) {
+          set.add(node);
+        }
+      }
+      if (set.size > 0) break;
     }
   }
 

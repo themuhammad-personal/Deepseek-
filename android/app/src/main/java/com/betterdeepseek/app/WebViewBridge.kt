@@ -120,18 +120,54 @@ internal fun classifyPickedFile(
     return PickedItemResult.Ok(PickedFile(name, content))
 }
 
+internal fun compressImageIfNeeded(bytes: ByteArray, maxDim: Int = 2048, quality: Int = 85): ByteArray {
+    try {
+        val options = android.graphics.BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        val origWidth = options.outWidth
+        val origHeight = options.outHeight
+
+        if (origWidth <= 0 || origHeight <= 0) return bytes
+
+        if (origWidth <= maxDim && origHeight <= maxDim && bytes.size < 1_500_000) {
+            return bytes
+        }
+
+        var sampleSize = 1
+        while (origWidth / sampleSize > maxDim || origHeight / sampleSize > maxDim) {
+            sampleSize *= 2
+        }
+
+        val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+            ?: return bytes
+
+        val outStream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, outStream)
+        bitmap.recycle()
+        return outStream.toByteArray()
+    } catch (e: Throwable) {
+        return bytes
+    }
+}
+
 internal fun encodePickedImage(
         name: String,
         bytes: ByteArray,
         capBytes: Long = WebViewBridge.MAX_PICKED_IMAGE_SIZE,
 ): PickedItemResult {
-    if (bytes.size.toLong() > capBytes) {
+    val processedBytes = compressImageIfNeeded(bytes)
+    if (processedBytes.size.toLong() > capBytes) {
         return PickedItemResult.Skipped(name, "too-large")
     }
     return PickedItemResult.Ok(
             PickedFile(
                     name = name,
-                    content = java.util.Base64.getEncoder().encodeToString(bytes),
+                    content = java.util.Base64.getEncoder().encodeToString(processedBytes),
                     encoding = "base64",
                     mime = mimeForImageName(name),
             )
