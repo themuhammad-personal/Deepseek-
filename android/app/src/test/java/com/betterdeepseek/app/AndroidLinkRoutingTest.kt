@@ -70,11 +70,7 @@ class AndroidLinkRoutingTest {
     fun `AWS WAF and Cloudflare challenges stay inside the WebView`() {
         assertFalse(shouldOpenExternally(Uri.parse("https://captcha.awswaf.com/")))
         assertFalse(shouldOpenExternally(Uri.parse("https://token.awswaf.com/challenge")))
-        assertFalse(
-                shouldOpenExternally(
-                        Uri.parse("https://challenges.cloudflare.com/cdn-cgi/challenge-platform")
-                )
-        )
+        assertFalse(shouldOpenExternally(Uri.parse("https://challenges.cloudflare.com/cdn-cgi/challenge-platform")))
         assertTrue(isSecurityChallengeHost("9kcwb3bhzb.execute-api.us-east-1.awswaf.com"))
     }
 

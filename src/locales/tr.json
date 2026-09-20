@@ -16,7 +16,9 @@
       "content": "İçerik",
       "description": "Açıklama",
       "none": "Hiçbiri",
-      "working": "Çalışıyor..."
+      "working": "Çalışıyor...",
+      "active": "Aktif",
+      "off": "Kapalı"
     },
     "drawer": {
       "title": "Better DeepSeek",
@@ -196,7 +198,9 @@
       "advancedSearchPlaceholder": "Ayarlarda ara...",
       "advancedNoResults": "Eşleşen ayar bulunamadı.",
       "disableTipBox": "İpucu Kutusunu Devre Dışı Bırak",
-      "disableTipBoxHint": "Drawer her açıldığında rastgele bir ipucu gösterir."
+      "disableTipBoxHint": "Drawer her açıldığında rastgele bir ipucu gösterir.",
+      "deepCode": "Deep Code",
+      "deepCodeDesc": "Otonom çalışma alanı dizinleme ve Harness kodlama ajanı"
     },
     "skillList": {
       "title": "Yetenek Seti",
@@ -406,7 +410,28 @@
       "commitsFailed": "Commit geçmişi getirilemedi: {{msg}}",
       "repoFailed": "Repo getirilemedi: {{msg}}",
       "invalidWebUrl": "Lütfen geçerli bir URL girin (http/https dahil).",
-      "webFetchFailed": "Sayfa içeriği getirilemedi: {{msg}}"
+      "webFetchFailed": "Sayfa içeriği getirilemedi: {{msg}}",
+      "uploadFileDesc": "PDF, görseller, belgeler ve kod",
+      "cameraPhoto": "Kamera ve Fotoğraflar",
+      "cameraPhotoDesc": "Fotoğraf çekin veya görsel yükleyin",
+      "webSearchMode": "Web Arama Modu",
+      "webSearchModeDesc": "Gerçek zamanlı yanıtlar için canlı web'de arama yapın",
+      "deepThinkR1": "DeepThink (R1)",
+      "deepThinkR1Desc": "Derin akıl yürütme ve düşünce zinciri",
+      "uploadFolderDesc": "Seçici aracılığıyla dizin dosyalarını okuyun",
+      "attachProjectDesc": "Proje dosyalarını ve bağlamını ekleyin",
+      "githubRepoDesc": "Depo dosyalarını klonlayın ve inceleyin",
+      "fetchWebPageDesc": "URL'den metin ve içerik çıkarın",
+      "deepResearch": "Derin Araştırma",
+      "deepResearchDesc": "Otonom çok adımlı web araştırması",
+      "deepResearchEnabled": "Derin Araştırma etkinleştirildi",
+      "deepResearchDisabled": "Derin Araştırma devre dışı bırakıldı",
+      "customCommands": "Komutlar ve İstemler",
+      "customCommandsDesc": "Hızlı kısayollar, snippet'ler ve araçlar",
+      "deepCode": "Deep Code",
+      "deepCodeDesc": "İşbirlikçi kodlama çalışma alanı ve proje geliştirme",
+      "deepCodeEnabled": "Deep Code etkinleştirildi",
+      "deepCodeDisabled": "Deep Code devre dışı bırakıldı"
     },
     "codeRunner": {
       "pythonRunner": "Python Çalıştırıcı",
@@ -830,7 +855,9 @@
       "exportChat": "Sohbeti Dışa Aktar (BDS)",
       "getBdsApp": "BDS Uygulamasını İndir",
       "whatsNew": "Neler Yeni?",
-      "advancedSettings": "Gelişmiş Ayarlar"
+      "advancedSettings": "Gelişmiş Ayarlar",
+      "pin": "Sohbeti Sabitle",
+      "unpin": "Sabitlemeyi Kaldır"
     },
     "commands": {
       "title": "Komutlar",
@@ -1248,6 +1275,23 @@
               "description": "Tıkanan veri akışlarının daha iyi yönetilmesi ve otomatik etiket kapatma."
             }
           }
+        },
+        "v0_1_14": {
+          "title": "Gelişmiş Grafikler, Farsça Dil Desteği ve İyileştirmeler",
+          "features": {
+            "feat_0": {
+              "title": "Gelişmiş Grafikler",
+              "description": "Better DeepSeek artık sizin için çok daha iyi grafikler hazırlayabilir. DeepSeek'ten bir grafik oluşturmasını isteyin yeter."
+            },
+            "feat_1": {
+              "title": "Yeni Dil Desteği",
+              "description": "Farsça dil desteği eklendi."
+            },
+            "feat_2": {
+              "title": "Hata Düzeltmeleri ve İyileştirmeler",
+              "description": "Uzantı genelinde çok sayıda hata düzeltmesi ve performans iyileştirmesi."
+            }
+          }
         }
       }
     },
@@ -1256,7 +1300,8 @@
       "tr": "Türkçe",
       "ru": "Rusça",
       "zh-cn": "简体中文",
-      "fa": "فارسی"
+      "fa": "فارسی",
+      "bn": "বাংলা"
     },
     "apiPlayground": {
       "title": "API Playground",
@@ -1395,8 +1440,6 @@
       "searchEngineWarning": "Paylaşılan sohbetler, arama motorları tarafından bulunup indekslenebilir."
     },
     "tips": {
-      "title": "💡 İpucu",
-      "disableInSettings": "Bu ipucunu Ayarlar'dan kapatabilirsin.",
       "0": "Bir sohbeti dışarı aktarmak için sohbet geçmişinde session'ın yanındaki ... butonuna tıklayabilirsin.",
       "1": "Ayarlar'dan bu ipucu kutusunu devre dışı bırakabilirsin.",
       "2": "Dilersen, mevcut ayarlarını ve verilerini dışarı aktarabilirsin. Gelişmiş ayarları ziyaret etmen yeterli.",
@@ -1409,7 +1452,9 @@
       "9": "Custom CSS'ler ile arayüzü dilediğin gibi özelleştirebilirsin.",
       "10": "Better DeepSeek'e daha fazla dil desteği eklemek istiyoruz. Sen de kendi dilini eklemek istersen <a href=\"https://github.com/EdgeTypE/better-deepseek/blob/main/LOCALIZATION.md\" target=\"_blank\" rel=\"noopener noreferrer\">buraya</a> göz atabilirsin. Ayrıca çeviri hatalarının olduğunu düşünüyorsan düzeltebilirsin.",
       "11": "Sohbet geçmişinde ... butonuna tıklayarak herhangi bir sohbet oturumuna etiket atayabilirsin. Ardından bu etiketleri kullanarak konuşmalarını hızlıca arayabilir veya filtreleyebilirsin.",
-      "12": "Yeni bir skill ya da karakter oluşurmak için DeepSeek'i kullanabilirsin. İstemen/sorman yeter."
+      "12": "Yeni bir skill ya da karakter oluşurmak için DeepSeek'i kullanabilirsin. İstemen/sorman yeter.",
+      "title": "💡 İpucu",
+      "disableInSettings": "Bu ipucunu Ayarlar'dan kapatabilirsin."
     }
   }
 }

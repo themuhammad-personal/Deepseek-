@@ -67,15 +67,6 @@ internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local
     return true
 }
 
-internal fun isGoogleAuthHost(host: String): Boolean {
-    val h = host.lowercase()
-    return h == "google.com" ||
-            h.endsWith(".google.com") ||
-            h == "accounts.youtube.com" ||
-            h == "googleusercontent.com" ||
-            h.endsWith(".googleusercontent.com")
-}
-
 internal fun isAppleAuthHost(host: String): Boolean {
     val h = host.lowercase()
     return h == "apple.com" ||
@@ -92,6 +83,15 @@ internal fun isSecurityChallengeHost(host: String): Boolean {
             h.endsWith(".cloudflare.com") ||
             h == "recaptcha.net" ||
             h.endsWith(".recaptcha.net")
+}
+
+internal fun isGoogleAuthHost(host: String): Boolean {
+    val h = host.lowercase()
+    return h == "google.com" ||
+            h.endsWith(".google.com") ||
+            h == "accounts.youtube.com" ||
+            h == "googleusercontent.com" ||
+            h.endsWith(".googleusercontent.com")
 }
 
 internal fun shouldCapturePopupInApp(url: Uri, assetHost: String = "bds-asset.local"): Boolean {

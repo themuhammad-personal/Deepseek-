@@ -16,7 +16,9 @@
       "content": "محتوا",
       "description": "توضیحات",
       "none": "هیچ‌کدام",
-      "working": "در حال انجام..."
+      "working": "در حال انجام...",
+      "active": "فعال",
+      "off": "خاموش"
     },
     "drawer": {
       "title": "Better DeepSeek",
@@ -196,7 +198,9 @@
       "advancedSearchPlaceholder": "جستجوی تنظیمات...",
       "advancedNoResults": "تنظیمات منطبقی یافت نشد.",
       "disableTipBox": "غیرفعال‌کردن جعبه نکته",
-      "disableTipBoxHint": "هر بار که کشو باز می‌شود یک نکته تصادفی نشان می‌دهد."
+      "disableTipBoxHint": "هر بار که کشو باز می‌شود یک نکته تصادفی نشان می‌دهد.",
+      "deepCode": "دیپ کد",
+      "deepCodeDesc": "نمایه‌سازی خودکار فضای کاری و ایجنت کدنویسی Harness"
     },
     "skillList": {
       "title": "مجموعه مهارت",
@@ -406,7 +410,28 @@
       "commitsFailed": "دریافت تاریخچه commit ناموفق بود: {{msg}}",
       "repoFailed": "دریافت مخزن ناموفق بود: {{msg}}",
       "invalidWebUrl": "لطفاً یک نشانی معتبر وارد کنید (شامل http/https).",
-      "webFetchFailed": "دریافت محتوای صفحه ممکن نشد: {{msg}}"
+      "webFetchFailed": "دریافت محتوای صفحه ممکن نشد: {{msg}}",
+      "uploadFileDesc": "PDF، تصاویر، اسناد و کد",
+      "cameraPhoto": "دوربین و عکس‌ها",
+      "cameraPhotoDesc": "عکس بگیرید یا تصویر بارگذاری کنید",
+      "webSearchMode": "حالت جستجوی وب",
+      "webSearchModeDesc": "جستجوی زنده در وب برای پاسخ‌های لحظه‌ای",
+      "deepThinkR1": "DeepThink (R1)",
+      "deepThinkR1Desc": "استدلال عمیق و زنجیره تفکر",
+      "uploadFolderDesc": "خواندن فایل‌های دایرکتوری از طریق انتخابگر",
+      "attachProjectDesc": "پیوست فایل‌ها و زمینه پروژه",
+      "githubRepoDesc": "کلون و بررسی فایل‌های مخزن",
+      "fetchWebPageDesc": "استخراج متن و محتوا از URL",
+      "deepResearch": "تحقیق عمیق",
+      "deepResearchDesc": "بررسی خودکار چندمرحله‌ای وب",
+      "deepResearchEnabled": "تحقیق عمیق فعال شد",
+      "deepResearchDisabled": "تحقیق عمیق غیرفعال شد",
+      "customCommands": "دستورها و پرامپت‌ها",
+      "customCommandsDesc": "میان‌برها، قطعه‌کدها و ابزارهای سریع",
+      "deepCode": "دیپ کد",
+      "deepCodeDesc": "فضای کاری کدنویسی مشترک و توسعه پروژه",
+      "deepCodeEnabled": "دیپ کد فعال شد",
+      "deepCodeDisabled": "دیپ کد غیرفعال شد"
     },
     "codeRunner": {
       "pythonRunner": "اجراگر پایتون",
@@ -797,7 +822,9 @@
       "exportChat": "خروجی گفتگو (BDS)",
       "getBdsApp": "دریافت برنامه BDS",
       "whatsNew": "چه خبر؟",
-      "advancedSettings": "تنظیمات پیشرفته"
+      "advancedSettings": "تنظیمات پیشرفته",
+      "pin": "سنجاق کردن گفتگو",
+      "unpin": "برداشتن سنجاق"
     },
     "savedItems": {
       "title": "موارد ذخیره‌شده",
@@ -1248,6 +1275,23 @@
               "description": "مدیریت بهتر جریان‌های متوقف و بسته‌شدن خودکار تگ‌ها."
             }
           }
+        },
+        "v0_1_14": {
+          "title": "نمودارهای پیشرفته، زبان فارسی و بهبودها",
+          "features": {
+            "feat_0": {
+              "title": "نمودارهای پیشرفته",
+              "description": "Better DeepSeek اکنون می‌تواند نمودارهای بسیار بهتری برای شما آماده کند. فقط از DeepSeek بخواهید نموداری بسازد."
+            },
+            "feat_1": {
+              "title": "پشتیبانی از زبان جدید",
+              "description": "پشتیبانی از زبان فارسی اضافه شد."
+            },
+            "feat_2": {
+              "title": "رفع اشکال و بهبودها",
+              "description": "رفع اشکالات متعدد و بهبود عملکرد در سراسر افزونه."
+            }
+          }
         }
       }
     },
@@ -1256,7 +1300,8 @@
       "tr": "ترکی",
       "ru": "روسی",
       "zh-cn": "چینی ساده‌شده",
-      "fa": "فارسی"
+      "fa": "فارسی",
+      "bn": "বাংলা"
     },
     "apiPlayground": {
       "title": "زمین بازی API",
