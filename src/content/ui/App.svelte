@@ -1,6 +1,5 @@
 <script>
   import Drawer from "./Drawer.svelte";
-  import GrokShell from "./GrokShell.svelte";
   import ToastStack from "./ToastStack.svelte";
   import QuestionPanel from "./QuestionPanel.svelte";
   import QueuePanel from "./QueuePanel.svelte";
@@ -191,8 +190,6 @@
     <span class="bds-toggle-dot" title="MCP Active" aria-hidden="true"></span>
   {/if}
 </button>
-
-<GrokShell />
 
 <Drawer bind:this={drawerRef} open={drawerOpen} onclose={closeDrawer} onopenapiplayground={openApiPlayground} />
 
