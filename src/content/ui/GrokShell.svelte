@@ -9,6 +9,7 @@
   let activeTitle = $state("New chat");
   let activePath = $state("");
   let modelName = $state("DeepSeek");
+  let logoSrc = $state("");
   let online = $state(true);
   let timer = null;
   let observer = null;
@@ -105,6 +106,7 @@
     if (!isAndroid) return;
 
     online = navigator.onLine;
+    try { logoSrc = window.chrome?.runtime?.getURL?.("static/icon-512.png") || ""; } catch (_) {}
     document.body.classList.add("bds-grok-shell-active");
     document.documentElement.classList.add("bds-grok-shell-active");
 
@@ -142,7 +144,7 @@
   <div class="grok-stage">
     <aside class:open={mobileOpen} class="grok-sidebar">
       <div class="grok-brand">
-        <div class="grok-logo">{@html logo()}</div>
+        <div class="grok-logo">{#if logoSrc}<img src={logoSrc} alt="" />{:else}{@html logo()}{/if}</div>
         <div class="grok-brand-copy">
           <strong>Super DeepSeek</strong>
           <span>Frontier reasoning, native feel</span>
@@ -250,7 +252,7 @@
   .grok-logo { width:40px; height:40px; border-radius:13px; display:grid; place-items:center; overflow:hidden;
     background:radial-gradient(circle at 32% 25%,rgba(110,201,212,.92),transparent 46%),linear-gradient(145deg,#07131a,#06151c 52%,#071018);
     border:1px solid rgba(110,201,212,.25); box-shadow:0 8px 28px rgba(110,201,212,.16),inset 0 0 24px rgba(110,201,212,.07); }
-  .grok-logo :global(svg){width:30px;height:30px}.grok-brand-copy{min-width:0;display:flex;flex-direction:column}.grok-brand-copy strong{font-size:14px;letter-spacing:-.02em}.grok-brand-copy span{margin-top:2px;font-size:10.5px;color:#74767e;white-space:nowrap}
+  .grok-logo :global(svg){width:30px;height:30px}.grok-logo img{width:100%;height:100%;object-fit:cover}.grok-brand-copy{min-width:0;display:flex;flex-direction:column}.grok-brand-copy strong{font-size:14px;letter-spacing:-.02em}.grok-brand-copy span{margin-top:2px;font-size:10.5px;color:#74767e;white-space:nowrap}
   .grok-new-chat{margin:0 12px;height:44px;border:0;border-radius:14px;background:#6ec9d4;color:#041014;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:700}
   .grok-new-chat:active{transform:scale(.97)}.grok-new-chat .plus{font-size:20px;line-height:1;font-weight:400}
   .grok-search{margin:12px 12px 10px;height:40px;display:flex;align-items:center;gap:9px;padding:0 12px;border-radius:11px;background:#141418;border:1px solid rgba(255,255,255,.07)}
