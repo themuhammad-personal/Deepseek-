@@ -13,7 +13,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node build.js --dev --target=android",
+    "dev": "node server.js",
+    "start": "node server.js",
     "build": "npm run build:android",
     "build:android": "node build.js --target=android && node scripts/copy-to-android-assets.js",
     "copy-assets": "node scripts/copy-to-android-assets.js",
@@ -42,6 +43,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "docx": "^9.6.1",
+    "express": "^5.2.1",
     "fflate": "^0.8.2",
     "html2canvas": "^1.4.1",
     "ignore": "^7.0.5",

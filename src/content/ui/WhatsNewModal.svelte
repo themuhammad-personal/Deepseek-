@@ -3,6 +3,7 @@
   import { VERSION_HISTORY, LATEST_VERSION } from "../../lib/versions.js";
   import { STORAGE_KEYS } from "../../lib/constants.js";
   import appState from "../state.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   import { t } from "../../lib/i18n.svelte.js";
 
@@ -74,6 +75,7 @@
   <div 
     bind:this={modalRef}
     class="bds-whats-new-modal" 
+    use:dragToDismiss={{ onDismiss: dismiss, handleSelector: '.bds-wn-header, .bds-whats-new-modal' }}
     onclick={(e) => e.stopPropagation()} 
     role="dialog" 
     aria-modal="true"

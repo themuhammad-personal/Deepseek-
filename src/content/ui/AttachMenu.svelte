@@ -35,6 +35,7 @@
   import { sendFileWithMessage } from "../auto.js";
   import { setDeepResearchEnabled } from "../deep-research.js";
   import { setDeepCodeEnabled } from "../deep-code.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   // The native input[type="file"] reference passed from scanner
   let { nativeInput } = $props();
@@ -964,6 +965,7 @@
     dt.items.add(file);
     target.files = dt.files;
     target.dispatchEvent(new Event("change", { bubbles: true }));
+    window.dispatchEvent(new CustomEvent("bds:files-changed"));
   }
 
   function formatSize(bytes) {
@@ -1156,6 +1158,7 @@
       class="bds-attach-dropdown"
       style={dropdownStyle}
       use:portal
+      use:dragToDismiss={{ onDismiss: () => (isOpen = false), handleSelector: '.bds-sheet-handle, .bds-sheet-header' }}
       onclick={(event) => event.stopPropagation()}
     >
       <div class="bds-sheet-handle" aria-hidden="true"></div>
@@ -1636,6 +1639,7 @@
     class="bds-project-panel"
     style={projectPanelStyle}
     use:portal
+    use:dragToDismiss={{ onDismiss: () => (showProjectPanel = false), handleSelector: '.bds-sheet-handle, .bds-pp-header' }}
     bind:this={projectPanelRef}
     onclick={(event) => event.stopPropagation()}
   >
@@ -2533,11 +2537,22 @@
 
     .bds-sheet-handle {
       display: block;
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--bds-border-hover, rgba(255, 255, 255, 0.25));
+      width: 40px;
+      height: 5px;
+      border-radius: 3px;
+      background: var(--bds-border-hover, rgba(255, 255, 255, 0.28));
       margin: 2px auto 14px;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    .bds-sheet-handle:active {
+      cursor: grabbing;
+      transform: scale(1.05);
+      background: var(--bds-text-tertiary, rgba(255, 255, 255, 0.45));
     }
 
     .bds-sheet-header {

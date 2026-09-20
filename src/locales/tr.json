@@ -473,6 +473,25 @@
       "file": "Dosya",
       "empty": "Bu dizin boş."
     },
+    "composer": {
+      "attachments": "Ekler",
+      "clearAll": "Tümünü Temizle",
+      "removeFile": "Dosyayı Kaldır",
+      "previewImage": "Görsel Önizlemesi",
+      "previewFile": "Dosya Önizlemesi",
+      "dropToAttach": "Eklemek için dosyaları buraya bırakın",
+      "imagePasted": "Görsel panodan eklendi",
+      "closePreview": "Önizlemeyi Kapat"
+    },
+    "thought": {
+      "thinking": "Düşünüyor...",
+      "thoughtProcess": "Düşünce Süreci"
+    },
+    "actionBar": {
+      "readAloud": "Sesli oku",
+      "forkChat": "Sohbeti dallandır",
+      "forked": "Bu mesajdan yeni sohbet dallandırıldı"
+    },
     "autoCodeRunner": {
       "aiWantsToRun": "Yapay zeka {{lang}} kodu çalıştırmak istiyor",
       "safeSandbox": "Bu kod güvenli bir tarayıcı sanal alanında (sandbox) yürütülecektir.",

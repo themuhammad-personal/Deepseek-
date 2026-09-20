@@ -1,12 +1,17 @@
 <script>
   import { t } from "../../lib/i18n.svelte.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   let { show = false, message = "", onconfirm, oncancel } = $props();
 </script>
 
 {#if show}
   <div class="bds-confirm-overlay" role="dialog" onclick={oncancel} onkeydown={(e) => e.key === 'Escape' && oncancel()}>
-    <div class="bds-confirm-dialog" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="bds-confirm-dialog"
+      use:dragToDismiss={{ onDismiss: oncancel, handleSelector: '.bds-confirm-dialog' }}
+      onclick={(e) => e.stopPropagation()}
+    >
       <p class="bds-confirm-message">{message}</p>
       <div class="bds-confirm-actions">
         <button type="button" class="bds-btn-outlined" onclick={oncancel}>{t('common.cancel')}</button>

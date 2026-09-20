@@ -11,6 +11,7 @@
   import { supportsLocalDirectoryLinking } from "../../lib/local-directory-source.js";
   import { isNativeFilePickerAvailable, nativePickFiles } from "../../platform/android-file-picker.js";
   import { t } from "../../lib/i18n.svelte.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   let { show = false, activeDirectory = null, fileCount = 0, onclose = null } = $props();
 
@@ -119,7 +120,11 @@
     onkeydown={(e) => e.key === 'Escape' && onclose?.()}
   >
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="bds-dc-modal" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="bds-dc-modal"
+      use:dragToDismiss={{ onDismiss: onclose, handleSelector: '.bds-drawer-header, .bds-dc-modal' }}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="bds-drawer-header">
         <div class="ds-modal-content__title">{t("deepCodeModal.title")}</div>
         <button id="bds-close" type="button" onclick={onclose} aria-label={t("deepCodeModal.closeAria")}>

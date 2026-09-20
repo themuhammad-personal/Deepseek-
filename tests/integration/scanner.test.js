@@ -9,6 +9,7 @@ const deepCodeToggleMock = vi.hoisted(() => ({ name: "DeepCodeToggle" }));
 const attachMenuMock = vi.hoisted(() => ({ name: "AttachMenu" }));
 const expandToggleMock = vi.hoisted(() => ({ name: "ExpandToggle" }));
 const ragPreviewMock = vi.hoisted(() => ({ name: "RagPreview" }));
+const composerChipsMock = vi.hoisted(() => ({ name: "ComposerChips" }));
 
 const processMessageNodeMock = vi.hoisted(() => vi.fn());
 const disposeMessageNodeMock = vi.hoisted(() => vi.fn());
@@ -38,6 +39,10 @@ vi.mock("../../src/content/ui/ExpandToggle.svelte", () => ({
 
 vi.mock("../../src/content/ui/RagPreview.svelte", () => ({
   default: ragPreviewMock,
+}));
+
+vi.mock("../../src/content/ui/ComposerChips.svelte", () => ({
+  default: composerChipsMock,
 }));
 
 vi.mock("../../src/content/ui/DeepResearchToggle.svelte", () => ({

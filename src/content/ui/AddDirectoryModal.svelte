@@ -6,6 +6,7 @@
   } from "../deep-code.js";
   import { unlinkDirectory } from "../../lib/local-directory-source.js";
   import { t } from "../../lib/i18n.svelte.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   let { show = false, activeDirectory = null, fileCount = 0, onclose = null } = $props();
 
@@ -85,7 +86,11 @@
     onkeydown={(e) => e.key === 'Escape' && handleCancel()}
   >
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="bds-add-card" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="bds-add-card"
+      use:dragToDismiss={{ onDismiss: handleCancel, handleSelector: '.bds-add-header, .bds-add-card' }}
+      onclick={(e) => e.stopPropagation()}
+    >
       <div class="bds-add-header">
         <div class="ds-modal-content__title">{t("deepCodeModal.addNewDirectory")}</div>
         <button id="bds-close" type="button" onclick={handleCancel} aria-label={t("deepCodeModal.closeAria")}>

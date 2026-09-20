@@ -473,6 +473,25 @@
       "file": "文件",
       "empty": "此目录为空。"
     },
+    "composer": {
+      "attachments": "附件",
+      "clearAll": "全部清除",
+      "removeFile": "移除文件",
+      "previewImage": "预览图片",
+      "previewFile": "预览文件",
+      "dropToAttach": "拖放文件至此以添加附件",
+      "imagePasted": "已从剪贴板添加图片",
+      "closePreview": "关闭预览"
+    },
+    "thought": {
+      "thinking": "思考中...",
+      "thoughtProcess": "思考过程"
+    },
+    "actionBar": {
+      "readAloud": "朗读",
+      "forkChat": "分叉对话",
+      "forked": "已从该消息分叉"
+    },
     "autoCodeRunner": {
       "aiWantsToRun": "AI 想要运行 {{lang}} 代码",
       "safeSandbox": "将在安全的沙盒环境中执行。",

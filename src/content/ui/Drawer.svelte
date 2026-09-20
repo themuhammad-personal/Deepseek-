@@ -9,6 +9,7 @@
   import appState from "../state.js";
   import { i18n, t } from "../../lib/i18n.svelte.js";
   import { getExtensionVersion } from "../../lib/extension-version.js";
+  import { dragToDismiss } from "../../lib/gestures/drag-to-dismiss.js";
 
   let { open = false, onclose, onopenapiplayground } = $props();
 
@@ -151,7 +152,11 @@
   <div class="bds-drawer-backdrop" onclick={handleClose} role="presentation"></div>
 {/if}
 
-<aside id="bds-drawer" class={open ? "bds-open" : "bds-closed"}>
+<aside
+  id="bds-drawer"
+  class={open ? "bds-open" : "bds-closed"}
+  use:dragToDismiss={{ onDismiss: handleClose, handleSelector: '.bds-drag-handle, .bds-drawer-header' }}
+>
   <!-- Drag Handle for Mobile Sheet -->
   <div class="bds-drag-handle" aria-hidden="true"></div>
 

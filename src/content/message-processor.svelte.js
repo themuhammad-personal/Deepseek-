@@ -19,6 +19,9 @@ import { injectJavaScriptRunButtons } from "./dom/javascript-injector.js";
 import { injectLuaRunButtons } from "./dom/lua-injector.js";
 import { injectRubyRunButtons } from "./dom/ruby-injector.js";
 import { injectDynamicTableFeatures } from "./dom/table-injector.js";
+import { enhanceThoughtBlocks } from "./dom/thought-enhancer.js";
+import { injectActionBar } from "./dom/action-bar-enhancer.js";
+import { enhanceCodeBlocks } from "./dom/code-block-enhancer.js";
 import { parseBdsMessage } from "./parser/index.js";
 import { parseTagAttributes, scanBdsTagPairs } from "./parser/tag-parser.js";
 import { cleanBdsString } from "./tags/tag-hider.js";
@@ -212,6 +215,7 @@ export function processMessageNode(node, nodeIndex = -1, nodes = null, context =
   injectLuaRunButtons(node);
   injectRubyRunButtons(node);
   injectDynamicTableFeatures(node);
+  enhanceCodeBlocks(node);
   injectSelectionCheckbox(node);
   injectBookmarkButton(node);
 
@@ -898,6 +902,12 @@ export function processMessageNode(node, nodeIndex = -1, nodes = null, context =
     syncVisibilityState(node, isLatestAssistant, stateData, isSettled);
 
     const isGenerating = !!node.querySelector('.ds-cursor, ._streaming') || (isLatestAssistant && isSystemGenerating());
+
+    // Enhance native thought blocks with Claude-style animated pulse/shimmer & collapsible capsule
+    enhanceThoughtBlocks(node, isLatestAssistant, isGenerating);
+
+    // Inject mobile-first action bar (Quick Copy with haptics, TTS read-aloud, conversation fork)
+    injectActionBar(node);
 
     // --- FILE COLLECTION ---
     // During LONG_WORK: ALWAYS buffer files. NEVER emit ZIP here.

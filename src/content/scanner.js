@@ -16,6 +16,7 @@ import { mount, unmount } from "svelte";
 import AttachMenu from "./ui/AttachMenu.svelte";
 import ExpandToggle from "./ui/ExpandToggle.svelte";
 import RagPreview from "./ui/RagPreview.svelte";
+import ComposerChips from "./ui/ComposerChips.svelte";
 import DeepResearchToggle from "./ui/DeepResearchToggle.svelte";
 import DeepCodeToggle from "./ui/DeepCodeToggle.svelte";
 import { injectSearchInput } from "./ui/SidebarSearch.js";
@@ -648,6 +649,22 @@ export function scanInputArea() {
   if (!ragMountPoint.dataset.bdsMounted) {
     mount(RagPreview, { target: ragMountPoint });
     ragMountPoint.dataset.bdsMounted = "1";
+  }
+
+  const composerChipsMountPoint = ensureComposerMount(
+    wrapper,
+    "bds-composer-chips-mount",
+    ".bds-composer-chips",
+    fileInput,
+  );
+  if (!composerChipsMountPoint.dataset.bdsMounted) {
+    mount(ComposerChips, {
+      target: composerChipsMountPoint,
+      props: {
+        nativeInput: fileInput
+      }
+    });
+    composerChipsMountPoint.dataset.bdsMounted = "1";
   }
 
   markComposerControlsMounted(wrapper);

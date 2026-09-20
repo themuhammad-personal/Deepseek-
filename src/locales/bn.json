@@ -549,6 +549,25 @@
       "file": "File",
       "empty": "This directory is empty."
     },
+    "composer": {
+      "attachments": "সংযুক্তি",
+      "clearAll": "সব মুছুন",
+      "removeFile": "ফাইল সরান",
+      "previewImage": "ছবির প্রিভিউ",
+      "previewFile": "ফাইলের প্রিভিউ",
+      "dropToAttach": "সংযুক্ত করতে ফাইল এখানে ফেলুন",
+      "imagePasted": "ক্লিপবোর্ড থেকে ছবি যুক্ত হয়েছে",
+      "closePreview": "প্রিভিউ বন্ধ করুন"
+    },
+    "thought": {
+      "thinking": "চিন্তাভাবনা চলছে...",
+      "thoughtProcess": "চিন্তার প্রক্রিয়া"
+    },
+    "actionBar": {
+      "readAloud": "পড়ে শোনান",
+      "forkChat": "নতুন চ্যাটে রূপান্তর করুন",
+      "forked": "এই বার্তা থেকে নতুন শাখা তৈরি হয়েছে"
+    },
     "autoCodeRunner": {
       "aiWantsToRun": "AI wants to run {{lang}} code",
       "safeSandbox": "This will execute in a safe sandbox.",

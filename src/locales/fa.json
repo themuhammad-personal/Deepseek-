@@ -473,6 +473,25 @@
       "file": "فایل",
       "empty": "این پوشه خالی است."
     },
+    "composer": {
+      "attachments": "پیوست‌ها",
+      "clearAll": "پاک کردن همه",
+      "removeFile": "حذف فایل",
+      "previewImage": "پیش‌نمایش تصویر",
+      "previewFile": "پیش‌نمایش فایل",
+      "dropToAttach": "برای پیوست کردن فایل‌ها را اینجا بکشید",
+      "imagePasted": "تصویر از کلیپ‌بورد پیوست شد",
+      "closePreview": "بستن پیش‌نمایش"
+    },
+    "thought": {
+      "thinking": "در حال فکر کردن...",
+      "thoughtProcess": "فرایند تفکر"
+    },
+    "actionBar": {
+      "readAloud": "خواندن با صدا",
+      "forkChat": "انشعاب گفتگو",
+      "forked": "گفتگو از این پیام منشعب شد"
+    },
     "autoCodeRunner": {
       "aiWantsToRun": "هوش مصنوعی می‌خواهد کد {{lang}} اجرا کند",
       "safeSandbox": "این در یک جعبه ایمن اجرا می‌شود.",

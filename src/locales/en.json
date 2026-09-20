@@ -498,6 +498,25 @@
       "file": "File",
       "empty": "This directory is empty."
     },
+    "composer": {
+      "attachments": "Attachments",
+      "clearAll": "Clear all",
+      "removeFile": "Remove file",
+      "previewImage": "Preview image",
+      "previewFile": "Preview file",
+      "dropToAttach": "Drop files here to attach",
+      "imagePasted": "Image attached from clipboard",
+      "closePreview": "Close preview"
+    },
+    "thought": {
+      "thinking": "Thinking...",
+      "thoughtProcess": "Thought Process"
+    },
+    "actionBar": {
+      "readAloud": "Read aloud",
+      "forkChat": "Fork conversation",
+      "forked": "Branched from this message"
+    },
     "autoCodeRunner": {
       "aiWantsToRun": "AI wants to run {{lang}} code",
       "safeSandbox": "This will execute in a safe sandbox.",

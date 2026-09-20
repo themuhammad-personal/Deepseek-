@@ -1,0 +1,6 @@
+{
+  "name": "Super DeepSeek",
+  "description": "Standalone Android & Web Client for DeepSeek AI with Claude & ChatGPT UX, Model Context Protocol (MCP) and Agentic Tools",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
