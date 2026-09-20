@@ -43,6 +43,35 @@ export function highlightCodeBlocks(rootNode = document) {
     // Make banner sticky
     if (bannerEl) {
       bannerEl.classList.add("bds-code-sticky-banner");
+      if (!bannerEl.querySelector(".bds-banner-artifact-btn")) {
+        const isArtifactCapable = ["markup", "html", "svg", "markdown", "javascript", "typescript", "python", "css"].includes(lang);
+        if (isArtifactCapable) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "bds-banner-artifact-btn";
+          btn.title = "Open Claude-style Artifact";
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <span>Artifact</span>
+          `;
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const codeText = codeEl.textContent || "";
+            window.dispatchEvent(new CustomEvent("bds:open-artifact", {
+              detail: {
+                title: `${(lang || "CODE").toUpperCase()} Artifact`,
+                language: lang || "code",
+                code: codeText,
+              }
+            }));
+          });
+          bannerEl.appendChild(btn);
+        }
+      }
     }
 
     // Determine language

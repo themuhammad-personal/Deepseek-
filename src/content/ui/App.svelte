@@ -11,6 +11,8 @@
   import PreviewPanel from "./PreviewPanel.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import DeepCodeModal from "./DeepCodeModal.svelte";
+  import ArtifactsView from "./ArtifactsView.svelte";
+  import VoiceOverlay from "./VoiceOverlay.svelte";
   import ApiPlayground from "../api-playground/ApiPlayground.svelte";
   import appState from "../state.js";
 
@@ -18,6 +20,13 @@
   let apiPlaygroundOpen = $state(false);
   let deepCodeModalOpen = $state(false);
   let whatsNewPending = $state(appState.whatsNewPending);
+
+  let voiceModeVisible = $state(false);
+
+  let artifactVisible = $state(false);
+  let artifactTitle = $state("Artifact");
+  let artifactLanguage = $state("code");
+  let artifactCode = $state("");
 
   let previewVisible = $state(false);
   let previewTitle = $state("");
@@ -149,6 +158,21 @@
     closeDrawer();
   });
 
+  window.addEventListener("bds:toggle-voice-mode", () => {
+    voiceModeVisible = !voiceModeVisible;
+  });
+
+  window.addEventListener("bds:open-voice-mode", () => {
+    voiceModeVisible = true;
+  });
+
+  window.addEventListener("bds:open-artifact", (e) => {
+    artifactTitle = e.detail?.title || "Artifact";
+    artifactLanguage = e.detail?.language || "code";
+    artifactCode = e.detail?.code || "";
+    artifactVisible = true;
+  });
+
   export function toggleDrawerPublic() {
     toggleDrawer();
   }
@@ -197,6 +221,19 @@
   title={previewTitle}
   content={previewContent}
   onclose={hidePreviewPanel}
+/>
+
+<ArtifactsView
+  visible={artifactVisible}
+  title={artifactTitle}
+  language={artifactLanguage}
+  code={artifactCode}
+  onclose={() => (artifactVisible = false)}
+/>
+
+<VoiceOverlay
+  visible={voiceModeVisible}
+  onclose={() => (voiceModeVisible = false)}
 />
 
 <ConfirmDialog

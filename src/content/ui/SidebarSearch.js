@@ -6,6 +6,7 @@
 
 import state from "../state.js";
 import { extractSessionId } from "../tags/tag-manager.js";
+import { loadPinnedSessions, isSessionPinned } from "../pins/pin-manager.js";
 import { i18n } from "../../lib/i18n.svelte.js";
 
 let searchInput = null;
@@ -18,6 +19,12 @@ let searchSuggestionsContainer = null;
 export function initSidebarSearch() {
   if (document.getElementById('bds-sidebar-search-container')) return;
   injectSearchInput();
+  loadPinnedSessions().then(() => {
+    performFiltering("");
+  });
+  window.addEventListener("bds:pinned-chats-changed", () => {
+    performFiltering(searchInput ? searchInput.value : "");
+  });
 }
 
 export function injectSearchInput() {
@@ -316,6 +323,42 @@ function performFiltering(query) {
       item.style.removeProperty('display');
     } else {
       item.style.setProperty('display', 'none', 'important');
+    }
+
+    // Pin status & badge decoration
+    const isPinned = isSessionPinned(sessionId);
+    item.classList.toggle("bds-chat-pinned", isPinned);
+
+    let pinBadge = item.querySelector(".bds-pin-badge");
+    if (isPinned) {
+      if (!pinBadge && titleEl) {
+        pinBadge = document.createElement("span");
+        pinBadge.className = "bds-pin-badge";
+        pinBadge.title = "Pinned conversation";
+        pinBadge.innerHTML = `
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="17" x2="12" y2="22"></line>
+            <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"></path>
+          </svg>
+        `;
+        titleEl.parentNode.insertBefore(pinBadge, titleEl);
+      }
+    } else if (pinBadge) {
+      pinBadge.remove();
+    }
+
+    // Search term highlighting
+    if (titleEl) {
+      if (!titleEl.hasAttribute("data-bds-raw-title")) {
+        titleEl.setAttribute("data-bds-raw-title", titleEl.textContent);
+      }
+      const rawText = titleEl.getAttribute("data-bds-raw-title") || "";
+      if (q && !inputTagSearch && rawText.toLowerCase().includes(q)) {
+        const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+        titleEl.innerHTML = rawText.replace(regex, `<mark class="bds-search-highlight">$1</mark>`);
+      } else {
+        titleEl.textContent = rawText;
+      }
     }
   });
 

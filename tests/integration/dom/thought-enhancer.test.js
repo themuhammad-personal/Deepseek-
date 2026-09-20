@@ -112,4 +112,34 @@ describe("Thought Enhancer", () => {
     expect(headerCount1).toBe(1);
     expect(headerCount2).toBe(1);
   });
+
+  it("extracts and renders OpenAI o1 style step-by-step milestones rail", () => {
+    const thinkEl = document.createElement("div");
+    thinkEl.className = "ds-think-content";
+    thinkEl.innerHTML = `
+      <p>Here is my plan to solve the user prompt:</p>
+      <p>1. Parse input JSON payload</p>
+      <p>2. Verify database connection credentials</p>
+      <p>3. Execute transaction securely</p>
+    `;
+    root.appendChild(thinkEl);
+
+    // Initial call - expanded
+    enhanceThoughtBlocks(root, false, false);
+    const header = thinkEl.querySelector(".bds-thought-header");
+    header.click(); // expand
+
+    const rail = thinkEl.querySelector(".bds-thought-milestones-rail");
+    expect(rail).not.toBeNull();
+
+    const items = rail.querySelectorAll(".bds-thought-step-item");
+    expect(items.length).toBe(3);
+    expect(items[0].textContent).toContain("Parse input JSON payload");
+    expect(items[1].textContent).toContain("Verify database connection credentials");
+    expect(items[2].textContent).toContain("Execute transaction securely");
+
+    const countBadge = header.querySelector(".bds-thought-step-count");
+    expect(countBadge.style.display).toBe("inline-block");
+    expect(countBadge.textContent).toBe("3 steps");
+  });
 });

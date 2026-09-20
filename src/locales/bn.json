@@ -841,6 +841,8 @@
       "downloadMd": "Download as .md"
     },
     "sidebarMenu": {
+      "pin": "পিন করুন",
+      "unpin": "আনপিন করুন",
       "tags": "Tags (BDS)",
       "exportChat": "Export Chat (BDS)",
       "getBdsApp": "সুপার ডিপসিক অ্যাপ",

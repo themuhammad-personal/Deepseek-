@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
   deepCodeOnboarded: "bds_deep_code_onboarded",
   commandMappings: "bds_command_mappings",
   mcpServers: "bds_mcp_servers",
+  pinnedSessions: "bds_pinned_sessions",
 };
 
 

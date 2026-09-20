@@ -1256,35 +1256,35 @@
       name: "Brave Web Search",
       serverUrl: "https://api.search.brave.com/res/v1/mcp",
       apiKeyRequired: true,
-      description: "লাইভ ওয়েব ও রিয়েল-টাইম নিউজ সার্চ (Brave API)",
+      description: "Real-time web search and live news queries via Brave Search API",
       defaultTools: ["brave_web_search", "brave_local_search"]
     },
     {
       name: "Web Content Fetcher",
       serverUrl: "https://mcp.deepseek-tools.local/fetch",
       apiKeyRequired: false,
-      description: "যেকোনো ওয়েব পেজের কন্টেন্ট ও আর্টিকেলের টেক্সট রিডার",
+      description: "Extract clean article text and markdown from any web URL",
       defaultTools: ["fetch_html", "fetch_markdown"]
     },
     {
       name: "Weather & Time Clock",
       serverUrl: "https://mcp.deepseek-tools.local/weather",
       apiKeyRequired: false,
-      description: "গ্লোবাল রিয়েল-টাইম আবহাওয়া ও বিভিন্ন শহরের টাইমজোন",
+      description: "Global real-time forecasts, temperatures, and timezone clock",
       defaultTools: ["get_weather", "get_current_time"]
     },
     {
       name: "GitHub Explorer",
       serverUrl: "https://api.github.com/mcp",
       apiKeyRequired: false,
-      description: "গিটহাব রিপোজিটরি, ফাইল ও কোড অনুসন্ধান",
+      description: "Browse GitHub repositories, inspect commits, files, and pull requests",
       defaultTools: ["search_repositories", "get_file_contents"]
     },
     {
       name: "Local Termux Bridge",
       serverUrl: "http://127.0.0.1:8080/sse",
       apiKeyRequired: false,
-      description: "অ্যান্ড্রয়েড টার্মুক্স লোকাল পাইথন/নোড সার্ভার কানেকশন",
+      description: "Connect to Android Termux local Python/Node development servers",
       defaultTools: ["run_command", "read_local_file"]
     }
   ];
@@ -1292,7 +1292,7 @@
   async function addPresetMcpServer(preset) {
     const existing = mcpServers.find(s => s.serverUrl === preset.serverUrl || s.name === preset.name);
     if (existing) {
-      if (appState.ui) appState.ui.showToast(`${preset.name} ইতোমধ্যে যুক্ত আছে।`);
+      if (appState.ui) appState.ui.showToast(`${preset.name} is already added.`);
       openMcpEditor(existing);
       return;
     }
@@ -1321,7 +1321,7 @@
       await chrome.storage.local.set({ [STORAGE_KEYS.mcpServers]: plain });
       await discoverMcpToolSchemas();
       pushConfigToPage();
-      if (appState.ui) appState.ui.showToast(`${preset.name} সফলভাবে যুক্ত হয়েছে!`);
+      if (appState.ui) appState.ui.showToast(`${preset.name} activated!`);
     }
   }
 
@@ -2572,11 +2572,12 @@
 
         <!-- 1-Tap Preset MCP Servers -->
         <div class="bds-mcp-presets-header">
-          <span class="bds-mcp-presets-title">প্রিসেট সার্ভার (Ready-to-Use Presets)</span>
-          <span class="bds-mcp-presets-hint">এক ট্যাপে মোবাইল উপযোগী জনপ্রিয় MCP প্লাগইন যুক্ত করুন:</span>
+          <span class="bds-mcp-presets-title">Preset MCP Servers (1-Tap Activation)</span>
+          <span class="bds-mcp-presets-hint">Instantly activate curated mobile-optimized MCP servers and tool plugins:</span>
         </div>
         <div class="bds-mcp-presets-grid">
           {#each MCP_PRESETS as preset}
+            {@const isAdded = mcpServers.some(s => s.serverUrl === preset.serverUrl || s.name === preset.name)}
             <div class="bds-mcp-preset-card">
               <div class="bds-mcp-preset-info">
                 <div class="bds-mcp-preset-name-row">
@@ -2592,10 +2593,18 @@
               <button
                 type="button"
                 class="bds-mcp-preset-add-btn"
+                class:bds-mcp-preset-active={isAdded}
                 onclick={() => addPresetMcpServer(preset)}
-                title="Add {preset.name}"
+                title="Activate {preset.name}"
               >
-                + যুক্ত করুন
+                {#if isAdded}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Active</span>
+                {:else}
+                  + Activate
+                {/if}
               </button>
             </div>
           {/each}
@@ -3526,6 +3535,15 @@
 
   .bds-mcp-preset-add-btn:hover {
     opacity: 0.9;
+  }
+
+  .bds-mcp-preset-add-btn.bds-mcp-preset-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .bds-mcp-empty-notice {

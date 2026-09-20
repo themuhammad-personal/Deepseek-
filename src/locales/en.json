@@ -818,6 +818,8 @@
       "downloadMd": "Download as .md"
     },
     "sidebarMenu": {
+      "pin": "Pin Chat",
+      "unpin": "Unpin Chat",
       "tags": "Tags (BDS)",
       "exportChat": "Export Chat (BDS)",
       "getBdsApp": "Get BDS App",

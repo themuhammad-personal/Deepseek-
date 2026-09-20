@@ -72,19 +72,48 @@ function injectStandaloneCodeHeader(pre, lang) {
   const header = document.createElement("div");
   header.className = "bds-code-floating-header";
 
+  const isArtifactCapable = ["html", "svg", "xml", "markdown", "md", "mermaid", "javascript", "js", "typescript", "ts", "python", "py", "css", "json"].includes(lang);
+
   header.innerHTML = `
     <span class="bds-code-lang-tag">${lang.toUpperCase()}</span>
-    <button type="button" class="bds-code-copy-btn" title="${i18n.t('common.copy') || 'Copy code'}">
-      <svg class="bds-copy-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-      </svg>
-      <svg class="bds-check-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-      <span>${i18n.t('common.copy') || 'Copy'}</span>
-    </button>
+    <div class="bds-code-actions-group">
+      ${isArtifactCapable ? `
+      <button type="button" class="bds-code-artifact-btn" title="Open Claude-style Artifact">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        <span>Artifact</span>
+      </button>` : ''}
+      <button type="button" class="bds-code-copy-btn" title="${i18n.t('common.copy') || 'Copy code'}">
+        <svg class="bds-copy-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg class="bds-check-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>${i18n.t('common.copy') || 'Copy'}</span>
+      </button>
+    </div>
   `;
+
+  const artifactBtn = header.querySelector(".bds-code-artifact-btn");
+  if (artifactBtn) {
+    artifactBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      triggerHaptic();
+      const codeText = pre.querySelector("code")?.textContent || pre.textContent || "";
+      window.dispatchEvent(new CustomEvent("bds:open-artifact", {
+        detail: {
+          title: `${lang.toUpperCase()} Artifact`,
+          language: lang,
+          code: codeText,
+        }
+      }));
+    });
+  }
 
   const copyBtn = header.querySelector(".bds-code-copy-btn");
   copyBtn.addEventListener("click", async (e) => {

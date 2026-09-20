@@ -1,11 +1,20 @@
 import { exportSession } from "../tools/exporter.js";
 import { setPendingExport, checkPendingExport } from "../tools/pending-export.js";
 import { openTagEditor } from "../tags/tag-editor.js";
+import { extractSessionId } from "../tags/tag-manager.js";
+import { isSessionPinned, toggleSessionPin } from "../pins/pin-manager.js";
 import { i18n } from "../../lib/i18n.svelte.js";
 import appState from "../state.js";
 
 // Keep track of which chat item's menu was opened
 let lastClickedChatUrl = null;
+
+// Pin Icon
+const PIN_ICON = `
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="12" y1="17" x2="12" y2="22"></line>
+  <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"></path>
+</svg>`;
 
 // Selection Icon
 const SELECTION_ICON = `
@@ -170,6 +179,18 @@ function injectOptions(menu) {
 
   const insertBefore = deleteOption || null;
 
+  // Pin / Unpin option
+  const sessionId = extractSessionId(lastClickedChatUrl);
+  const isPinned = isSessionPinned(sessionId);
+  const pinLabel = isPinned
+    ? (i18n.t("sidebarMenu.unpin") || "Unpin Chat")
+    : (i18n.t("sidebarMenu.pin") || "Pin Chat");
+
+  const pinOption = createMenuOption(pinLabel, PIN_ICON, "bds-pin-option", async () => {
+    document.body.click();
+    await toggleSessionPin(sessionId);
+  });
+
   // Tags option
   const tagsOption = createMenuOption(i18n.t('sidebarMenu.tags'), TAG_ICON, "bds-tags-option", () => {
     if (!lastClickedChatUrl) {
@@ -188,11 +209,12 @@ function injectOptions(menu) {
     handleExportAction("selection");
   });
 
-  // Insert: Tags first, then Export, both before Delete
-  tagsOption.style.borderTop = "1px solid rgba(0,0,0,0.05)";
-  tagsOption.style.marginTop = "4px";
-  tagsOption.style.paddingTop = "8px";
+  // Insert: Pin, Tags, Export, all before Delete
+  pinOption.style.borderTop = "1px solid rgba(0,0,0,0.05)";
+  pinOption.style.marginTop = "4px";
+  pinOption.style.paddingTop = "8px";
 
+  menu.insertBefore(pinOption, insertBefore);
   menu.insertBefore(tagsOption, insertBefore);
   menu.insertBefore(exportOption, insertBefore);
 }

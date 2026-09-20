@@ -1,12 +1,15 @@
 /**
  * Native Thought Block Enhancer for DeepSeek & Super DeepSeek.
- * Elevates raw chain-of-thought blocks into sleek Claude/ChatGPT-style
- * collapsible capsule cards with animated pulse/shimmer effects.
+ * Elevates raw chain-of-thought blocks into sleek OpenAI 'o1' and Claude 3.7
+ * style step-by-step thinking progress dropdowns with duration badges,
+ * milestone rails, and smooth collapsible accordions.
  */
 
 import { i18n } from "../../lib/i18n.svelte.js";
 
 const ENHANCED_ATTR = "data-bds-thought-enhanced";
+const START_TIME_ATTR = "data-bds-start-time";
+const DURATION_ATTR = "data-bds-duration";
 
 function triggerHaptic() {
   if (typeof window !== "undefined") {
@@ -57,6 +60,10 @@ function applyThoughtEnhancement(thinkEl, isGenerating) {
   thinkEl.setAttribute(ENHANCED_ATTR, "true");
   thinkEl.classList.add("bds-thought-box");
 
+  if (isGenerating && !thinkEl.hasAttribute(START_TIME_ATTR)) {
+    thinkEl.setAttribute(START_TIME_ATTR, String(Date.now()));
+  }
+
   // Determine if it should be collapsed by default (historical messages collapsed, active stream expanded)
   const isCollapsed = !isGenerating && !thinkEl.classList.contains("bds-thought-expanded");
 
@@ -69,7 +76,7 @@ function applyThoughtEnhancement(thinkEl, isGenerating) {
     header.setAttribute("tabindex", "0");
     header.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
 
-    const headerText = getHeaderText(existingHeader, isGenerating);
+    const headerText = getHeaderText(existingHeader, isGenerating, thinkEl);
 
     header.innerHTML = `
       <div class="bds-thought-header-left">
@@ -80,6 +87,7 @@ function applyThoughtEnhancement(thinkEl, isGenerating) {
         </div>
         <span class="bds-thought-label">${headerText}</span>
         <div class="bds-thought-pulse-dot" style="display: ${isGenerating ? 'inline-block' : 'none'};"></div>
+        <span class="bds-thought-step-count" style="display: none;"></span>
       </div>
       <div class="bds-thought-header-right">
         <svg class="bds-thought-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -97,6 +105,7 @@ function applyThoughtEnhancement(thinkEl, isGenerating) {
         thinkEl.classList.remove("bds-thought-collapsed");
         thinkEl.classList.add("bds-thought-expanded");
         header.setAttribute("aria-expanded", "true");
+        renderMilestoneRail(thinkEl);
       } else {
         thinkEl.classList.add("bds-thought-collapsed");
         thinkEl.classList.remove("bds-thought-expanded");
@@ -134,6 +143,7 @@ function applyThoughtEnhancement(thinkEl, isGenerating) {
     thinkEl.classList.remove("bds-thought-collapsed");
     thinkEl.classList.add("bds-thought-expanded");
     if (header) header.setAttribute("aria-expanded", "true");
+    renderMilestoneRail(thinkEl);
   }
 
   // Shimmer indicator
@@ -156,22 +166,137 @@ function updateActiveState(box, isGenerating) {
   if (isGenerating) {
     box.classList.add("bds-thinking-active");
     if (pulseDot) pulseDot.style.display = "inline-block";
-    if (label && label.textContent !== i18n.t("thought.thinking")) {
+
+    const startTime = parseInt(box.getAttribute(START_TIME_ATTR) || "0", 10);
+    if (startTime > 0) {
+      const elapsed = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+      if (label) {
+        label.textContent = `Thinking (${elapsed}s)...`;
+      }
+    } else if (label && label.textContent !== i18n.t("thought.thinking")) {
       label.textContent = i18n.t("thought.thinking") || "Thinking...";
     }
   } else {
     box.classList.remove("bds-thinking-active");
     if (pulseDot) pulseDot.style.display = "none";
     if (shimmer) shimmer.remove();
+
+    // Finalize duration if not already set
+    if (!box.hasAttribute(DURATION_ATTR) && box.hasAttribute(START_TIME_ATTR)) {
+      const startTime = parseInt(box.getAttribute(START_TIME_ATTR) || "0", 10);
+      const elapsed = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+      box.setAttribute(DURATION_ATTR, String(elapsed));
+      if (label) {
+        label.textContent = `Thought for ${elapsed}s`;
+      }
+    } else if (box.hasAttribute(DURATION_ATTR) && label) {
+      const dur = box.getAttribute(DURATION_ATTR);
+      label.textContent = `Thought for ${dur}s`;
+    }
+
+    renderMilestoneRail(box);
   }
 }
 
-function getHeaderText(existingHeader, isGenerating) {
+/**
+ * Extract step-by-step thinking milestones and render an OpenAI 'o1' timeline rail.
+ */
+function renderMilestoneRail(thinkEl) {
+  if (!thinkEl) return;
+  const content = thinkEl.textContent || "";
+  if (content.length < 50) return;
+
+  const milestones = extractMilestones(content);
+  const countBadge = thinkEl.querySelector(".bds-thought-step-count");
+  if (countBadge) {
+    if (milestones.length >= 2) {
+      countBadge.textContent = `${milestones.length} steps`;
+      countBadge.style.display = "inline-block";
+    } else {
+      countBadge.style.display = "none";
+    }
+  }
+
+  // If already rendered milestone rail, don't duplicate
+  let rail = thinkEl.querySelector(".bds-thought-milestones-rail");
+  if (milestones.length < 2) {
+    if (rail) rail.remove();
+    return;
+  }
+
+  if (!rail) {
+    rail = document.createElement("div");
+    rail.className = "bds-thought-milestones-rail";
+    const header = thinkEl.querySelector(".bds-thought-header");
+    if (header && header.nextSibling) {
+      thinkEl.insertBefore(rail, header.nextSibling);
+    } else {
+      thinkEl.appendChild(rail);
+    }
+  }
+
+  rail.innerHTML = milestones.map((step, idx) => `
+    <div class="bds-thought-step-item">
+      <div class="bds-thought-step-node">
+        <span class="bds-thought-step-num">${idx + 1}</span>
+      </div>
+      <div class="bds-thought-step-text" title="${step}">${step}</div>
+    </div>
+  `).join("");
+}
+
+function extractMilestones(text) {
+  const steps = [];
+  const lines = text.split("\n");
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Pattern 1: Markdown headers e.g. ### Step 1 or ## Analysis
+    const headerMatch = line.match(/^#{1,4}\s+(.+)$/);
+    if (headerMatch && headerMatch[1].length < 80) {
+      steps.push(cleanStepText(headerMatch[1]));
+      continue;
+    }
+
+    // Pattern 2: Bold steps e.g. **1. Understanding requirement** or **Analyzing constraints:**
+    const boldMatch = line.match(/^\*\*([^*]+)\*\*/);
+    if (boldMatch && boldMatch[1].length > 4 && boldMatch[1].length < 80) {
+      steps.push(cleanStepText(boldMatch[1]));
+      continue;
+    }
+
+    // Pattern 3: Numbered steps at line start e.g. 1. Deconstruct problem
+    const numMatch = line.match(/^(\d+[\.\)]\s+)(.+)$/);
+    if (numMatch && numMatch[2].length > 5 && numMatch[2].length < 80) {
+      steps.push(cleanStepText(numMatch[2]));
+      continue;
+    }
+  }
+
+  // Deduplicate and cap at 8 milestones
+  const unique = Array.from(new Set(steps));
+  return unique.slice(0, 8);
+}
+
+function cleanStepText(text) {
+  return text.replace(/[:：]$/, "").replace(/^\d+[\.\)]\s*/, "").trim();
+}
+
+function getHeaderText(existingHeader, isGenerating, thinkEl) {
   if (isGenerating) {
     return i18n.t("thought.thinking") || "Thinking...";
   }
+  if (thinkEl && thinkEl.hasAttribute(DURATION_ATTR)) {
+    return `Thought for ${thinkEl.getAttribute(DURATION_ATTR)}s`;
+  }
   if (existingHeader && existingHeader.textContent?.trim()) {
-    return existingHeader.textContent.trim();
+    const txt = existingHeader.textContent.trim();
+    // If original text has "Thought for Xs", retain it
+    if (/thought\s+for/i.test(txt)) return txt;
+    return txt;
   }
   return i18n.t("thought.thoughtProcess") || "Thought Process";
 }
+

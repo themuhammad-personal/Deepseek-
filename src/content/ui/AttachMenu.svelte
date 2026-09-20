@@ -1131,6 +1131,7 @@
     <button
       class="bds-mic-btn {isRecording ? 'bds-recording' : ''}"
       onclick={toggleSpeechRecognition}
+      oncontextmenu={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("bds:open-voice-mode")); }}
       title={isRecording ? t('attachMenu.stopRecording') : t('attachMenu.voicePrompt')}
     >
       <svg
@@ -1240,6 +1241,35 @@
         <span class="bds-item-content">
           <span class="bds-item-title">{t('attachMenu.cameraPhoto') || 'Camera & Photos'}</span>
           <span class="bds-item-desc">{t('attachMenu.cameraPhotoDesc') || 'Take photos or upload images'}</span>
+        </span>
+      </button>
+
+      <button type="button" class="bds-attach-item" onclick={() => {
+        closeMenu();
+        window.dispatchEvent(new CustomEvent("bds:open-voice-mode"));
+      }}>
+        <span class="bds-item-icon-box">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="bds-item-icon"
+          >
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </span>
+        <span class="bds-item-content">
+          <span class="bds-item-title">Voice Mode (Live Audio)</span>
+          <span class="bds-item-desc">Immersive audio visualizer & live hands-free conversation</span>
         </span>
       </button>
 
