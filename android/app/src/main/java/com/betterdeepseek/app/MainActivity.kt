@@ -61,6 +61,8 @@ internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local
     if (host == "deepseek.com" || host.endsWith(".deepseek.com")) return false
     if (host == "hcaptcha.com" || host.endsWith(".hcaptcha.com")) return false
     if (isGoogleAuthHost(host)) return false
+    if (isAppleAuthHost(host)) return false
+    if (isSecurityChallengeHost(host)) return false
 
     return true
 }
@@ -72,6 +74,24 @@ internal fun isGoogleAuthHost(host: String): Boolean {
             h == "accounts.youtube.com" ||
             h == "googleusercontent.com" ||
             h.endsWith(".googleusercontent.com")
+}
+
+internal fun isAppleAuthHost(host: String): Boolean {
+    val h = host.lowercase()
+    return h == "apple.com" ||
+            h.endsWith(".apple.com") ||
+            h == "icloud.com" ||
+            h.endsWith(".icloud.com")
+}
+
+internal fun isSecurityChallengeHost(host: String): Boolean {
+    val h = host.lowercase()
+    return h == "awswaf.com" ||
+            h.endsWith(".awswaf.com") ||
+            h == "cloudflare.com" ||
+            h.endsWith(".cloudflare.com") ||
+            h == "recaptcha.net" ||
+            h.endsWith(".recaptcha.net")
 }
 
 internal fun shouldCapturePopupInApp(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
