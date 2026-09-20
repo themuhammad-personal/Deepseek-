@@ -16,14 +16,9 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     mockReset: true,
-    poolOptions: {
-      forks: {
-        execArgv: ["--max-old-space-size=4096", "--expose-gc"],
-      },
-      threads: {
-        execArgv: ["--max-old-space-size=4096", "--expose-gc"],
-      },
-    },
+    fileParallelism: false,
+    maxWorkers: 1,
+    minWorkers: 1,
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
