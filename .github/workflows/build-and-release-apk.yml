@@ -61,6 +61,8 @@ jobs:
 
       - name: Run Web & Polyfill Tests
         run: npm run test
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Make Gradle Wrapper Executable
         working-directory: android

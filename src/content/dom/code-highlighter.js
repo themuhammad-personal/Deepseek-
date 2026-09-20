@@ -40,6 +40,9 @@ export function highlightCodeBlocks(rootNode = document) {
 
     if (!codeEl) continue;
 
+    // Determine language
+    const lang = detectLanguage(codeEl, bannerEl);
+
     // Make banner sticky
     if (bannerEl) {
       bannerEl.classList.add("bds-code-sticky-banner");
@@ -74,8 +77,6 @@ export function highlightCodeBlocks(rootNode = document) {
       }
     }
 
-    // Determine language
-    const lang = detectLanguage(codeEl, bannerEl);
     if (lang && Prism.languages[lang]) {
       try {
         codeEl.classList.add(`language-${lang}`);
