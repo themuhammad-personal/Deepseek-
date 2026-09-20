@@ -16,9 +16,7 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     mockReset: true,
-    fileParallelism: false,
-    maxWorkers: 1,
-    minWorkers: 1,
+    pool: "forks",
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
