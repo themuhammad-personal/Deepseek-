@@ -61,14 +61,6 @@
   let menuRef = $state(null);
   let dropdownStyle = $state("");
 
-  $effect(() => {
-    if (typeof window !== "undefined" && window.AndroidBridge?.setNativeBlur) {
-      try {
-        window.AndroidBridge.setNativeBlur(isOpen, isOpen ? 25 : 0);
-      } catch {}
-    }
-  });
-
   // GitHub dialog state
   let showGithubDialog = $state(false);
   let githubUrl = $state("");
@@ -2641,8 +2633,8 @@
       margin: 0 !important;
       max-height: 85vh !important;
       overflow-y: auto !important;
-      background: #18181b !important;
-      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      background: var(--bds-bg-panel, #18181b) !important;
+      border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.1)) !important;
       border-bottom: none !important;
       border-radius: 28px 28px 0 0 !important;
       padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
@@ -2656,8 +2648,8 @@
       border-radius: 14px !important;
       gap: 14px !important;
       white-space: normal !important;
-      background: #242428 !important;
-      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      background: var(--bds-bg-elevated, #242428) !important;
+      border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.08)) !important;
       margin-bottom: 8px !important;
       text-align: left !important;
       align-items: center !important;
@@ -2669,8 +2661,8 @@
 
     .bds-attach-item:hover,
     .bds-attach-item:active {
-      background: #2a2a30 !important;
-      border-color: rgba(255, 255, 255, 0.18) !important;
+      background: var(--bds-bg-hover, #2a2a30) !important;
+      border-color: var(--bds-border-hover, rgba(255, 255, 255, 0.18)) !important;
     }
 
     .bds-item-icon-box {
@@ -2678,8 +2670,8 @@
       height: 38px !important;
       min-width: 38px !important;
       border-radius: 10px !important;
-      background: #1c1c1f !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      background: var(--bds-bg-panel, #1c1c1f) !important;
+      border: 1px solid var(--bds-border, rgba(255, 255, 255, 0.12)) !important;
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;

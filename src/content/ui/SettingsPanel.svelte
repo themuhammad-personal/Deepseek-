@@ -717,13 +717,19 @@
       advancedOpen = true;
       subMcpOpen = true;
       subResearchOpen = true;
+    } else if (activeTab === "appearance") {
+      advancedOpen = true;
+      subCSSOpen = true;
+    } else if (activeTab === "language") {
+      advancedOpen = true;
+      subLanguageOpen = true;
+    } else if (activeTab === "voice") {
+      advancedOpen = true;
+      subVoiceOpen = true;
     } else if (activeTab === "chat") {
       advancedOpen = true;
       subInjectionOpen = true;
       subChatOpen = true;
-      subVoiceOpen = true;
-      subLanguageOpen = true;
-      subCSSOpen = true;
     } else if (activeTab === "data") {
       advancedOpen = true;
       subIntegrationsOpen = true;
@@ -734,10 +740,6 @@
     } else if (activeTab === "deep_code") {
       advancedOpen = true;
       subDeepCodeOpen = true;
-    } else if (activeTab === "appearance") {
-      advancedOpen = true;
-      subCSSOpen = true;
-      subLanguageOpen = true;
     } else if (activeTab === "projects") {
       advancedOpen = true;
       subProjectsOpen = true;
@@ -764,8 +766,10 @@
     if (activeTab === "deep_research") return sectionKey === "subResearch";
     if (activeTab === "deep_code") return sectionKey === "subDeepCode";
     if (activeTab === "data") return sectionKey === "subIntegrations" || sectionKey === "subUtilities";
-    if (activeTab === "appearance") return sectionKey === "subCSS" || sectionKey === "subLanguage";
-    if (activeTab === "chat") return sectionKey === "subChat" || sectionKey === "subVoice" || sectionKey === "subCSS" || sectionKey === "subLanguage" || sectionKey === "subInjection";
+    if (activeTab === "appearance") return sectionKey === "subCSS";
+    if (activeTab === "language") return sectionKey === "subLanguage";
+    if (activeTab === "voice") return sectionKey === "subVoice";
+    if (activeTab === "chat") return sectionKey === "subChat" || sectionKey === "subInjection";
     if (activeTab === "prompts") return sectionKey === "systemPrompts";
     if (activeTab === "projects") return sectionKey === "subProjects";
     if (activeTab === "settings") {

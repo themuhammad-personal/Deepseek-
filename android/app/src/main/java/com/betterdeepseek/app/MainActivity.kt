@@ -440,21 +440,10 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = !isPageDark
         }
 
-        bridge.onNativeBlurRequested = { enabled, radius ->
-            runOnUiThread {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    if (enabled) {
-                        val blurEffect = android.graphics.RenderEffect.createBlurEffect(
-                            radius,
-                            radius,
-                            android.graphics.Shader.TileMode.CLAMP
-                        )
-                        webView.setRenderEffect(blurEffect)
-                    } else {
-                        webView.setRenderEffect(null)
-                    }
-                }
-            }
+        bridge.onNativeBlurRequested = { _, _ ->
+            // No-op: in an embedded WebView app, applying RenderEffect to the WebView
+            // blurs all HTML content including drawers and dialogs.
+            // Glassmorphism backdrop blurring is handled cleanly in CSS.
         }
 
         bridge.onThemeChanged = { isDark ->

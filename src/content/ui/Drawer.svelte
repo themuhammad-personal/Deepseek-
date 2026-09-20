@@ -13,14 +13,6 @@
 
   let { open = false, onclose, onopenapiplayground } = $props();
 
-  $effect(() => {
-    if (typeof window !== "undefined" && window.AndroidBridge?.setNativeBlur) {
-      try {
-        window.AndroidBridge.setNativeBlur(open, open ? 25 : 0);
-      } catch {}
-    }
-  });
-
   const extensionVersion = getExtensionVersion();
 
   // Navigation section: 'overview' | 'prompts' | 'mcp' | 'deep_research' | 'memory' | 'commands' | 'data' | 'chat'
@@ -144,6 +136,10 @@
       case "prompts": return t("drawer.sectionPrompts") || "System Prompts";
       case "mcp": return t("drawer.sectionMcpServers") || "MCP Servers & Tools";
       case "deep_research": return t("settings.subResearch") || "Deep Research";
+      case "deep_code": return t("settings.deepCode") || "Deep Code";
+      case "appearance": return t("settings.subCSS") || "Appearance";
+      case "language": return t("settings.languageSettings") || "Language";
+      case "voice": return t("settings.voiceMode") || "Voice Mode";
       case "memory": return t("drawer.sectionMemories") || "Stored Memories";
       case "commands": return t("drawer.sectionSavedItems") || "Custom Commands";
       case "data": return t("settings.subIntegrations") || "Data Controls";
@@ -181,7 +177,7 @@
           <line x1="19" y1="12" x2="5" y2="12"></line>
           <polyline points="12 19 5 12 12 5"></polyline>
         </svg>
-        <span>ব্যাক</span>
+        <span>{t("common.back") || "Back"}</span>
       </button>
       <span class="bds-header-title">{getSectionTitle(currentSection)}</span>
     {:else}
@@ -230,7 +226,7 @@
     </span>
     <input
       type="text"
-      placeholder="সার্চ সেটিংস, প্লাগইন, প্রম্পটস..."
+      placeholder={t("drawer.searchPlaceholder") || (i18n.locale === "bn" ? "সার্চ সেটিংস, প্লাগইন, প্রম্পটস..." : "Search settings, plugins, prompts...")}
       bind:value={searchQuery}
       class="bds-drawer-search-input"
     />
@@ -382,7 +378,7 @@
             <div class="bds-settings-card">
               <!-- Language Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+              <div class="bds-settings-row" onclick={() => (currentSection = "language")}>
                 <div class="bds-settings-row-left">
                   <div class="bds-settings-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -404,7 +400,7 @@
 
               <!-- Voice Mode Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+              <div class="bds-settings-row" onclick={() => (currentSection = "voice")}>
                 <div class="bds-settings-row-left">
                   <div class="bds-settings-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -433,7 +429,7 @@
 
               <!-- Appearance Row -->
               <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-              <div class="bds-settings-row" onclick={() => (currentSection = "chat")}>
+              <div class="bds-settings-row" onclick={() => (currentSection = "appearance")}>
                 <div class="bds-settings-row-left">
                   <div class="bds-settings-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -586,7 +582,7 @@
                     </svg>
                   </div>
                   <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">DeepSeek Mobile</span>
+                    <span class="bds-settings-row-title">Super DeepSeek</span>
                     <span class="bds-settings-row-sub">v{extensionVersion} • Standalone Edition</span>
                   </div>
                 </div>
@@ -708,6 +704,54 @@
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="data"
+          onsave={handleSettingsSaved}
+          onapiplayground={openApiPlayground}
+          onimportdata={() => {
+            refreshSettings();
+            refreshCharacters();
+            refreshSkills();
+            refreshMemories();
+            refreshProjects();
+          }}
+        />
+
+      {:else if currentSection === "appearance"}
+        <!-- Sub-View: Appearance (OLED Dark Mode & Themes) -->
+        <SettingsPanel
+          bind:this={settingsRef}
+          activeTab="appearance"
+          onsave={handleSettingsSaved}
+          onapiplayground={openApiPlayground}
+          onimportdata={() => {
+            refreshSettings();
+            refreshCharacters();
+            refreshSkills();
+            refreshMemories();
+            refreshProjects();
+          }}
+        />
+
+      {:else if currentSection === "language"}
+        <!-- Sub-View: Language Settings -->
+        <SettingsPanel
+          bind:this={settingsRef}
+          activeTab="language"
+          onsave={handleSettingsSaved}
+          onapiplayground={openApiPlayground}
+          onimportdata={() => {
+            refreshSettings();
+            refreshCharacters();
+            refreshSkills();
+            refreshMemories();
+            refreshProjects();
+          }}
+        />
+
+      {:else if currentSection === "voice"}
+        <!-- Sub-View: Voice Mode Settings -->
+        <SettingsPanel
+          bind:this={settingsRef}
+          activeTab="voice"
           onsave={handleSettingsSaved}
           onapiplayground={openApiPlayground}
           onimportdata={() => {
