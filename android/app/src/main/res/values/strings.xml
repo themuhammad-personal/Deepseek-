@@ -19,4 +19,9 @@
     <string name="bds_update_download_failed">Download failed (%1$s).</string>
     <string name="bds_update_need_permission">Grant the install unknown apps permission for Super DeepSeek, then try again.</string>
     <string name="bds_update_install_failed">Could not open the package installer.</string>
+
+    <!-- App Shortcuts -->
+    <string name="shortcut_new_chat">New Chat</string>
+    <string name="shortcut_voice">Voice Mode</string>
+    <string name="shortcut_deep_research">Deep Research</string>
 </resources>

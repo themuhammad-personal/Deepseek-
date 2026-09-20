@@ -247,6 +247,7 @@ class MainActivity : ComponentActivity() {
 
     @Volatile private var pendingPickFilesRequestId: String? = null
     @Volatile private var pendingPickFilesMode: String? = null
+    private var isPageReady: Boolean = false
 
     private val multiFileLauncher: ActivityResultLauncher<Array<String>> =
             registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -327,7 +328,10 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen(this)
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition { !isPageReady }
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -393,7 +397,7 @@ class MainActivity : ComponentActivity() {
                     bridge.evaluateJs = { script -> evaluateJavascript(script, null) }
                     isVerticalScrollBarEnabled = false
                     isHorizontalScrollBarEnabled = false
-                    overScrollMode = View.OVER_SCROLL_NEVER
+                    overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
                     setBackgroundColor(if (isPageDark) PAGE_BG_DARK else PAGE_BG_LIGHT)
                 }
 
@@ -413,9 +417,43 @@ class MainActivity : ComponentActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout, ::applyRootWindowInsets)
 
+        // Smooth 60/120Hz frame-synchronized keyboard insets animation
+        ViewCompat.setWindowInsetsAnimationCallback(
+            rootLayout,
+            object : androidx.core.view.WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                override fun onProgress(
+                    insets: WindowInsetsCompat,
+                    runningAnimations: MutableList<androidx.core.view.WindowInsetsAnimationCompat>
+                ): WindowInsetsCompat {
+                    val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+                    val bottomInset = maxOf(systemBars.bottom, imeInsets.bottom)
+                    rootLayout.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomInset)
+                    return insets
+                }
+            }
+        )
+
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !isPageDark
             isAppearanceLightNavigationBars = !isPageDark
+        }
+
+        bridge.onNativeBlurRequested = { enabled, radius ->
+            runOnUiThread {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    if (enabled) {
+                        val blurEffect = android.graphics.RenderEffect.createBlurEffect(
+                            radius,
+                            radius,
+                            android.graphics.Shader.TileMode.CLAMP
+                        )
+                        webView.setRenderEffect(blurEffect)
+                    } else {
+                        webView.setRenderEffect(null)
+                    }
+                }
+            }
         }
 
         bridge.onThemeChanged = { isDark ->
@@ -566,16 +604,87 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Routes VIEW intents (e.g. deep links to chat.deepseek.com) into the existing WebView session
-     * instead of spawning a new Activity instance.
+     * instead of spawning a new Activity instance, and processes incoming shares and app shortcuts.
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val data = intent.data ?: return
-        val url = data.toString()
-        if (url.startsWith("https://chat.deepseek.com")) {
+        setIntent(intent)
+        val data = intent.data
+        val url = data?.toString()
+        if (url != null && url.startsWith("https://chat.deepseek.com")) {
             webView.loadUrl(url)
         }
+        handleIncomingIntent(intent)
     }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val shortcut = intent.getStringExtra("bds_action")
+
+        if (!shortcut.isNullOrBlank()) {
+            val script = "(function(){ try { window.dispatchEvent(new CustomEvent('bds:shortcut-action', { detail: { action: '$shortcut' } })); } catch(e){} })();"
+            webView.evaluateJavascript(script, null)
+            return
+        }
+
+        if (action == Intent.ACTION_SEND) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            @Suppress("DEPRECATION")
+            val stream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            if (!text.isNullOrBlank()) {
+                val escaped = jsStringLiteral(text)
+                val script = "(function(){ try { window.dispatchEvent(new CustomEvent('bds:incoming-share', { detail: { text: $escaped } })); } catch(e){} })();"
+                webView.evaluateJavascript(script, null)
+            } else if (stream != null) {
+                handleIncomingStreamShare(listOf(stream))
+            }
+        } else if (action == Intent.ACTION_SEND_MULTIPLE) {
+            @Suppress("DEPRECATION")
+            val streams = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+            if (!streams.isNullOrEmpty()) {
+                handleIncomingStreamShare(streams)
+            }
+        }
+    }
+
+    private fun handleIncomingStreamShare(uris: List<Uri>) {
+        Thread {
+            val filesArray = org.json.JSONArray()
+            for (uri in uris) {
+                try {
+                    val name = getDisplayName(uri) ?: "shared_image.png"
+                    val mime = contentResolver.getType(uri) ?: "image/png"
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        val bytes = stream.readBytes()
+                        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                        val fileObj = org.json.JSONObject().apply {
+                            put("name", name)
+                            put("mime", mime)
+                            put("encoding", "base64")
+                            put("content", base64)
+                        }
+                        filesArray.put(fileObj)
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed reading shared uri: $uri", t)
+                }
+            }
+            if (filesArray.length() > 0) {
+                runOnUiThread {
+                    val payloadLiteral = jsStringLiteral(filesArray.toString())
+                    val script = "(function(){ try { window.dispatchEvent(new CustomEvent('bds:incoming-share', { detail: { files: JSON.parse($payloadLiteral) } })); } catch(e){} })();"
+                    webView.evaluateJavascript(script, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun getDisplayName(uri: Uri): String? =
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (!cursor.moveToFirst() || index < 0) null else cursor.getString(index)
+            }
 
     private fun bdsWebViewClient() =
             object : WebViewClient() {
@@ -610,9 +719,11 @@ class MainActivity : ComponentActivity() {
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
+                    isPageReady = true
                     if (url.isNullOrEmpty()) return
                     if (url.startsWith("https://chat.deepseek.com")) {
                         injectBdsScripts(view)
+                        handleIncomingIntent(intent)
                     }
                 }
             }
@@ -948,10 +1059,26 @@ class MainActivity : ComponentActivity() {
 
         view.evaluateJavascript(injected, null)
         view.evaluateJavascript(bootstrap, null)
+        val materialAccent = getMaterialYouAccentHex()
+        if (materialAccent != null) {
+            view.evaluateJavascript("try { document.documentElement.style.setProperty('--bds-material-accent', '$materialAccent'); } catch(e){}", null)
+        }
         // content.js installs Android platform helpers, mounts the UI, and calls
         // startThemeWatcher(), which persists pageIsDark via chrome.storage and fires
         // AndroidBridge.reportTheme() for the live native bar-icon colour update.
         view.evaluateJavascript(content, null)
+    }
+
+    private fun getMaterialYouAccentHex(): String? {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            return try {
+                val color = resources.getColor(android.R.color.system_accent1_500, theme)
+                String.format("#%06X", (0xFFFFFF and color))
+            } catch (_: Throwable) {
+                null
+            }
+        }
+        return null
     }
 
     private fun readAsset(path: String): String? =
@@ -1012,7 +1139,7 @@ class MainActivity : ComponentActivity() {
         // Default WebView background colours used in the inset-padding area behind transparent
         // system bars. Approximates DeepSeek's own page backgrounds so the status/nav bar region
         // blends seamlessly before (and if) the page reports its live theme via reportTheme().
-        private val PAGE_BG_DARK = Color.rgb(0x15, 0x15, 0x17)
+        private val PAGE_BG_DARK = Color.BLACK
         private val PAGE_BG_LIGHT = Color.WHITE
     }
 }

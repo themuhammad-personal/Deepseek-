@@ -12,6 +12,7 @@
  */
 
 import { STORAGE_KEYS } from "../lib/constants.js";
+import state from "./state.js";
 
 export function startThemeWatcher() {
   // DeepSeek sets the theme class on <body> (e.g. "en_US dark" / "en_US light"), not on <html>.
@@ -20,11 +21,20 @@ export function startThemeWatcher() {
   function detect() {
     if (document.body.classList.contains("dark")) return true;
     if (document.body.classList.contains("light")) return false;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return Boolean(window.matchMedia?.("(prefers-color-scheme: dark)")?.matches);
   }
 
   function apply(isDark) {
     chrome.storage.local.set({ [STORAGE_KEYS.pageIsDark]: isDark });
+
+    if (isDark && state.settings.oledDarkMode) {
+      document.documentElement.classList.add("bds-oled-dark");
+      document.body.classList.add("bds-oled-dark");
+    } else {
+      document.documentElement.classList.remove("bds-oled-dark");
+      document.body.classList.remove("bds-oled-dark");
+    }
+
     // Live notification for Android native bar icon colours. No-op on other platforms.
     // Avoid typeof-function check: JavascriptInterface methods on some WebView versions
     // are callable but do not report as "function" via typeof.
@@ -52,5 +62,5 @@ export function startThemeWatcher() {
   });
 
   // OS-level theme changes (covers DeepSeek's "System" setting).
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", run);
+  window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", run);
 }

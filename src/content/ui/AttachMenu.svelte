@@ -61,6 +61,14 @@
   let menuRef = $state(null);
   let dropdownStyle = $state("");
 
+  $effect(() => {
+    if (typeof window !== "undefined" && window.AndroidBridge?.setNativeBlur) {
+      try {
+        window.AndroidBridge.setNativeBlur(isOpen, isOpen ? 25 : 0);
+      } catch {}
+    }
+  });
+
   // GitHub dialog state
   let showGithubDialog = $state(false);
   let githubUrl = $state("");

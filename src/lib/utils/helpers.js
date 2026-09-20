@@ -50,3 +50,13 @@ export function base64ToBlob(base64, mimeType) {
 
   return new Blob([bytes], { type: mimeType || "application/octet-stream" });
 }
+
+/**
+ * Format bytes into readable string (e.g. 1.2 MB).
+ */
+export function formatBytes(bytes) {
+  const num = Number(bytes) || 0;
+  if (num < 1024) return `${num} B`;
+  if (num < 1048576) return `${(num / 1024).toFixed(1)} KB`;
+  return `${(num / 1048576).toFixed(1)} MB`;
+}

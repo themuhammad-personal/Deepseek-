@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_new_chat"
+        android:shortcutLongLabel="@string/shortcut_new_chat">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.betterdeepseek.app"
+            android:targetClass="com.betterdeepseek.app.MainActivity">
+            <extra android:name="bds_action" android:value="new_chat" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="voice_mode"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_voice"
+        android:shortcutLongLabel="@string/shortcut_voice">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.betterdeepseek.app"
+            android:targetClass="com.betterdeepseek.app.MainActivity">
+            <extra android:name="bds_action" android:value="voice" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="deep_research"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_deep_research"
+        android:shortcutLongLabel="@string/shortcut_deep_research">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.betterdeepseek.app"
+            android:targetClass="com.betterdeepseek.app.MainActivity">
+            <extra android:name="bds_action" android:value="deep_research" />
+        </intent>
+    </shortcut>
+</shortcuts>

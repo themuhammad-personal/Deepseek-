@@ -106,6 +106,85 @@ async function init() {
     pushConfigToPage();
   });
 
+  // Handle Android App Shortcuts
+  window.addEventListener("bds:shortcut-action", (e) => {
+    const action = e.detail?.action;
+    if (action === "new_chat") {
+      const newChatSelectors = remoteConfig.getConfig("selectors.sidebar.newChatButton") || [
+        "a[href='/']",
+        ".ds-icon-button[title*='New']",
+        ".ds-icon-button[aria-label*='New']",
+        "div[role='button']:has(svg)"
+      ];
+      const btn = findVisibleElement(newChatSelectors);
+      if (btn) {
+        btn.click();
+      } else {
+        window.location.href = "https://chat.deepseek.com/";
+      }
+    } else if (action === "voice_mode") {
+      window.dispatchEvent(new CustomEvent("bds:toggle-voice-mode"));
+    } else if (action === "deep_research") {
+      window.dispatchEvent(new CustomEvent("bds:toggle-deep-research"));
+    }
+  });
+
+  // Handle Direct Share (Text & Files from other Android apps)
+  window.addEventListener("bds:incoming-share", async (e) => {
+    const text = e.detail?.text;
+    const files = e.detail?.files;
+
+    await waitForChatReady();
+    const inputSelectors = remoteConfig.getConfig("selectors.chatInput.textarea");
+    const textarea = findVisibleElement(inputSelectors);
+    const nativeInput = textarea ? (textarea.querySelector("textarea") || textarea) : null;
+
+    if (text && nativeInput) {
+      if (nativeInput.tagName === "TEXTAREA") {
+        nativeInput.value = nativeInput.value ? `${nativeInput.value}\n\n${text}` : text;
+        nativeInput.dispatchEvent(new Event("input", { bubbles: true }));
+        nativeInput.dispatchEvent(new Event("change", { bubbles: true }));
+      } else if (nativeInput.isContentEditable) {
+        nativeInput.textContent = nativeInput.textContent ? `${nativeInput.textContent}\n\n${text}` : text;
+        nativeInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      }
+      nativeInput.focus();
+    }
+
+    if (Array.isArray(files) && files.length > 0) {
+      const fileInputSelectors = remoteConfig.getConfig("selectors.fileInput.input") || [
+        "input[type='file']"
+      ];
+      const fileInput = findVisibleElement(fileInputSelectors) || document.querySelector("input[type='file']");
+      if (fileInput) {
+        try {
+          const dt = new DataTransfer();
+          if (fileInput.files) {
+            for (let i = 0; i < fileInput.files.length; i++) {
+              dt.items.add(fileInput.files[i]);
+            }
+          }
+          for (const item of files) {
+            const byteCharacters = atob(item.content);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: item.mime || "application/octet-stream" });
+            const file = new File([blob], item.name || "shared_file", { type: item.mime || "application/octet-stream" });
+            dt.items.add(file);
+          }
+          fileInput.files = dt.files;
+          fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+          window.dispatchEvent(new CustomEvent("bds:files-changed"));
+        } catch (err) {
+          console.error("[BDS] Failed to process incoming shared files", err);
+        }
+      }
+    }
+  });
+
   // ── Storage probe state (#108 contract verification) ──
   let storageProbeListener = null;
   let storageProbeState = null;

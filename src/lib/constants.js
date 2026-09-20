@@ -900,6 +900,7 @@ export const DEFAULT_SETTINGS = {
   loadAllHistoryOnSession: false,
   showTimestamps: false,
   disableTipBox: false,
+  oledDarkMode: false,
 };
 
 // ── Default Remote Config (built-in fallback) ──

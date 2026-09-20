@@ -69,6 +69,7 @@
   );
   let tokenPriceDisplay = $state(Boolean(appState.settings.tokenPriceDisplay));
   let showTimestamps = $state(Boolean(appState.settings.showTimestamps));
+  let oledDarkMode = $state(Boolean(appState.settings.oledDarkMode));
   let collapseLongUserMessages = $state(Boolean(appState.settings.collapseLongUserMessages));
   let loadAllHistoryOnSession = $state(Boolean(appState.settings.loadAllHistoryOnSession));
   let projectRagEnabled = $state(Boolean(appState.settings.projectRagEnabled));
@@ -230,7 +231,7 @@
       searchProviders: enabledSearchProviderIds(),
       mcpInlineMaxChars,
       locale, syncLocale, collapseLongUserMessages,
-      loadAllHistoryOnSession, customCSS, disableTipBox
+      loadAllHistoryOnSession, customCSS, disableTipBox, oledDarkMode
     });
   }
 
@@ -836,6 +837,7 @@
     maxChatSessions = Number(appState.settings.maxChatSessions) || 500;
     tokenPriceDisplay = Boolean(appState.settings.tokenPriceDisplay);
     showTimestamps = Boolean(appState.settings.showTimestamps);
+    oledDarkMode = Boolean(appState.settings.oledDarkMode);
     collapseLongUserMessages = Boolean(appState.settings.collapseLongUserMessages);
     loadAllHistoryOnSession = Boolean(appState.settings.loadAllHistoryOnSession);
     projectRagEnabled = Boolean(appState.settings.projectRagEnabled);
@@ -1089,6 +1091,14 @@
     appState.settings.syncLocale = syncLocale;
     appState.settings.customCSS = customCSS;
     appState.settings.disableTipBox = disableTipBox;
+    appState.settings.oledDarkMode = oledDarkMode;
+    if (oledDarkMode && document.body.classList.contains("dark")) {
+      document.documentElement.classList.add("bds-oled-dark");
+      document.body.classList.add("bds-oled-dark");
+    } else {
+      document.documentElement.classList.remove("bds-oled-dark");
+      document.body.classList.remove("bds-oled-dark");
+    }
     appState.settings.mcpInlineMaxChars = Math.max(500, Math.min(100000, Math.round(Number(mcpInlineMaxChars) || 8000)));
 
     await chrome.storage.local.set({
@@ -2469,6 +2479,25 @@
       </button>
       <div class="bds-card-body bds-sub-content" class:open={subCSSOpen}>
 <div class="bds-sub-inner">
+        <div class="bds-toggle-row">
+          <span class="bds-toggle-label">Pure OLED #000000 Dark Mode</span>
+          <label class="bds-switch">
+            <input id="bds-oled-dark-mode" type="checkbox" bind:checked={oledDarkMode} onchange={() => {
+              if (oledDarkMode && document.body.classList.contains("dark")) {
+                document.documentElement.classList.add("bds-oled-dark");
+                document.body.classList.add("bds-oled-dark");
+              } else {
+                document.documentElement.classList.remove("bds-oled-dark");
+                document.body.classList.remove("bds-oled-dark");
+              }
+            }} />
+            <span class="bds-switch-track"></span>
+          </label>
+        </div>
+        <p style="font-size: 10px; opacity: 0.5; margin: -8px 0 12px; padding-left: 0;">
+          Pure black background for OLED/AMOLED screens to maximize contrast and battery efficiency.
+        </p>
+
         <div class="bds-toggle-row" style="flex-direction: column; align-items: stretch; gap: 0;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
             {#if editingSnippetId}

@@ -122,9 +122,10 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="bds-dc-modal"
-      use:dragToDismiss={{ onDismiss: onclose, handleSelector: '.bds-drawer-header, .bds-dc-modal' }}
+      use:dragToDismiss={{ onDismiss: () => onclose?.(), handleSelector: '.bds-sheet-handle, .bds-drawer-header, .bds-dc-modal' }}
       onclick={(e) => e.stopPropagation()}
     >
+      <div class="bds-sheet-handle" aria-hidden="true"></div>
       <div class="bds-drawer-header">
         <div class="ds-modal-content__title">{t("deepCodeModal.title")}</div>
         <button id="bds-close" type="button" onclick={onclose} aria-label={t("deepCodeModal.closeAria")}>
@@ -503,7 +504,20 @@
     background: rgba(239, 68, 68, 0.15);
   }
 
+  .bds-sheet-handle {
+    display: none;
+    width: 36px;
+    height: 4px;
+    background: var(--bds-border-hover, #4b5563);
+    border-radius: 999px;
+    margin: -8px auto 12px;
+    opacity: 0.6;
+  }
+
   @media (max-width: 767px) {
+    .bds-sheet-handle {
+      display: block;
+    }
     .bds-dc-modal {
       width: 100vw !important;
       max-width: 100vw !important;
@@ -512,7 +526,8 @@
       position: fixed !important;
       bottom: 0 !important;
       max-height: 88vh !important;
-      padding: 20px 16px !important;
+      padding: 16px 16px !important;
+      touch-action: pan-y;
     }
   }
 </style>

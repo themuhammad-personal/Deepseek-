@@ -674,6 +674,17 @@ class WebViewBridge(
         }
     }
 
+    /** Callback to apply native hardware blur on the underlying WebView view. */
+    @Volatile var onNativeBlurRequested: ((enabled: Boolean, radius: Float) -> Unit)? = null
+
+    /**
+     * Request native hardware GPU blur (RenderEffect) on Android 12+.
+     */
+    @JavascriptInterface
+    fun setNativeBlur(enabled: Boolean, radius: Float) {
+        onNativeBlurRequested?.invoke(enabled, radius)
+    }
+
     /**
      * Perform native physical haptic vibration for crisp Android touch interaction.
      */
@@ -696,10 +707,26 @@ class WebViewBridge(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val effect =
                         when (type?.lowercase()) {
-                            "heavy", "error" ->
-                                    VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE)
+                            "heavy" ->
+                                    VibrationEffect.createOneShot(45, VibrationEffect.DEFAULT_AMPLITUDE)
+                            "error" ->
+                                    VibrationEffect.createWaveform(longArrayOf(0, 30, 60, 45), -1)
+                            "success" ->
+                                    VibrationEffect.createWaveform(longArrayOf(0, 15, 60, 20), -1)
+                            "message_sent" ->
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                                    } else {
+                                        VibrationEffect.createOneShot(18, 180)
+                                    }
+                            "tick" ->
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                                    } else {
+                                        VibrationEffect.createOneShot(10, 120)
+                                    }
                             "medium" ->
-                                    VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+                                    VibrationEffect.createOneShot(22, VibrationEffect.DEFAULT_AMPLITUDE)
                             else ->
                                     VibrationEffect.createOneShot(12, VibrationEffect.DEFAULT_AMPLITUDE)
                         }

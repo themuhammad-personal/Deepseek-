@@ -661,7 +661,8 @@ export function scanInputArea() {
     mount(ComposerChips, {
       target: composerChipsMountPoint,
       props: {
-        nativeInput: fileInput
+        nativeInput: fileInput,
+        fileInput: fileInput,
       }
     });
     composerChipsMountPoint.dataset.bdsMounted = "1";
@@ -944,7 +945,8 @@ function findNativeFileInputTrigger(fileInput) {
     candidate.classList?.contains("bds-deep-code-mount") ||
     candidate.classList?.contains("bds-attach-menu-mount") ||
     candidate.classList?.contains("bds-expand-toggle-mount") ||
-    candidate.classList?.contains("bds-rag-preview-mount")
+    candidate.classList?.contains("bds-rag-preview-mount") ||
+    candidate.classList?.contains("bds-composer-chips-mount")
   ) {
     return null;
   }

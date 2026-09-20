@@ -22,6 +22,7 @@ import { injectDynamicTableFeatures } from "./dom/table-injector.js";
 import { enhanceThoughtBlocks } from "./dom/thought-enhancer.js";
 import { injectActionBar } from "./dom/action-bar-enhancer.js";
 import { enhanceCodeBlocks } from "./dom/code-block-enhancer.js";
+import { highlightCodeBlocks } from "./dom/code-highlighter.js";
 import { parseBdsMessage } from "./parser/index.js";
 import { parseTagAttributes, scanBdsTagPairs } from "./parser/tag-parser.js";
 import { cleanBdsString } from "./tags/tag-hider.js";
@@ -216,6 +217,7 @@ export function processMessageNode(node, nodeIndex = -1, nodes = null, context =
   injectRubyRunButtons(node);
   injectDynamicTableFeatures(node);
   enhanceCodeBlocks(node);
+  highlightCodeBlocks(node);
   injectSelectionCheckbox(node);
   injectBookmarkButton(node);
 

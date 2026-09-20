@@ -8,4 +8,10 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <style name="Theme.SuperDeepSeek.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bds_splash_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.BetterDeepSeek.NoActionBar</item>
+    </style>
 </resources>

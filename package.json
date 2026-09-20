@@ -49,6 +49,7 @@
     "ignore": "^7.0.5",
     "marked": "^18.0.3",
     "pptxgenjs": "^4.0.1",
+    "prismjs": "^1.30.0",
     "turndown": "^7.2.4",
     "vega": "^6.4.0",
     "vega-embed": "^7.2.0",

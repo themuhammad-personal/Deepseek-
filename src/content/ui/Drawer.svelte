@@ -13,6 +13,14 @@
 
   let { open = false, onclose, onopenapiplayground } = $props();
 
+  $effect(() => {
+    if (typeof window !== "undefined" && window.AndroidBridge?.setNativeBlur) {
+      try {
+        window.AndroidBridge.setNativeBlur(open, open ? 25 : 0);
+      } catch {}
+    }
+  });
+
   const extensionVersion = getExtensionVersion();
 
   // Navigation section: 'overview' | 'prompts' | 'mcp' | 'deep_research' | 'memory' | 'commands' | 'data' | 'chat'
