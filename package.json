@@ -20,7 +20,9 @@
     "test:app": "node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/i18n.test.ts src/lib/group-chats.test.ts src/lib/artifacts.test.ts src/lib/ai/system-prompt.test.ts src/lib/deepseek/parse-sse.test.ts src/lib/mcp-presets.test.ts src/lib/search-providers.test.ts src/lib/utils.test.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "android:assemble:release": "cd android && ./gradlew assembleRelease"
+    "android:assemble:release": "cd android && ./gradlew assembleRelease",
+    "build:android": "vite build --config vite.android-spa.config.ts",
+    "build:android:full": "npm run build:android && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -100,5 +102,5 @@
     "vite": "^8.2.0"
   },
   "version": "1.0.0",
-  "description": "Super DeepSeek — Claude-class native client for DeepSeek"
+  "description": "Super DeepSeek \u2014 Claude-class native client for DeepSeek"
 }

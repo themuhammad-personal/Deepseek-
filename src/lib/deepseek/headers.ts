@@ -24,5 +24,7 @@ export function dsHeaders(token?: string, extra?: Record<string, string>): Heade
 export function newDeviceId(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return Buffer.from(bytes).toString("base64").replace(/=+$/, "");
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/=+$/, "");
 }

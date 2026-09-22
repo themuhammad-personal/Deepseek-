@@ -1618,6 +1618,267 @@ class WebViewBridge(
         return transcriptArray
     }
 
+    // ── DeepSeek Official Login via Native OkHttp + Hidden WebView WAF Cookies ──
+
+    @Volatile var mainWebView: android.webkit.WebView? = null
+    @Volatile var hiddenWebView: android.webkit.WebView? = null
+    @Volatile var evaluateHiddenJs: ((String) -> Unit)? = null
+
+    @JavascriptInterface
+    fun dsLoginNative(payloadJson: String?, callbackId: String?) {
+        val safeCallbackId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeCallbackId.isEmpty()) return
+        Thread {
+            try {
+                val payload = try { JSONObject(payloadJson ?: "{}") } catch (_: Exception) { JSONObject() }
+                val email = payload.optString("email").trim().ifEmpty { null }
+                val mobile = payload.optString("mobile").trim().ifEmpty { null }
+                val areaCode = payload.optString("area_code").trim().ifEmpty { "+880" }
+                val password = payload.optString("password")
+
+                if (password.isEmpty() || (email == null && mobile == null)) {
+                    deliverDsLoginError(safeCallbackId, "Email or phone and password required")
+                    return@Thread
+                }
+
+                val deviceId = generateDeviceId()
+
+                val dsPayload = JSONObject().apply {
+                    put("email", email?.let { if (it.isNotEmpty()) it else JSONObject.NULL } ?: JSONObject.NULL)
+                    put("mobile", mobile?.let { if (it.isNotEmpty()) it else JSONObject.NULL } ?: JSONObject.NULL)
+                    put("password", password)
+                    put("area_code", areaCode)
+                    put("device_id", deviceId)
+                    put("os", "web")
+                }
+
+                val cookieManager = android.webkit.CookieManager.getInstance()
+                val cookies = cookieManager.getCookie("https://chat.deepseek.com") ?: ""
+
+                val requestBody = dsPayload.toString().toRequestBody("application/json".toMediaTypeOrNull())
+                val requestBuilder = Request.Builder()
+                    .url("https://chat.deepseek.com/api/v0/users/login")
+                    .post(requestBody)
+                    .header("Accept", "*/*")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Content-Type", "application/json")
+                    .header("Origin", "https://chat.deepseek.com")
+                    .header("Referer", "https://chat.deepseek.com/")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36")
+                    .header("X-Client-Platform", "web")
+                    .header("X-Client-Version", "1.0.0")
+                    .header("X-Client-Locale", "en_US")
+                if (cookies.isNotEmpty()) {
+                    requestBuilder.header("Cookie", cookies)
+                }
+
+                val response = httpClient.newCall(requestBuilder.build()).execute()
+                val bodyString = response.body?.string() ?: ""
+                val code = response.code
+                val wafAction = response.header("x-amzn-waf-action")
+
+                Log.d(TAG, "DeepSeek login response code=$code waf=$wafAction body=${bodyString.take(500)}")
+
+                if (code == 202 && wafAction == "challenge") {
+                    Log.w(TAG, "WAF challenge detected, trying hidden WebView fetch")
+                    tryHiddenWebViewLogin(payload, safeCallbackId)
+                    return@Thread
+                }
+
+                if (bodyString.isEmpty()) {
+                    deliverDsLoginError(safeCallbackId, "Empty response from DeepSeek (code $code)")
+                    return@Thread
+                }
+
+                try {
+                    val json = JSONObject(bodyString)
+                    val data = json.optJSONObject("data")
+                    if (data != null) {
+                        val bizCode = data.optInt("biz_code", 0)
+                        if (bizCode != 0) {
+                            val bizMsg = data.optString("biz_msg", "Login failed")
+                            deliverDsLoginError(safeCallbackId, bizMsg)
+                            return@Thread
+                        }
+                        val bizData = data.optJSONObject("biz_data")
+                        if (bizData != null) {
+                            val user = bizData.optJSONObject("user") ?: bizData
+                            val token = user.optString("token").ifEmpty { bizData.optString("token") }
+                            if (token.isNotEmpty()) {
+                                val result = JSONObject().apply {
+                                    put("token", token)
+                                    put("email", user.optString("email", email ?: ""))
+                                    put("mobile", user.optString("mobile", mobile ?: ""))
+                                }
+                                deliverDsLoginSuccess(safeCallbackId, result)
+                                return@Thread
+                            }
+                        }
+                    }
+                    val msg = json.optString("msg", "Login failed")
+                    deliverDsLoginError(safeCallbackId, msg)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Login JSON parse failed", e)
+                    deliverDsLoginError(safeCallbackId, "Parse error: ${e.message}")
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "dsLoginNative failed", t)
+                deliverDsLoginError(safeCallbackId, t.message ?: "Network error")
+            }
+        }.start()
+    }
+
+    private fun tryHiddenWebViewLogin(originalPayload: JSONObject, callbackId: String) {
+        val hidden = hiddenWebView
+        if (hidden == null) {
+            deliverDsLoginError(callbackId, "Hidden WebView not ready, please wait for WAF")
+            return
+        }
+        val payloadStr = JSONObject.quote(originalPayload.toString())
+        val js = """
+            (async () => {
+              try {
+                const orig = JSON.parse($payloadStr);
+                const bytes = new Uint8Array(32);
+                crypto.getRandomValues(bytes);
+                let bin = '';
+                for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+                const device_id = btoa(bin).replace(/=+$/,'');
+                const body = {
+                  email: orig.email || null,
+                  mobile: orig.mobile || null,
+                  password: orig.password,
+                  area_code: orig.area_code || '+880',
+                  device_id,
+                  os: 'web'
+                };
+                console.log('[HiddenLogin] attempting', body.email || body.mobile);
+                const res = await fetch('/api/v0/users/login', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Client-Platform': 'web',
+                    'X-Client-Version': '1.0.0',
+                    'X-Client-Locale': 'en_US'
+                  },
+                  body: JSON.stringify(body)
+                });
+                const json = await res.json();
+                console.log('[HiddenLogin] response', JSON.stringify(json).slice(0,500));
+                const resultStr = JSON.stringify(json);
+                window.AndroidBridge.onHiddenLoginResult('$callbackId', resultStr, res.ok);
+              } catch(e) {
+                console.error('[HiddenLogin] error', e);
+                window.AndroidBridge.onHiddenLoginResult('$callbackId', JSON.stringify({error: e.message}), false);
+              }
+            })();
+        """.trimIndent()
+        hidden.post {
+            try {
+                hidden.evaluateJavascript(js, null)
+            } catch (e: Exception) {
+                Log.e(TAG, "Hidden WebView evaluate failed", e)
+                deliverDsLoginError(callbackId, "Hidden WebView error: ${e.message}")
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun onHiddenLoginResult(callbackId: String?, resultJson: String?, ok: Boolean) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeId.isEmpty()) return
+        Thread {
+            try {
+                val jsonStr = resultJson ?: "{}"
+                val json = try { JSONObject(jsonStr) } catch (_: Exception) { JSONObject().apply { put("error", "Invalid response") } }
+                if (!ok) {
+                    val err = json.optString("error", json.optString("msg", "Login failed"))
+                    deliverDsLoginError(safeId, err)
+                    return@Thread
+                }
+                val data = json.optJSONObject("data")
+                if (data != null) {
+                    val bizCode = data.optInt("biz_code", 0)
+                    if (bizCode != 0) {
+                        deliverDsLoginError(safeId, data.optString("biz_msg", "Login failed"))
+                        return@Thread
+                    }
+                    val bizData = data.optJSONObject("biz_data")
+                    if (bizData != null) {
+                        val user = bizData.optJSONObject("user") ?: bizData
+                        val token = user.optString("token").ifEmpty { bizData.optString("token") }
+                        if (token.isNotEmpty()) {
+                            val result = JSONObject().apply {
+                                put("token", token)
+                                put("email", user.optString("email", ""))
+                                put("mobile", user.optString("mobile", ""))
+                            }
+                            deliverDsLoginSuccess(safeId, result)
+                            return@Thread
+                        }
+                    }
+                }
+                deliverDsLoginError(safeId, json.optString("msg", "Login failed"))
+            } catch (t: Throwable) {
+                Log.e(TAG, "onHiddenLoginResult failed", t)
+                deliverDsLoginError(safeId, t.message ?: "Error")
+            }
+        }.start()
+    }
+
+    private fun generateDeviceId(): String {
+        return try {
+            val bytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(bytes)
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).replace("=", "")
+        } catch (_: Exception) {
+            val bytes = ByteArray(32)
+            java.util.Random().nextBytes(bytes)
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).replace("=", "")
+        }
+    }
+
+    private fun deliverDsLoginSuccess(callbackId: String, result: JSONObject) {
+        val escaped = JSONObject.quote(result.toString())
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsLoginCallbacks || {};
+                const cb = cbs['$callbackId'];
+                if(cb && cb.resolve) {
+                  const data = JSON.parse($escaped);
+                  cb.resolve(data);
+                  delete cbs['$callbackId'];
+                }
+              } catch(e){ console.error('[Bridge] deliver success failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post {
+            mainWebView?.evaluateJavascript(script, null)
+        }
+        evaluateJs?.invoke(script)
+    }
+
+    private fun deliverDsLoginError(callbackId: String, error: String) {
+        val escaped = JSONObject.quote(error)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsLoginCallbacks || {};
+                const cb = cbs['$callbackId'];
+                if(cb && cb.reject) {
+                  cb.reject($escaped);
+                  delete cbs['$callbackId'];
+                }
+              } catch(e){ console.error('[Bridge] deliver error failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post {
+            mainWebView?.evaluateJavascript(script, null)
+        }
+        evaluateJs?.invoke(script)
+    }
+
     companion object {
         private const val TAG = "BdsWebViewBridge"
         // Shared with UpdateChecker, which keeps the update channel and the dismissed-build
