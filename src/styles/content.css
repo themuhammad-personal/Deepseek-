@@ -60,6 +60,27 @@ body.dark.bds-oled-dark {
   background-color: #000000 !important;
 }
 
+/* ── Banner Suppression & Startup Jump Prevention ── */
+[class*="mobile-banner"],
+[class*="app-banner"],
+[class*="download-banner"],
+[class*="get-app"],
+[class*="download-app"],
+[class*="client-banner"],
+[class*="install-banner"],
+[class*="open-in-app"],
+[class*="header-banner"],
+div:has(> a[href*="download"]),
+div:has(> a[href*="/app"]) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* ── Hidden Messages ── */
 .bds-hidden-message {
   display: none !important;
@@ -4866,9 +4887,13 @@ textarea.bds-input,
   padding: 8px 10px;
   border-radius: 8px;
   transition: background 0.1s;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.bds-help-item:hover {
-  background: var(--bds-bg-input);
+.bds-help-item:hover,
+.bds-help-item:active {
+  background: var(--bds-bg-hover, var(--bds-bg-input));
 }
 .bds-help-icon {
   flex-shrink: 0;

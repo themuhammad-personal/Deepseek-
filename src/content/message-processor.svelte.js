@@ -1430,20 +1430,24 @@ function playVoiceResponse(text) {
  */
 function hideMessageNode(node, hidden) {
   // DeepSeek uses .ds-markdown for content. 
-  // We also try broader selectors to capture everything that might contain tags.
+  // We strictly target markdown containers so we never accidentally hide message wrappers or overlays.
   const contentSelectors = [
     '.ds-markdown',
-    '.ds-message-content',
-    'div[class*="markdown"]',
-    'div[class*="content"]'
+    'div[class*="markdown"]'
   ];
 
   let foundElements = [];
   for (const selector of contentSelectors) {
     const elements = node.querySelectorAll(selector);
     elements.forEach(el => {
-      // NEVER touch elements that belong to BDS overlays or hosts
-      if (el.closest('.bds-host-wrapper') || el.closest('#bds-root') || el.closest('.bds-message-overlay')) {
+      // NEVER touch elements that belong to BDS overlays or hosts, or contain them
+      if (
+        el.closest('.bds-host-wrapper') ||
+        el.closest('#bds-root') ||
+        el.closest('.bds-message-overlay') ||
+        el.querySelector('.bds-host-wrapper') ||
+        el.querySelector('.bds-message-overlay')
+      ) {
         return;
       }
       // Ignore components that are inside think segments

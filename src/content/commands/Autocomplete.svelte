@@ -50,7 +50,11 @@ import { devLog } from "../../lib/dev-log.js"
 
   $effect(refreshSnippetCommands)
 
-  function handleBlur() { isOpen = false }
+  let blurTimer = null
+  function handleBlur() {
+    clearTimeout(blurTimer)
+    blurTimer = setTimeout(() => { isOpen = false }, 250)
+  }
 
   $effect(() => {
     if (!editor) return

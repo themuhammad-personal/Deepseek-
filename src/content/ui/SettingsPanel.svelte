@@ -595,10 +595,6 @@
     { key: 'subDeepCode', labelKey: 'settings.deepCode', settingKeys: [
       'deepCodeToggle.enableToggle', 'deepCodeModal.activeCodebase',
     ]},
-    { key: 'subVoice', labelKey: 'settings.subVoice', settingKeys: [
-      'settings.voiceMode', 'settings.autoSubmitVoice',
-      'settings.speechLanguage', 'settings.vadSilenceTimeout',
-    ]},
     { key: 'subIntegrations', labelKey: 'settings.subIntegrations', settingKeys: [
       'settings.markdownMaxDepth', 'settings.githubToken',
       'settings.tokenPriceEstimation', 'settings.showTimestamps',
@@ -723,9 +719,6 @@
     } else if (activeTab === "language") {
       advancedOpen = true;
       subLanguageOpen = true;
-    } else if (activeTab === "voice") {
-      advancedOpen = true;
-      subVoiceOpen = true;
     } else if (activeTab === "chat") {
       advancedOpen = true;
       subInjectionOpen = true;
@@ -768,21 +761,19 @@
     if (activeTab === "data") return sectionKey === "subIntegrations" || sectionKey === "subUtilities";
     if (activeTab === "appearance") return sectionKey === "subCSS";
     if (activeTab === "language") return sectionKey === "subLanguage";
-    if (activeTab === "voice") return sectionKey === "subVoice";
     if (activeTab === "chat") return sectionKey === "subChat" || sectionKey === "subInjection";
     if (activeTab === "prompts") return sectionKey === "systemPrompts";
     if (activeTab === "projects") return sectionKey === "subProjects";
     if (activeTab === "settings") {
-      if (activeCategory === "all") return true;
+      if (activeCategory === "all") return sectionKey !== "subVoice";
       if (activeCategory === "general") return sectionKey === "subLanguage" || sectionKey === "subUtilities";
       if (activeCategory === "chat") return sectionKey === "systemPrompts" || sectionKey === "subChat" || sectionKey === "subInjection";
-      if (activeCategory === "voice") return sectionKey === "subVoice";
       if (activeCategory === "research") return sectionKey === "subResearch" || sectionKey === "subDeepCode";
       if (activeCategory === "mcp") return sectionKey === "subMcp" || sectionKey === "subDeepCode";
       if (activeCategory === "appearance") return sectionKey === "subCSS";
       if (activeCategory === "integrations") return sectionKey === "subIntegrations";
       if (activeCategory === "backup") return sectionKey === "subUtilities" || sectionKey === "subProjects";
-      return true;
+      return sectionKey !== "subVoice";
     }
     return false;
   }
@@ -1542,17 +1533,6 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
       </span>
       <span>Chat & Prompts</span>
-    </button>
-    <button
-      type="button"
-      class="bds-category-pill"
-      class:active={activeCategory === 'voice'}
-      onclick={() => activeCategory = 'voice'}
-    >
-      <span class="bds-pill-icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-      </span>
-      <span>Voice & Audio</span>
     </button>
     <button
       type="button"

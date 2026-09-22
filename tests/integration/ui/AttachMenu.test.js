@@ -185,7 +185,6 @@ describe("AttachMenu integration", () => {
 
     expect(target.querySelector(".bds-attach-wrapper")).toBeTruthy();
     expect(target.querySelector(".bds-project-btn")).toBeTruthy();
-    expect(target.querySelector(".bds-mic-btn")).toBeTruthy();
     expect(target.querySelector(".bds-plus-btn")).toBeTruthy();
     cleanup();
   });
@@ -220,7 +219,6 @@ describe("AttachMenu integration", () => {
 
     expect(target.querySelector(".bds-attach-wrapper")).toBeTruthy();
     expect(target.querySelector(".bds-project-btn")).toBeTruthy();
-    expect(target.querySelector(".bds-mic-btn")).toBeTruthy();
     expect(target.querySelector(".bds-plus-btn")).toBeNull();
     cleanup();
   });
@@ -434,14 +432,6 @@ describe("AttachMenu integration", () => {
 
     expect(projectFileBuilderMocks.projectFilesToFile).toHaveBeenCalled();
     expect(nativeInput.files).toHaveLength(1);
-
-    target.querySelector(".bds-mic-btn").click();
-    recognitionInstance.onresult?.({
-      results: [[{ transcript: "voice text" }]],
-    });
-    await flushUi();
-
-    expect(document.querySelector("#chat-input").value).toBe("voice text");
     cleanup();
   });
 

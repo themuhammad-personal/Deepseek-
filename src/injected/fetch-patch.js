@@ -56,11 +56,32 @@ export function patchFetch(state, isChatCompletionUrl, markStart, markEnd) {
           return response;
         }
 
-        const response = await originalFetch.call(
-          this,
-          requestInfo.input,
-          requestInfo.init
-        );
+        let response;
+        try {
+          response = await originalFetch.call(
+            this,
+            requestInfo.input,
+            requestInfo.init
+          );
+        } catch (fetchErr) {
+          console.warn("[BetterDeepSeek] Mutated fetch failed, retrying original fetch:", fetchErr);
+          response = await originalFetch.apply(this, arguments);
+          tryCaptureTokenUsage(response, url, requestInfo?.modelName);
+          return response;
+        }
+
+        // If DeepSeek rejected the mutated payload (e.g. 400 Bad Request, 422 Unprocessable),
+        // fallback to the unmodified original request immediately so user messages are NEVER lost!
+        if (response && response.status >= 400 && response.status < 500) {
+          console.warn("[BetterDeepSeek] Mutated fetch returned HTTP " + response.status + ", retrying original request...");
+          try {
+            const fallbackResponse = await originalFetch.apply(this, arguments);
+            tryCaptureTokenUsage(fallbackResponse, url, requestInfo?.modelName);
+            return fallbackResponse;
+          } catch (retryErr) {
+            console.error("[BetterDeepSeek] Fallback fetch failed:", retryErr);
+          }
+        }
 
         // Detect server errors
         if (response && response.status >= 500) {
@@ -76,16 +97,21 @@ export function patchFetch(state, isChatCompletionUrl, markStart, markEnd) {
         tryCaptureTokenUsage(response, url, requestInfo.modelName);
         return response;
       } catch (innerError) {
-        // Detect network failures
-        window.dispatchEvent(new CustomEvent("bds:network-error", {
-          detail: JSON.stringify({
-            url,
-            status: 0,
-            type: 'fetch',
-            error: String(innerError)
-          })
-        }));
-        throw innerError;
+        console.warn("[BetterDeepSeek] Fetch patch inner error, falling back to original fetch:", innerError);
+        try {
+          return await originalFetch.apply(this, arguments);
+        } catch (fallbackErr) {
+          // Detect network failures
+          window.dispatchEvent(new CustomEvent("bds:network-error", {
+            detail: JSON.stringify({
+              url,
+              status: 0,
+              type: 'fetch',
+              error: String(fallbackErr)
+            })
+          }));
+          throw fallbackErr;
+        }
       } finally {
         markEnd(url);
       }

@@ -237,6 +237,13 @@ export function isLatestAssistantMessage(node, nodes) {
   return findLatestAssistantMessageNode(nodes) === node;
 }
 
+function isBdsElement(el) {
+  if (!el || el.nodeType !== Node.ELEMENT_NODE) return false;
+  return Boolean(
+    el.closest?.("#bds-root, .bds-host-wrapper, [class*='bds-'], [id*='bds-'], [data-bds]")
+  );
+}
+
 /**
  * Find the closest message ancestor for a given DOM node.
  * Returns null if the node is not inside a message.
@@ -244,9 +251,9 @@ export function isLatestAssistantMessage(node, nodes) {
 function closestMessageNode(target) {
   if (!target || target === document.body || target === document.documentElement) return null;
   const el = target.nodeType === Node.ELEMENT_NODE ? target : target.parentElement;
-  if (!el || el.closest?.("#bds-root") || el.closest?.(".bds-host-wrapper")) return null;
+  if (!el || isBdsElement(el)) return null;
   const msg = el.closest?.("div.ds-message");
-  return msg && !msg.closest("#bds-root") ? msg : null;
+  return msg && !isBdsElement(msg) ? msg : null;
 }
 
 /**
@@ -264,15 +271,15 @@ export function observeChatDom() {
 
     for (const r of records) {
       const targetEl = r.target.nodeType === Node.ELEMENT_NODE ? r.target : r.target.parentElement;
-      // Ignore records where the target itself is within #bds-root or a BDS host
-      if (!targetEl || targetEl.closest?.("#bds-root") || targetEl.closest?.(".bds-host-wrapper")) continue;
+      // Ignore records where the target itself is within #bds-root or a BDS element
+      if (!targetEl || isBdsElement(targetEl)) continue;
 
       let recordHasExternal = false;
 
       // Collect removed message subtrees
       for (const removed of r.removedNodes) {
         if (removed.nodeType !== Node.ELEMENT_NODE) continue;
-        if (removed.closest?.("#bds-root") || removed.closest?.(".bds-host-wrapper")) continue;
+        if (isBdsElement(removed)) continue;
 
         recordHasExternal = true;
 
@@ -280,7 +287,7 @@ export function observeChatDom() {
           ? [removed]
           : Array.from(removed.querySelectorAll?.("div.ds-message") || []);
         for (const rm of removedMessages) {
-          if (!rm.closest?.("#bds-root")) {
+          if (!isBdsElement(rm)) {
             removedNodes.add(rm);
           }
         }
@@ -289,7 +296,7 @@ export function observeChatDom() {
       // Collect added/modified messages
       for (const added of r.addedNodes) {
         if (added.nodeType !== Node.ELEMENT_NODE) continue;
-        if (added.closest?.("#bds-root") || added.closest?.(".bds-host-wrapper")) continue;
+        if (isBdsElement(added)) continue;
 
         recordHasExternal = true;
 
@@ -302,7 +309,7 @@ export function observeChatDom() {
         const descendantMessages = added.querySelectorAll?.("div.ds-message");
         if (descendantMessages?.length) {
           for (const dm of descendantMessages) {
-            if (!dm.closest?.("#bds-root")) {
+            if (!isBdsElement(dm)) {
               dirtyNodes.add(dm);
               registerKnownNode(dm);
             }
@@ -1263,11 +1270,12 @@ function setupCommandListener(editor) {
 
   editor.dispatchEvent(new Event("input", { bubbles: true }))
 
-  document.querySelector(".bds-cmd-help-mount")?.remove()
-  const helpMountPoint = document.createElement("div")
-  helpMountPoint.className = "bds-cmd-help-mount"
-  document.body.appendChild(helpMountPoint)
+  if (!document.querySelector(".bds-cmd-help-mount") && !commandsHelpInstance) {
+    const helpMountPoint = document.createElement("div")
+    helpMountPoint.className = "bds-cmd-help-mount"
+    document.body.appendChild(helpMountPoint)
 
-  commandsHelpInstance = mount(CommandsHelp, { target: helpMountPoint })
+    commandsHelpInstance = mount(CommandsHelp, { target: helpMountPoint })
+  }
 }
 

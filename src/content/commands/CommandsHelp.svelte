@@ -21,6 +21,31 @@
   function open() { isOpen = true; search = ""; selectedCategory = "all" }
   function close() { isOpen = false }
 
+  function selectCommand(cmd) {
+    try {
+      const editor =
+        document.querySelector("textarea#chat-input") ||
+        document.querySelector(".ds-textarea textarea") ||
+        document.querySelector("textarea") ||
+        document.querySelector('[role="textbox"]');
+
+      if (editor) {
+        const textToInsert = `/${cmd.id} `;
+        if (editor.tagName === "TEXTAREA" || editor.tagName === "INPUT") {
+          editor.value = textToInsert;
+        } else {
+          editor.textContent = textToInsert;
+        }
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        editor.dispatchEvent(new Event("change", { bubbles: true }));
+        editor.focus();
+      }
+    } catch (e) {
+      console.warn("[BDS] Failed to insert command:", e);
+    }
+    close();
+  }
+
   function handleKeydown(e) {
     if (e.key === "Escape") close()
   }
@@ -52,7 +77,14 @@
       </div>
       <div class="bds-help-list">
         {#each filtered as cmd}
-          <div class="bds-help-item">
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div
+            class="bds-help-item"
+            role="button"
+            tabindex="0"
+            onclick={() => selectCommand(cmd)}
+            onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectCommand(cmd); } }}
+          >
             <span class="bds-help-icon">{@html cmd.icon}</span>
             <div class="bds-help-info">
               <span class="bds-help-name">/{cmd.id}</span>

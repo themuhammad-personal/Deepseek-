@@ -727,6 +727,11 @@ class MainActivity : ComponentActivity() {
                     return openExternalUrl(url)
                 }
 
+                override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    injectEarlySuppressCss(view)
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     isPageReady = true
@@ -740,6 +745,13 @@ class MainActivity : ComponentActivity() {
 
     private fun bdsWebChromeClient() =
             object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    super.onProgressChanged(view, newProgress)
+                    if (newProgress in 15..80 && view != null) {
+                        injectEarlySuppressCss(view)
+                    }
+                }
+
                 override fun onShowFileChooser(
                         webView: WebView?,
                         filePathCallback: ValueCallback<Array<Uri>>?,
@@ -1040,6 +1052,41 @@ class MainActivity : ComponentActivity() {
     }
 
     // ── BDS script injection ─────────────────────────────────────────────
+
+    private fun injectEarlySuppressCss(view: WebView) {
+        val script = """
+            (function() {
+                var id = 'bds-early-banner-suppress';
+                if (document.getElementById(id)) return;
+                var style = document.createElement('style');
+                style.id = id;
+                style.textContent = `
+                    [class*="mobile-banner"],
+                    [class*="app-banner"],
+                    [class*="download-banner"],
+                    [class*="get-app"],
+                    [class*="download-app"],
+                    [class*="client-banner"],
+                    [class*="install-banner"],
+                    [class*="open-in-app"],
+                    [class*="header-banner"],
+                    div:has(> a[href*="download"]),
+                    div:has(> a[href*="/app"]) {
+                        display: none !important;
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        visibility: hidden !important;
+                        pointer-events: none !important;
+                    }
+                `;
+                var target = document.head || document.documentElement;
+                if (target) target.appendChild(style);
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(script, null)
+    }
 
     /**
      * Read the BDS bundle (content.css/js, injected.js) from assets/bds and inject them into the

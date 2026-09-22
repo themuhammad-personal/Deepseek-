@@ -114,12 +114,6 @@
     saveSettingDirectly();
   }
 
-  function toggleVoiceSetting(e) {
-    e?.stopPropagation();
-    appState.settings.voiceMode = !appState.settings.voiceMode;
-    saveSettingDirectly();
-  }
-
   function saveSettingDirectly() {
     try {
       if (typeof chrome !== "undefined" && chrome.storage?.local) {
@@ -139,7 +133,6 @@
       case "deep_code": return t("settings.deepCode") || "Deep Code";
       case "appearance": return t("settings.subCSS") || "Appearance";
       case "language": return t("settings.languageSettings") || "Language";
-      case "voice": return t("settings.voiceMode") || "Voice Mode";
       case "memory": return t("drawer.sectionMemories") || "Stored Memories";
       case "commands": return t("drawer.sectionSavedItems") || "Custom Commands";
       case "data": return t("settings.subIntegrations") || "Data Controls";
@@ -395,35 +388,6 @@
                 <div class="bds-settings-row-right">
                   <span class="bds-badge-value">{appState.settings.preferredLang || "বাংলা"}</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </div>
-              </div>
-
-              <!-- Voice Mode Row -->
-              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-              <div class="bds-settings-row" onclick={() => (currentSection = "voice")}>
-                <div class="bds-settings-row-left">
-                  <div class="bds-settings-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                      <line x1="12" y1="19" x2="12" y2="23"></line>
-                      <line x1="8" y1="23" x2="16" y2="23"></line>
-                    </svg>
-                  </div>
-                  <div class="bds-settings-row-text">
-                    <span class="bds-settings-row-title">{t("settings.voiceMode") || "Voice Mode"}</span>
-                    <span class="bds-settings-row-sub">{t("settings.autoSubmitVoice") || "Automatic voice readout"}</span>
-                  </div>
-                </div>
-                <div class="bds-settings-row-right">
-                  <label class="bds-ios-switch" onclick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(appState.settings.voiceMode)}
-                      onchange={toggleVoiceSetting}
-                    />
-                    <span class="bds-ios-slider"></span>
-                  </label>
                 </div>
               </div>
 
@@ -736,22 +700,6 @@
         <SettingsPanel
           bind:this={settingsRef}
           activeTab="language"
-          onsave={handleSettingsSaved}
-          onapiplayground={openApiPlayground}
-          onimportdata={() => {
-            refreshSettings();
-            refreshCharacters();
-            refreshSkills();
-            refreshMemories();
-            refreshProjects();
-          }}
-        />
-
-      {:else if currentSection === "voice"}
-        <!-- Sub-View: Voice Mode Settings -->
-        <SettingsPanel
-          bind:this={settingsRef}
-          activeTab="voice"
           onsave={handleSettingsSaved}
           onapiplayground={openApiPlayground}
           onimportdata={() => {
