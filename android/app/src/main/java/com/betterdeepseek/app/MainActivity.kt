@@ -17,6 +17,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
@@ -26,7 +27,173 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.UserAgentMetadata
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewFeature
+
+// ── Helper functions for unit tests (from original better-deepseek) ──
+
+internal fun applyRootWindowInsets(view: View, windowInsets: WindowInsetsCompat): WindowInsetsCompat {
+    val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+    val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
+    val bottomInset = maxOf(systemBars.bottom, imeInsets.bottom)
+    view.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomInset)
+    view.translationY = 0f
+    return WindowInsetsCompat.CONSUMED
+}
+
+internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
+    val scheme = url.scheme?.lowercase() ?: return false
+    if (scheme != "http" && scheme != "https") return false
+    val host = url.host?.lowercase() ?: return false
+    if (host == assetHost.lowercase()) return false
+    if (host == "deepseek.com" || host.endsWith(".deepseek.com")) return false
+    if (host == "hcaptcha.com" || host.endsWith(".hcaptcha.com")) return false
+    if (isGoogleAuthHost(host)) return false
+    return true
+}
+
+internal fun isGoogleAuthHost(host: String): Boolean {
+    val h = host.lowercase()
+    return h == "google.com" ||
+            h.endsWith(".google.com") ||
+            h == "accounts.youtube.com" ||
+            h == "googleusercontent.com" ||
+            h.endsWith(".googleusercontent.com")
+}
+
+internal fun shouldCapturePopupInApp(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
+    return !shouldOpenExternally(url, assetHost)
+}
+
+internal fun shouldOpenRequestExternally(
+        request: WebResourceRequest,
+        assetHost: String = "bds-asset.local"
+): Boolean {
+    if (!request.isForMainFrame) return false
+    val url = request.url ?: return false
+    if (!shouldOpenExternally(url, assetHost)) return false
+    return request.hasGesture()
+}
+
+internal fun deriveWebViewUserAgent(defaultUserAgent: String): String {
+    return defaultUserAgent
+            .replace(Regex(""";\s*wv(?=\))"""), "")
+            .replace(Regex("""\bVersion/\d+(?:\.\d+)*\s*"""), "")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+}
+
+internal fun parseChromeMajorVersion(ua: String): String? {
+    return CHROME_VERSION_REGEX.find(ua)?.groupValues?.get(1)?.substringBefore('.')
+}
+
+internal fun parseAndroidPlatformVersion(ua: String): String? {
+    return Regex("""Android\s+(\d+(?:\.\d+)*)""").find(ua)?.groupValues?.get(1)
+}
+
+internal fun parseDeviceModel(ua: String): String? {
+    val inner =
+            Regex("""Android\s+[\d.]+;\s*([^;)]+)""")
+                    .find(ua)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.trim()
+                    ?: return null
+    return inner.substringBefore(" Build/").trim().ifBlank { null }
+}
+
+internal fun buildUserAgentMetadata(derivedUa: String): UserAgentMetadata {
+    val builder = UserAgentMetadata.Builder().setPlatform("Android").setMobile(true)
+    val chromeVersion = CHROME_VERSION_REGEX.find(derivedUa)?.groupValues?.get(1)
+    if (chromeVersion != null) {
+        val majorVersion = chromeVersion.substringBefore('.')
+        val brandVersions =
+                listOf(
+                        UserAgentMetadata.BrandVersion.Builder()
+                                .setBrand("Not/A)Brand")
+                                .setMajorVersion("8")
+                                .setFullVersion("8.0.0.0")
+                                .build(),
+                        UserAgentMetadata.BrandVersion.Builder()
+                                .setBrand("Chromium")
+                                .setMajorVersion(majorVersion)
+                                .setFullVersion(chromeVersion)
+                                .build(),
+                        UserAgentMetadata.BrandVersion.Builder()
+                                .setBrand("Google Chrome")
+                                .setMajorVersion(majorVersion)
+                                .setFullVersion(chromeVersion)
+                                .build(),
+                )
+        builder.setFullVersion(chromeVersion).setBrandVersionList(brandVersions)
+    }
+    builder.setArchitecture("").setBitness(UserAgentMetadata.BITNESS_DEFAULT)
+    parseAndroidPlatformVersion(derivedUa)?.let { builder.setPlatformVersion(it) }
+    parseDeviceModel(derivedUa)?.let { builder.setModel(it) }
+    return builder.build()
+}
+
+internal fun buildFileChooserIntent(acceptTypes: Array<String>?, allowMultiple: Boolean): Intent {
+    return Intent(Intent.ACTION_GET_CONTENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "*/*"
+        if (allowMultiple) {
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        val mimeTypes = mapAcceptTypes(acceptTypes)
+        if (mimeTypes.isNotEmpty()) {
+            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+        }
+    }
+}
+
+internal fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>? {
+    if (resultCode != Activity.RESULT_OK) return null
+    val uris = linkedSetOf<Uri>()
+    val clipData = data?.clipData
+    if (clipData != null) {
+        for (i in 0 until clipData.itemCount) {
+            clipData.getItemAt(i).uri?.let { uris.add(it) }
+        }
+    } else {
+        data?.data?.let { uris.add(it) }
+    }
+    if (uris.isNotEmpty()) return uris.toTypedArray()
+    return runCatching { WebChromeClient.FileChooserParams.parseResult(resultCode, data) }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+}
+
+private fun mapAcceptTypes(acceptTypes: Array<String>?): List<String> {
+    val tokens =
+            acceptTypes
+                    ?.flatMap { it.split(',') }
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    .orEmpty()
+    if (tokens.isEmpty()) return emptyList()
+    val mapped = linkedSetOf<String>()
+    for (token in tokens) {
+        val mimeType =
+                when {
+                    "/" in token -> token
+                    token.startsWith(".") ->
+                            MimeTypeMap.getSingleton()
+                                    .getMimeTypeFromExtension(
+                                            token.removePrefix(".").lowercase()
+                                    )
+                    else -> null
+                }
+        if (mimeType.isNullOrBlank()) return emptyList()
+        mapped.add(mimeType)
+    }
+    return mapped.toList()
+}
+
+private val CHROME_VERSION_REGEX = Regex("""\bChrome/(\d+(?:\.\d+)*)""")
 
 /**
  * Super DeepSeek - React standalone + hidden DeepSeek WebView for official login
@@ -38,14 +205,6 @@ import androidx.webkit.WebViewAssetLoader
  *   CloudFront challenge tokens. This solves "Failed to fetch" because DeepSeek API is behind
  *   AWS WAF that requires browser cookies. The hidden WebView's cookies are shared via
  *   CookieManager and used by OkHttp in WebViewBridge for official API calls.
- * 
- * Login flow:
- * 1. User enters email/password in React SPA
- * 2. React calls window.AndroidBridge.dsLoginNative(payload, callbackId)
- * 3. WebViewBridge uses OkHttp with CookieManager cookies to POST to /api/v0/users/login
- *    with proper headers (Origin, Referer, X-Client-*, User-Agent)
- * 4. If WAF challenge blocks (202), it waits for hiddenWebView to solve it, retries
- * 5. Returns token to React via JS callback, React stores account and proceeds to real chat
  */
 class MainActivity : ComponentActivity() {
 
@@ -89,14 +248,11 @@ class MainActivity : ComponentActivity() {
         cookieManager.setAcceptCookie(true)
 
         bridge = WebViewBridge(applicationContext)
-        // Asset loader serves from android/app/src/main/assets/ root
-        // React SPA is built to android/app/src/main/assets/ with android-spa.html at root
         assetLoader = WebViewAssetLoader.Builder()
             .setDomain("appassets.androidplatform.net")
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
-        // Main WebView - React SPA
         mainWebView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -153,7 +309,6 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(Color.BLACK)
         }
 
-        // Hidden WebView - loads official DeepSeek to get WAF cookies
         hiddenWebView = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(1, 1).apply {
                 leftMargin = -10
@@ -190,11 +345,9 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(Color.TRANSPARENT)
         }
 
-        // Enable third-party cookies for both WebViews (needed for DeepSeek WAF)
         cookieManager.setAcceptThirdPartyCookies(mainWebView, true)
         cookieManager.setAcceptThirdPartyCookies(hiddenWebView, true)
 
-        // Link bridge to WebViews
         bridge.mainWebView = mainWebView
         bridge.hiddenWebView = hiddenWebView
         bridge.evaluateJs = { script -> mainWebView.post { mainWebView.evaluateJavascript(script, null) } }
