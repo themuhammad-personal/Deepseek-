@@ -15,7 +15,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
-import kotlin.math.maxOf
 
 /**
  * Super DeepSeek V2 - Completely Rebuilt
@@ -88,7 +87,8 @@ class MainActivity : ComponentActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, maxOf(systemBars.bottom, ime.bottom))
+            val bottom = if (systemBars.bottom > ime.bottom) systemBars.bottom else ime.bottom
+            view.setPadding(systemBars.left, systemBars.top, systemBars.right, bottom)
             insets
         }
 
