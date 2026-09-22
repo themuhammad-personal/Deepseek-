@@ -43,13 +43,8 @@ import java.io.File
 
 internal fun applyRootWindowInsets(view: View, windowInsets: WindowInsetsCompat): WindowInsetsCompat {
     val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-    val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
-    val isImeVisible = windowInsets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0
-
-    // When the soft keyboard (IME) is visible, Android's adjustResize handles resizing the view.
-    // Applying IME height as additional bottom padding causes double-resizing and violent chat bar jitter.
-    // Pad for navigation bar ONLY when keyboard is not visible.
-    val bottomInset = if (isImeVisible) 0 else systemBars.bottom
+    val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
+    val bottomInset = maxOf(systemBars.bottom, ime.bottom)
     view.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomInset)
     view.translationY = 0f
     return windowInsets
