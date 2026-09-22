@@ -13,37 +13,41 @@ export function LoginScreen() {
   const busy = useAppStore((s) => s.ui.loginBusy);
   const error = useAppStore((s) => s.ui.loginError);
   const [tab, setTab] = useState<Tab>("email");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("thealaminpersonal@gmail.com");
   const [phone, setPhone] = useState("");
   const [area, setArea] = useState("+880");
   const [password, setPassword] = useState("");
   const [wafStatus, setWafStatus] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    const checkBridge = () => {
-      const bridge = (window as any).AndroidBridge;
-      if (bridge?.dsLoginNative) {
-        setWafStatus("Native bridge ready - WAF cookies solving in background...");
-        setTimeout(() => setWafStatus(""), 5000);
-      } else {
-        setWafStatus("Initializing secure connection...");
-        setTimeout(() => setWafStatus(""), 3000);
-      }
-    };
-    checkBridge();
+    const bridge = (window as any).AndroidBridge;
+    if (bridge?.dsLoginNative) {
+      setWafStatus("✅ Native bridge ready - hidden WebView solving WAF in background (2-3 sec)...");
+      setTimeout(() => setWafStatus(""), 4000);
+    }
   }, []);
+
+  async function doLogin(attempt = 0): Promise<{ token: string; email: string; mobile: string }> {
+    return dsLoginDirect(
+      tab === "email"
+        ? { email: email.trim(), password }
+        : { mobile: phone.trim(), area_code: area, password }
+    );
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const store = useAppStore.getState();
     store.setLoginError("");
     store.setLoginBusy(true);
-    setWafStatus("Connecting to DeepSeek...");
+    
     try {
       let token: string | undefined
       let retEmail: string | undefined
       let retMobile: string | undefined
 
+      // Try server API first (web)
       try {
         const res = await fetch("/api/ds/login", {
           method: "POST",
@@ -54,12 +58,7 @@ export function LoginScreen() {
               : { mobile: phone.trim(), area_code: area, password },
           ),
         });
-        const json = (await res.json()) as {
-          token?: string;
-          email?: string;
-          mobile?: string;
-          error?: string;
-        };
+        const json = (await res.json()) as any;
         if (res.ok && json.token) {
           token = json.token
           retEmail = json.email
@@ -68,26 +67,37 @@ export function LoginScreen() {
           throw new Error(json.error || "Login failed")
         }
       } catch (err) {
-        console.log("[Login] Server API failed, trying official DeepSeek via native bridge:", err)
-        setWafStatus("Trying official DeepSeek login via hidden WebView (bypass WAF)...")
-        try {
-          const direct = await dsLoginDirect(
-            tab === "email"
-              ? { email: email.trim(), password }
-              : { mobile: phone.trim(), area_code: area, password }
-          );
-          token = direct.token
-          retEmail = direct.email
-          retMobile = direct.mobile
-          setWafStatus("Login success via official API!")
-        } catch (directErr) {
-          const msg = directErr instanceof Error ? directErr.message : "Sign in failed"
-          console.error("[Login] Direct login failed:", msg)
-          if (msg.includes("WAF") || msg.includes("wait") || msg.includes("challenge")) {
-            setWafStatus("WAF challenge solving... Please wait 5 sec and retry")
+        console.log("[Login] Server API failed, trying official DeepSeek via hidden WebView:", err)
+        
+        // Try up to 3 times with WAF wait
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (attempt === 0) {
+              setWafStatus("🔐 Trying official DeepSeek login via hidden WebView (bypass WAF)...")
+            } else {
+              setWafStatus(`⏳ WAF solving... retry ${attempt + 1}/3 (wait 3 sec)...`)
+              await new Promise(r => setTimeout(r, 3000))
+            }
+            
+            const direct = await doLogin(attempt);
+            token = direct.token
+            retEmail = direct.email
+            retMobile = direct.mobile
+            setWafStatus("✅ Login success via official API!")
+            break
+          } catch (directErr) {
+            const msg = directErr instanceof Error ? directErr.message : "Sign in failed"
+            console.error(`[Login] Attempt ${attempt + 1} failed:`, msg)
+            
+            if (msg.includes("WAF") && attempt < 2) {
+              setWafStatus(`🛡️ WAF challenge solving... Please wait 5 sec and retry (${attempt + 1}/3)`)
+              setRetryCount(attempt + 1)
+              continue
+            }
+            
+            store.setLoginError(msg)
+            return
           }
-          store.setLoginError(msg)
-          return
         }
       }
 
@@ -100,7 +110,7 @@ export function LoginScreen() {
         email: retEmail || email.trim(),
         mobile: retMobile || phone.trim(),
       });
-      setWafStatus("Signed in! Loading workspace...")
+      setWafStatus("🎉 Signed in! Loading workspace...")
     } catch {
       store.setLoginError(t(locale, "loginFailed"));
     } finally {
@@ -205,7 +215,21 @@ export function LoginScreen() {
           ) : null}
 
           {error ? (
-            <p className="rounded-[var(--radius-sm)] bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>
+            <div className="space-y-2">
+              <p className="rounded-[var(--radius-sm)] bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>
+              {error.includes("WAF") ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWafStatus("🔄 Retrying after WAF wait...");
+                    setTimeout(() => onSubmit(new Event('submit') as any), 1000)
+                  }}
+                  className="w-full rounded-[var(--radius-sm)] bg-elevated px-3 py-2 text-xs text-accent"
+                >
+                  Retry after 3 sec (attempt {retryCount + 1})
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <button
@@ -217,7 +241,7 @@ export function LoginScreen() {
           </button>
 
           <p className="pt-2 text-center text-[11px] leading-4 text-faint">
-            {t(locale, "loginFooter")} • Official login via hidden WebView (bypass WAF)
+            {t(locale, "loginFooter")} • Official login via hidden WebView (bypass WAF) • Auto-retry 3x
           </p>
         </form>
       </div>

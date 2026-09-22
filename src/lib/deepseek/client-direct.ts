@@ -27,7 +27,6 @@ function unwrap<T>(json: Envelope<T>, fallback: string): T {
   return biz.biz_data
 }
 
-// ── Native Android Bridge for official DeepSeek login (bypass CORS + WAF) ──
 declare global {
   interface Window {
     AndroidBridge?: {
@@ -48,11 +47,10 @@ function dsLoginViaNative(body: DsLoginBody): Promise<{ token: string; email: st
     const callbackId = Math.random().toString(36).slice(2) + Date.now().toString(36)
     window._dsLoginCallbacks = window._dsLoginCallbacks || {}
     
-    // Timeout after 30s
     const timer = setTimeout(() => {
       delete window._dsLoginCallbacks![callbackId]
-      reject('Login timeout - WAF challenge solving, please wait and retry')
-    }, 30000)
+      reject('WAF challenge solving... Please wait 5 sec and retry')
+    }, 15000)
 
     window._dsLoginCallbacks[callbackId] = {
       resolve: (data: any) => {
@@ -83,26 +81,45 @@ function dsLoginViaNative(body: DsLoginBody): Promise<{ token: string; email: st
   })
 }
 
+// Retry wrapper for WAF
+async function dsLoginViaNativeWithRetry(body: DsLoginBody, retries = 2): Promise<{ token: string; email: string; mobile: string }> {
+  let lastErr: any
+  for (let i = 0; i <= retries; i++) {
+    try {
+      if (i > 0) {
+        console.log(`[Login] Retry ${i}/${retries} after WAF wait...`)
+        await new Promise(r => setTimeout(r, 3000 + i * 1000))
+      }
+      const res = await dsLoginViaNative(body)
+      return res
+    } catch (e) {
+      lastErr = e
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('WAF') && i < retries) {
+        console.log(`[Login] WAF detected, will retry ${i+1}/${retries}`)
+        continue
+      }
+      throw e
+    }
+  }
+  throw lastErr
+}
+
 export async function dsLoginDirect(body: DsLoginBody) {
-  // 1. Try native Android bridge first (official, bypasses CORS + WAF via hidden WebView cookies)
   if (typeof window !== 'undefined' && (window as any).AndroidBridge?.dsLoginNative) {
     try {
-      console.log('[Login] Trying native bridge...')
-      const nativeRes = await dsLoginViaNative(body)
+      console.log('[Login] Trying native bridge with retry...')
+      const nativeRes = await dsLoginViaNativeWithRetry(body, 2)
       if (nativeRes.token) {
         console.log('[Login] Native bridge SUCCESS')
         return nativeRes
       }
     } catch (e) {
-      console.warn('[Login] Native bridge failed, falling back to fetch:', e)
-      const msg = e instanceof Error ? e.message : String(e)
-      if (msg.includes('WAF') || msg.includes('wait')) {
-        throw new Error(msg)
-      }
+      console.warn('[Login] Native bridge failed:', e)
+      throw e
     }
   }
 
-  // 2. Try direct fetch (will fail on Android due to CORS/WAF, but works on web)
   const payload = {
     email: body.email?.trim() || null,
     mobile: body.mobile?.trim() || null,
@@ -111,36 +128,28 @@ export async function dsLoginDirect(body: DsLoginBody) {
     device_id: newDeviceId(),
     os: 'web',
   }
-  try {
-    const res = await fetch(`${DS_API}/users/login`, {
-      method: 'POST',
-      headers: dsHeaders(),
-      body: JSON.stringify(payload),
-    })
-    const json = (await res.json()) as Envelope<{
-      user?: { token?: string; email?: string; mobile?: string; id?: string }
-      token?: string
-    }>
-    if (!res.ok) throw new Error(`Login failed (${res.status})`)
-    const data = unwrap(json, 'Email or password is incorrect.')
-    const user = (data.user ?? data) as {
-      token?: string
-      email?: string
-      mobile?: string
-    }
-    const token = user.token || (data as any).token
-    if (!token) throw new Error('DeepSeek did not return a session.')
-    return {
-      token,
-      email: user.email || body.email || '',
-      mobile: user.mobile || body.mobile || '',
-    }
-  } catch (fetchErr) {
-    const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
-    if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-      throw new Error('Network blocked by WAF. Please wait 5 seconds for hidden WebView to solve challenge and retry. If persists, restart app.')
-    }
-    throw fetchErr
+  const res = await fetch(`${DS_API}/users/login`, {
+    method: 'POST',
+    headers: dsHeaders(),
+    body: JSON.stringify(payload),
+  })
+  const json = (await res.json()) as Envelope<{
+    user?: { token?: string; email?: string; mobile?: string; id?: string }
+    token?: string
+  }>
+  if (!res.ok) throw new Error(`Login failed (${res.status})`)
+  const data = unwrap(json, 'Email or password is incorrect.')
+  const user = (data.user ?? data) as {
+    token?: string
+    email?: string
+    mobile?: string
+  }
+  const token = user.token || (data as any).token
+  if (!token) throw new Error('DeepSeek did not return a session.')
+  return {
+    token,
+    email: user.email || body.email || '',
+    mobile: user.mobile || body.mobile || '',
   }
 }
 
