@@ -3,6 +3,7 @@ package com.betterdeepseek.app
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -14,6 +15,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import kotlin.math.maxOf
 
 /**
  * Super DeepSeek V2 - Completely Rebuilt
