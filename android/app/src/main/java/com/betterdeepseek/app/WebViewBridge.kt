@@ -269,9 +269,9 @@ class WebViewBridge(
     private val httpClient: OkHttpClient =
             httpClient
                     ?: OkHttpClient.Builder()
-                            .connectTimeout(20, TimeUnit.SECONDS)
-                            .readTimeout(60, TimeUnit.SECONDS)
-                            .callTimeout(120, TimeUnit.SECONDS)
+                            .connectTimeout(4, TimeUnit.SECONDS)
+                            .readTimeout(8, TimeUnit.SECONDS)
+                            .callTimeout(12, TimeUnit.SECONDS)
                             .build()
 
     /** Set by MainActivity to react to page theme changes without leaking the Activity window. */

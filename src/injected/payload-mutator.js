@@ -374,14 +374,15 @@ export function buildHiddenPrefix(
     }
   }
 
-  // Inject skills if it's the first turn OR if skills have changed
+  // Inject skills if it's the first turn with a custom system prompt OR if skills have changed
   const currentSkillsFingerprint = getSkillsFingerprint(state.config.skills);
   let lastSkillsFingerprint = null;
   if (!forceSystemPrompt && messages) {
     lastSkillsFingerprint = getLastSkillsFingerprintInHistory(messages, excludeTarget);
   }
 
-  if (forceSystemPrompt || (currentSkillsFingerprint && currentSkillsFingerprint !== lastSkillsFingerprint)) {
+  const hasCustomPrompt = Boolean(state.config.systemPrompt && state.config.systemPrompt.trim());
+  if ((forceSystemPrompt && hasCustomPrompt) || (currentSkillsFingerprint && currentSkillsFingerprint !== lastSkillsFingerprint)) {
     const skillsBlock = buildSkillsBlock(state);
     if (skillsBlock) {
       blocks.push(skillsBlock);

@@ -1356,14 +1356,6 @@ function syncVisibilityState(node, isLatestAssistant, stateData, isSettled) {
     hideMessageNode(node, false);
   }
 
-  // --- VOICE OUTPUT (TTS) ---
-  if (isLatestAssistant && isSettled && state.settings.voiceMode) {
-    if (!readMessages.has(node)) {
-      readMessages.add(node);
-      playVoiceResponse(stateData.lastRawText);
-    }
-  }
-
   // --- TOKEN PRICE DISPLAY (assistant messages) ---
   if (isSettled && state.settings.tokenPriceDisplay && !stateData.priceInjected) {
     stateData.priceInjected = true;

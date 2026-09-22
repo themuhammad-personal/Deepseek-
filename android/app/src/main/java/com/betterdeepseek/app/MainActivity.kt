@@ -44,13 +44,15 @@ import java.io.File
 internal fun applyRootWindowInsets(view: View, windowInsets: WindowInsetsCompat): WindowInsetsCompat {
     val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
     val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
-    val bottomInset = maxOf(systemBars.bottom, imeInsets.bottom)
+    val isImeVisible = windowInsets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0
 
-    // Resize the WebView host from the bottom so the top of the viewport stays anchored like a
-    // normal adjustResize layout, while still preserving the persistent system-bar insets.
+    // When the soft keyboard (IME) is visible, Android's adjustResize handles resizing the view.
+    // Applying IME height as additional bottom padding causes double-resizing and violent chat bar jitter.
+    // Pad for navigation bar ONLY when keyboard is not visible.
+    val bottomInset = if (isImeVisible) 0 else systemBars.bottom
     view.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomInset)
     view.translationY = 0f
-    return WindowInsetsCompat.CONSUMED
+    return windowInsets
 }
 
 internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
@@ -439,23 +441,6 @@ class MainActivity : ComponentActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout, ::applyRootWindowInsets)
 
-        // Smooth 60/120Hz frame-synchronized keyboard insets animation
-        ViewCompat.setWindowInsetsAnimationCallback(
-            rootLayout,
-            object : androidx.core.view.WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
-                override fun onProgress(
-                    insets: WindowInsetsCompat,
-                    runningAnimations: MutableList<androidx.core.view.WindowInsetsAnimationCompat>
-                ): WindowInsetsCompat {
-                    val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-                    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-                    val bottomInset = maxOf(systemBars.bottom, imeInsets.bottom)
-                    rootLayout.setPadding(systemBars.left, systemBars.top, systemBars.right, bottomInset)
-                    return insets
-                }
-            }
-        )
-
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = !isPageDark
             isAppearanceLightNavigationBars = !isPageDark
@@ -733,6 +718,13 @@ class MainActivity : ComponentActivity() {
                     injectEarlySuppressCss(view)
                 }
 
+                override fun onPageCommitVisible(view: WebView, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    if (url?.startsWith("https://chat.deepseek.com") == true) {
+                        injectBdsScripts(view)
+                    }
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     isPageReady = true
@@ -748,8 +740,13 @@ class MainActivity : ComponentActivity() {
             object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     super.onProgressChanged(view, newProgress)
-                    if (newProgress in 15..80 && view != null) {
-                        injectEarlySuppressCss(view)
+                    if (view != null) {
+                        if (newProgress in 15..80) {
+                            injectEarlySuppressCss(view)
+                        }
+                        if (newProgress >= 50 && view.url?.startsWith("https://chat.deepseek.com") == true) {
+                            injectBdsScripts(view)
+                        }
                     }
                 }
 
@@ -1058,32 +1055,68 @@ class MainActivity : ComponentActivity() {
         val script = """
             (function() {
                 var id = 'bds-early-banner-suppress';
-                if (document.getElementById(id)) return;
-                var style = document.createElement('style');
-                style.id = id;
-                style.textContent = `
-                    [class*="mobile-banner"],
-                    [class*="app-banner"],
-                    [class*="download-banner"],
-                    [class*="get-app"],
-                    [class*="download-app"],
-                    [class*="client-banner"],
-                    [class*="install-banner"],
-                    [class*="open-in-app"],
-                    [class*="header-banner"],
-                    div:has(> a[href*="download"]),
-                    div:has(> a[href*="/app"]) {
-                        display: none !important;
-                        height: 0 !important;
-                        min-height: 0 !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        visibility: hidden !important;
-                        pointer-events: none !important;
+                if (!document.getElementById(id)) {
+                    var style = document.createElement('style');
+                    style.id = id;
+                    style.textContent = `
+                        [class*="mobile-banner"],
+                        [class*="app-banner"],
+                        [class*="download-banner"],
+                        [class*="get-app"],
+                        [class*="download-app"],
+                        [class*="client-banner"],
+                        [class*="install-banner"],
+                        [class*="open-in-app"],
+                        [class*="header-banner"],
+                        header [class*="banner"],
+                        div:has(> a[href*="download"]),
+                        div:has(> a[href*="/app"]) {
+                            display: none !important;
+                            height: 0 !important;
+                            min-height: 0 !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            visibility: hidden !important;
+                            pointer-events: none !important;
+                        }
+                    `;
+                    var target = document.head || document.documentElement;
+                    if (target) target.appendChild(style);
+                }
+
+                // Early banner suppressor mutation observer
+                function hideBanners() {
+                    var els = document.querySelectorAll('div, header, section');
+                    for (var i = 0; i < Math.min(els.length, 40); i++) {
+                        var el = els[i];
+                        if (el && el.textContent && (el.textContent.includes('Get App') || el.textContent.includes('Download App'))) {
+                            var rect = el.getBoundingClientRect();
+                            if (rect.top <= 140 && rect.height > 0 && rect.height < 200) {
+                                el.style.setProperty('display', 'none', 'important');
+                            }
+                        }
                     }
-                `;
-                var target = document.head || document.documentElement;
-                if (target) target.appendChild(style);
+                }
+                hideBanners();
+                if (!window.__bdsBannerObserver && document.documentElement) {
+                    window.__bdsBannerObserver = new MutationObserver(hideBanners);
+                    window.__bdsBannerObserver.observe(document.documentElement, { childList: true, subtree: true });
+                }
+
+                // Startup splash mask to prevent raw DeepSeek interface lingering
+                if (!document.getElementById('bds-startup-mask') && document.body) {
+                    var mask = document.createElement('div');
+                    mask.id = 'bds-startup-mask';
+                    mask.style.cssText = 'position:fixed;inset:0;background:#000000;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.25s ease;pointer-events:all;';
+                    mask.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:16px;"><svg width="60" height="60" viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="42" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-dasharray="180" stroke-dashoffset="45"><animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="1.2s" repeatCount="indefinite"/></circle><path d="M35 52C35 44 42 38 50 38C58 38 65 44 65 52C65 60 58 66 50 66C45 66 41 64 38 60L32 63" stroke="#3b82f6" stroke-width="4" stroke-linecap="round"/></svg><span style="color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:18px;font-weight:600;letter-spacing:0.5px;">Super DeepSeek</span></div>';
+                    document.body.appendChild(mask);
+                    setTimeout(function() {
+                        if (mask && mask.parentNode) {
+                            mask.style.opacity = '0';
+                            setTimeout(function() { if (mask.parentNode) mask.parentNode.removeChild(mask); }, 250);
+                        }
+                    }, 3500);
+                }
             })();
         """.trimIndent()
         view.evaluateJavascript(script, null)
@@ -1124,7 +1157,17 @@ class MainActivity : ComponentActivity() {
         // content.js installs Android platform helpers, mounts the UI, and calls
         // startThemeWatcher(), which persists pageIsDark via chrome.storage and fires
         // AndroidBridge.reportTheme() for the live native bar-icon colour update.
-        view.evaluateJavascript(content, null)
+        view.evaluateJavascript(content) {
+            view.evaluateJavascript("""
+                (function() {
+                    var mask = document.getElementById('bds-startup-mask');
+                    if (mask) {
+                        mask.style.opacity = '0';
+                        setTimeout(function() { if (mask.parentNode) mask.parentNode.removeChild(mask); }, 250);
+                    }
+                })();
+            """.trimIndent(), null)
+        }
     }
 
     private fun getMaterialYouAccentHex(): String? {

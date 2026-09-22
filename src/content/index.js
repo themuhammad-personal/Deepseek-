@@ -80,10 +80,16 @@ async function init() {
   checkPendingExport();
   checkPendingMemoryImport();
   pushConfigToPage();
-  import("./bridge.js").then(async (m) => {
-    await m.discoverMcpToolSchemas();
-    pushConfigToPage();
-  });
+  if (state.mcpServers?.some(s => s.enabled)) {
+    import("./bridge.js").then(async (m) => {
+      try {
+        await m.discoverMcpToolSchemas();
+        pushConfigToPage();
+      } catch (e) {
+        console.warn("[BDS] Background MCP discovery error:", e);
+      }
+    });
+  }
   startStatusMonitor();
   startThemeWatcher();
 
@@ -122,8 +128,6 @@ async function init() {
       } else {
         window.location.href = "https://chat.deepseek.com/";
       }
-    } else if (action === "voice_mode") {
-      window.dispatchEvent(new CustomEvent("bds:toggle-voice-mode"));
     } else if (action === "deep_research") {
       window.dispatchEvent(new CustomEvent("bds:toggle-deep-research"));
     }

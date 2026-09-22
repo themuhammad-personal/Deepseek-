@@ -284,14 +284,10 @@ function handleHistoryMessages(data) {
 export async function pushConfigToPage() {
   try {
     const activeProject = getActiveProject();
-    let activeSystemPrompt;
-    if (!state.settings.activeSystemPromptId || state.settings.activeSystemPromptId === "default") {
-      activeSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    } else if (Array.isArray(state.settings.customSystemPrompts)) {
+    let activeSystemPrompt = "";
+    if (state.settings.activeSystemPromptId && state.settings.activeSystemPromptId !== "default" && Array.isArray(state.settings.customSystemPrompts)) {
       const custom = state.settings.customSystemPrompts.find(p => p.id === state.settings.activeSystemPromptId);
-      activeSystemPrompt = custom ? custom.content : DEFAULT_SYSTEM_PROMPT;
-    } else {
-      activeSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+      activeSystemPrompt = custom ? custom.content : "";
     }
 
     const projectRagEnabled = Boolean(state.settings.projectRagEnabled);
@@ -313,7 +309,8 @@ export async function pushConfigToPage() {
 
     const allFiles = [...activeProjectFiles, ...localDirFiles];
 
-    const mcpSchemas = await discoverMcpToolSchemas();
+    // Read cached schemas synchronously — NEVER block config pushes or settings saving on network calls!
+    const mcpSchemas = state.mcpToolSchemas || [];
 
     const detail = {
       mcpToolSchemas: mcpSchemas,
@@ -459,11 +456,15 @@ export async function discoverMcpToolSchemas({ force = false } = {}) {
     const results = await Promise.allSettled(
       enabledServers.map(server =>
         new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            resolve({ serverName: server.name, serverUrl: server.serverUrl, tools: [] });
+          }, 2000);
           chrome.runtime.sendMessage(
             { type: "bds-mcp-list-tools", serverUrl: server.serverUrl, apiKey: server.apiKey || "" },
             (response) => {
+              clearTimeout(timer);
               if (response?.ok) resolve({ serverName: server.name, serverUrl: server.serverUrl, tools: response.tools });
-              else reject(new Error(response?.error || "Failed to list tools"));
+              else resolve({ serverName: server.name, serverUrl: server.serverUrl, tools: [] });
             }
           );
         })

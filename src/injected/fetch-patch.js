@@ -128,6 +128,14 @@ export function patchFetch(state, isChatCompletionUrl, markStart, markEnd) {
 function tryCaptureTokenUsage(response, url, modelName) {
   if (!response || !response.clone) return;
   try {
+    const contentType = response.headers?.get("content-type") || "";
+    // CRITICAL: NEVER clone active streaming responses (SSE / text/event-stream) on Android WebView!
+    // In Chromium Android WebView, cloning active server-sent event responses blocks or locks
+    // the underlying stream and starves DeepSeek's frontend React reader, causing the "..." loading state
+    // and infinite spinner.
+    if (contentType.includes("text/event-stream") || contentType.includes("stream") || (url && url.includes("/chat/completion"))) {
+      return;
+    }
     const cloned = response.clone();
     readResponseForUsage(cloned, modelName).catch(() => {});
   } catch (e) {
