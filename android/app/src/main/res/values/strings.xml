@@ -22,6 +22,5 @@
 
     <!-- App Shortcuts -->
     <string name="shortcut_new_chat">New Chat</string>
-    <string name="shortcut_voice">Voice Mode</string>
     <string name="shortcut_deep_research">Deep Research</string>
 </resources>

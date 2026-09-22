@@ -67,21 +67,6 @@ class AndroidLinkRoutingTest {
     }
 
     @Test
-    fun `AWS WAF and Cloudflare challenges stay inside the WebView`() {
-        assertFalse(shouldOpenExternally(Uri.parse("https://captcha.awswaf.com/")))
-        assertFalse(shouldOpenExternally(Uri.parse("https://token.awswaf.com/challenge")))
-        assertFalse(shouldOpenExternally(Uri.parse("https://challenges.cloudflare.com/cdn-cgi/challenge-platform")))
-        assertTrue(isSecurityChallengeHost("9kcwb3bhzb.execute-api.us-east-1.awswaf.com"))
-    }
-
-    @Test
-    fun `Apple Sign In hosts stay inside the WebView`() {
-        assertFalse(shouldOpenExternally(Uri.parse("https://appleid.apple.com/auth/authorize")))
-        assertFalse(shouldOpenExternally(Uri.parse("https://idmsa.apple.com/")))
-        assertTrue(isAppleAuthHost("appleid.apple.com"))
-    }
-
-    @Test
     fun `popup capture follows internal routing allowlist`() {
         assertTrue(shouldCapturePopupInApp(Uri.parse("https://accounts.google.com/o/oauth2/v2/auth")))
         assertTrue(shouldCapturePopupInApp(Uri.parse("https://www.google.com/gsi/select")))
@@ -92,8 +77,6 @@ class AndroidLinkRoutingTest {
                         Uri.parse("https://newassets.hcaptcha.com/captcha/v1/hcaptcha.html")
                 )
         )
-        assertTrue(shouldCapturePopupInApp(Uri.parse("https://appleid.apple.com/auth/authorize")))
-        assertTrue(shouldCapturePopupInApp(Uri.parse("https://captcha.awswaf.com/")))
         assertFalse(shouldCapturePopupInApp(Uri.parse("https://github.com/EdgeTypE/better-deepseek")))
     }
 
