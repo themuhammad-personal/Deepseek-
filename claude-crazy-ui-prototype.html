@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super DeepSeek - Claude Level Crazy UI Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #FAF9F5;
+  --paper-dark: #121212;
+  --ink: #0D0D0D;
+  --ink-dark: #E8E8E6;
+  --ink-muted: #6B6B6B;
+  --ink-dim: #9A9A9A;
+  --border: #E8E3DC;
+  --border-dark: #2A2A2A;
+  --accent: #D97757;
+  --accent-blue: #4D6BFE;
+  --accent-green: #10B981;
+  --bg-user: #EDE9E3;
+  --bg-user-dark: #1E1E1E;
+  --bg-card: #FFFFFF;
+  --bg-card-dark: #1C1C1E;
+  --radius-xl: 24px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow-soft: 0 8px 32px rgba(0,0,0,0.06);
+  --shadow-medium: 0 16px 48px rgba(0,0,0,0.12);
+  --blur: 24px;
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: var(--paper-dark);
+    --ink: var(--ink-dark);
+    --border: var(--border-dark);
+    --bg-card: var(--bg-card-dark);
+    --bg-user: var(--bg-user-dark);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 280px;
+  background: rgba(250, 249, 245, 0.8);
+  backdrop-filter: blur(var(--blur)) saturate(180%);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.4s var(--ease-spring);
+  z-index: 20;
+}
+.sidebar-header {
+  height: 64px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.5px;
+}
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+}
+.new-chat-btn {
+  margin: 14px 12px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-soft);
+}
+.new-chat-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-medium); }
+.new-chat-btn:active { transform: scale(0.98); }
+
+.search-bar {
+  margin: 0 12px 12px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.search-bar kbd {
+  margin-left: auto;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'Geist Mono';
+}
+
+.history {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink-dim);
+  padding: 0 12px 6px;
+}
+.chat-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+.chat-item:hover { background: var(--bg-card); color: var(--ink); }
+.chat-item.active { background: var(--bg-user); color: var(--ink); font-weight: 500; }
+.chat-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.projects-section {
+  border-top: 1px solid var(--border);
+  padding: 14px 12px;
+}
+.project-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.project-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-soft); }
+.project-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #FEF3C7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4D6BFE, #8B5CF6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--paper);
+  min-width: 0;
+}
+
+.topbar {
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(250,249,245,0.8);
+  backdrop-filter: blur(20px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.model-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 6px 6px 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+.model-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+}
+.model-name { font-weight: 600; font-size: 13.5px; }
+.model-badge {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.top-actions { display: flex; gap: 8px; }
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ink-muted);
+  transition: all 0.15s;
+}
+.icon-btn:hover { background: var(--bg-user); color: var(--ink); }
+
+/* CHAT */
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.chat-container {
+  width: 100%;
+  max-width: 760px;
+  padding: 0 24px 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* WELCOME */
+.welcome {
+  text-align: center;
+  padding: 40px 0 20px;
+  animation: fadeUp 0.6s var(--ease-spring);
+}
+.welcome-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28px;
+  box-shadow: 0 12px 32px rgba(217,119,87,0.3);
+  animation: float 3s ease-in-out infinite;
+}
+.welcome h1 {
+  font-family: 'Sora', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+}
+.welcome p { color: var(--ink-muted); font-size: 15px; }
+.prompt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 28px;
+  text-align: left;
+}
+.prompt-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-spring);
+}
+.prompt-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); border-color: var(--accent); }
+.prompt-card-icon { font-size: 20px; margin-bottom: 8px; }
+.prompt-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.prompt-card-desc { font-size: 12.5px; color: var(--ink-muted); line-height: 1.4; }
+
+/* MESSAGES */
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeUp 0.4s var(--ease-spring);
+}
+.message.user { align-items: flex-end; }
+.bubble {
+  max-width: 85%;
+  padding: 14px 18px;
+  border-radius: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+  position: relative;
+}
+.user .bubble {
+  background: var(--bg-user);
+  border: 1px solid var(--border);
+  border-bottom-right-radius: 6px;
+  color: var(--ink);
+}
+.assistant .bubble {
+  background: transparent;
+  padding: 0;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.assistant-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ai-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* THINKING */
+.thinking {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin: 8px 0;
+}
+.thinking-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  user-select: none;
+}
+.thinking-header:hover { background: var(--paper); }
+.thinking-dots {
+  display: flex;
+  gap: 3px;
+}
+.thinking-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+  animation: bounce 1.4s infinite;
+}
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+.thinking-content {
+  padding: 0 16px 16px 44px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border);
+  margin-top: 0;
+  padding-top: 12px;
+  display: none;
+}
+.thinking.open .thinking-content { display: block; }
+.thinking.open .chevron { transform: rotate(180deg); }
+
+/* CODE */
+.code-block {
+  background: #0D0D0D;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid #2A2A2A;
+  box-shadow: var(--shadow-soft);
+}
+.code-header {
+  height: 44px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1A1A1A;
+  border-bottom: 1px solid #2A2A2A;
+}
+.code-lang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #A1A1AA;
+  font-size: 12.5px;
+  font-family: 'Geist Mono';
+  font-weight: 500;
+}
+.code-actions { display: flex; gap: 8px; }
+.code-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #27272A;
+  border: 1px solid #3F3F46;
+  color: #E4E4E7;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.code-btn.primary { background: white; color: black; border-color: white; }
+.code-content {
+  padding: 16px;
+  overflow-x: auto;
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #E4E4E7;
+}
+.code-content .keyword { color: #C084FC; }
+.code-content .string { color: #86EFAC; }
+.code-content .func { color: #60A5FA; }
+
+/* ARTIFACT */
+.artifact {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin: 12px 0;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.artifact:hover { box-shadow: var(--shadow-soft); transform: translateY(-1px); }
+.artifact-preview {
+  height: 180px;
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.artifact-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.6), transparent 70%);
+}
+.artifact-info {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.artifact-title { font-weight: 600; font-size: 14px; }
+.artifact-desc { font-size: 12.5px; color: var(--ink-muted); }
+
+/* MESSAGE ACTIONS */
+.msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.message:hover .msg-actions { opacity: 1; }
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ink-muted);
+  transition: all 0.15s;
+}
+.action-btn:hover { background: var(--bg-user); color: var(--ink); }
+
+/* COMPOSER - LIQUID GLASS CRAZY */
+.composer-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 20px 20px;
+  background: linear-gradient(to top, var(--paper) 20%, rgba(250,249,245,0) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 15;
+}
+.composer-container {
+  width: 100%;
+  max-width: 760px;
+  position: relative;
+}
+.file-carousel {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px 6px 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-soft);
+  animation: slideIn 0.3s var(--ease-spring);
+}
+.file-chip-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.file-chip-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.composer {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 28px;
+  box-shadow: 
+    0 8px 32px rgba(0,0,0,0.08),
+    0 0 0 1px rgba(255,255,255,0.6) inset,
+    0 1px 0 rgba(255,255,255,0.8) inset;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  transition: all 0.3s var(--ease-spring);
+  position: relative;
+  overflow: hidden;
+}
+.composer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(0,0,0,0.05));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: xor;
+  pointer-events: none;
+}
+.composer:focus-within {
+  border-color: rgba(77,107,254,0.3);
+  box-shadow: 
+    0 12px 40px rgba(0,0,0,0.12),
+    0 0 0 1px rgba(255,255,255,0.8) inset,
+    0 0 0 4px rgba(77,107,254,0.1);
+  transform: translateY(-1px);
+}
+
+.composer-plus {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s var(--ease-spring);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.composer-plus:hover { transform: scale(1.05) rotate(90deg); }
+.composer-plus:active { transform: scale(0.95); }
+
+.composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 8px 4px;
+  max-height: 160px;
+  min-height: 24px;
+  resize: none;
+  color: var(--ink);
+}
+.composer-input::placeholder { color: var(--ink-dim); }
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.composer-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--ink-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.composer-icon:hover { background: var(--bg-user); color: var(--ink); }
+.composer-icon.active { background: var(--ink); color: var(--paper); }
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-spring);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+.send-btn:hover { transform: scale(1.05); }
+.send-btn:active { transform: scale(0.95); }
+.send-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+.slash-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-medium);
+  overflow: hidden;
+  display: none;
+  animation: fadeUp 0.2s var(--ease-spring);
+  z-index: 20;
+}
+.slash-menu.open { display: block; }
+.slash-item {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.slash-item:hover, .slash-item.active { background: var(--paper); }
+.slash-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.slash-info { flex: 1; }
+.slash-title { font-weight: 600; font-size: 13.5px; }
+.slash-desc { font-size: 12px; color: var(--ink-muted); }
+
+/* ATTACH SHEET */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -16px 48px rgba(0,0,0,0.15);
+  z-index: 51;
+  transform: translateY(100%);
+  transition: transform 0.5s var(--ease-spring);
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.sheet.open { transform: translateY(0); }
+.sheet-handle {
+  width: 40px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 999px;
+  margin: 12px auto 8px;
+}
+.sheet-header {
+  padding: 8px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-title { font-weight: 700; font-size: 16px; }
+.sheet-grid {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  overflow-y: auto;
+}
+.sheet-option {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.sheet-option:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); border-color: var(--ink); }
+.sheet-option-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.sheet-option-title { font-weight: 600; font-size: 13px; }
+.sheet-option-desc { font-size: 11px; color: var(--ink-muted); }
+
+/* CANVAS PANEL */
+.canvas {
+  width: 480px;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transform: translateX(100%);
+  transition: transform 0.5s var(--ease-spring);
+  position: relative;
+  z-index: 15;
+}
+.canvas.open { transform: translateX(0); }
+.canvas-header {
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.canvas-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.canvas-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #0D0D0D;
+  color: #E4E4E7;
+}
+.preview-box {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  color: #0D0D0D;
+  box-shadow: var(--shadow-soft);
+}
+
+/* ANIMATIONS */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px) scale(0.95); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40% { transform: scale(1.2); opacity: 1; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .canvas { position: fixed; inset: 0 0 0 auto; width: 100%; }
+  .prompt-grid { grid-template-columns: 1fr; }
+  .sheet-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar open" id="sidebar">
+  <div class="sidebar-header">
+    <div class="brand">
+      <div class="brand-icon">S</div>
+      Super DeepSeek
+    </div>
+    <button class="icon-btn" onclick="toggleSidebar()">✕</button>
+  </div>
+  <button class="new-chat-btn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    New Chat
+  </button>
+  <div class="search-bar">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    Search chats...
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="history">
+    <div>
+      <div class="group-title">Today</div>
+      <div class="chat-item active">DeepSeek R1 reasoning analysis <span class="dot"></span></div>
+      <div class="chat-item">Build Claude-level UI with Svelte 5</div>
+      <div class="chat-item">Explain quantum computing like I'm 5</div>
+    </div>
+    <div>
+      <div class="group-title">Yesterday</div>
+      <div class="chat-item">50MB file upload optimization</div>
+      <div class="chat-item">MCP server integration for mobile</div>
+      <div class="chat-item">Android WebView security audit</div>
+    </div>
+    <div>
+      <div class="group-title">Previous 7 Days</div>
+      <div class="chat-item">Liquid glass design system</div>
+      <div class="chat-item">Voice mode with VAD processor</div>
+    </div>
+  </div>
+  <div class="projects-section">
+    <div class="group-title">Projects</div>
+    <div class="project-card">
+      <div class="project-icon">📁</div>
+      <div>
+        <div style="font-weight:600; font-size:13px;">Super DeepSeek APK</div>
+        <div style="font-size:11px; color:var(--ink-muted);">12 files • 3 chats</div>
+      </div>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="avatar">M</div>
+    <div style="flex:1;">
+      <div style="font-weight:600; font-size:13px;">Muhammad</div>
+      <div style="font-size:11px; color:var(--ink-muted);">Pro Plan • DeepSeek V3</div>
+    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button class="icon-btn" onclick="toggleSidebar()" style="display:none;" id="mobileMenuBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <div class="model-picker" onclick="toggleModelMenu()">
+        <div class="model-dot"></div>
+        <span class="model-name">DeepSeek</span>
+        <span class="model-badge">R1 • Thinking</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:4px;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" title="Share"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></button>
+      <button class="icon-btn" title="Canvas" onclick="toggleCanvas()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg></button>
+      <button class="icon-btn" title="More"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+    </div>
+  </div>
+
+  <div class="chat-area" id="chatArea">
+    <div class="chat-container" id="chatContainer">
+      <!-- WELCOME -->
+      <div class="welcome" id="welcome">
+        <div class="welcome-logo">✦</div>
+        <h1>Where should we start?</h1>
+        <p>DeepSeek R1 thinks deeper, now with Claude-level craft</p>
+        <div class="prompt-grid">
+          <div class="prompt-card" onclick="usePrompt('Build a liquid glass UI')">
+            <div class="prompt-card-icon">🎨</div>
+            <div class="prompt-card-title">Design liquid glass UI</div>
+            <div class="prompt-card-desc">Create iOS 26 style glass morphism with blur and depth</div>
+          </div>
+          <div class="prompt-card" onclick="usePrompt('Audit my Android app')">
+            <div class="prompt-card-icon">🔍</div>
+            <div class="prompt-card-title">Audit Android APK</div>
+            <div class="prompt-card-desc">Find security flaws and performance issues</div>
+          </div>
+          <div class="prompt-card" onclick="usePrompt('Explain MCP servers')">
+            <div class="prompt-card-icon">🔌</div>
+            <div class="prompt-card-title">Setup MCP servers</div>
+            <div class="prompt-card-desc">Brave Search, GitHub, Weather in 1-tap</div>
+          </div>
+          <div class="prompt-card" onclick="usePrompt('Optimize file uploads')">
+            <div class="prompt-card-icon">📂</div>
+            <div class="prompt-card-title">50MB file handling</div>
+            <div class="prompt-card-desc">Chunked upload without OOM on low-end devices</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SAMPLE MESSAGES -->
+      <div class="message user" style="display:none;" id="sampleUser">
+        <div class="bubble">এই রিপোজিটরিটা ক্লোন করে Claude AI এর মত প্রফেশনাল APK বানানোর প্ল্যান দাও, crazy UI সহ</div>
+      </div>
+
+      <div class="message assistant" style="display:none;" id="sampleAssistant">
+        <div class="assistant-header">
+          <div class="ai-avatar">R1</div>
+          <span style="font-weight:600; font-size:14px;">DeepSeek R1</span>
+          <span style="font-size:11px; color:var(--ink-dim); background:var(--paper); border:1px solid var(--border); padding:2px 8px; border-radius:999px;">Thought for 12s</span>
+        </div>
+        
+        <div class="thinking" id="thinking" onclick="this.classList.toggle('open')">
+          <div class="thinking-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A7.5 7.5 0 0 0 2 9.5c0 5.424 7.5 11.5 7.5 11.5S17 14.924 17 9.5A7.5 7.5 0 0 0 9.5 2z"></path><circle cx="9.5" cy="9.5" r="2.5"></circle></svg>
+            <span>Reasoning • Analyzed 7 architecture layers</span>
+            <div class="thinking-dots"><span></span><span></span><span></span></div>
+            <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto; transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+          <div class="thinking-content">
+            User wants Claude-level APK. Current app is WebView wrapper + content script. Main issues: keystore leaked, 3.4MB bundle, no custom renderer. Need to propose: hide DeepSeek DOM, render own chat with virtual list, liquid glass composer, artifacts canvas, MCP presets. Also need to fix security: origin check in WebViewBridge, secure server.js. Design tokens: warm paper #FAF9F5, terracotta accent. Motion: spring animations.
+          </div>
+        </div>
+
+        <div class="bubble">
+          <p style="margin-bottom:12px;">আপনার Super DeepSeek অ্যাপটি ইতিমধ্যে solid foundation আছে — কিন্তু Claude-level হতে হলে আমাদের <strong>Overlay থেকে Owner</strong> হতে হবে।</p>
+          <p style="margin-bottom:12px;">বর্তমানে আপনি DeepSeek ওয়েব UI এর উপরে ছোট overlay দেখাচ্ছেন। Claude এর মত হতে হলে DeepSeek UI পুরো hide করে নিজস্ব renderer বানাতে হবে।</p>
+          
+          <div class="code-block">
+            <div class="code-header">
+              <div class="code-lang">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                claude-chat.svelte
+              </div>
+              <div class="code-actions">
+                <button class="code-btn">Copy</button>
+                <button class="code-btn primary" onclick="toggleCanvas()">Open in Canvas</button>
+              </div>
+            </div>
+            <div class="code-content"><span class="keyword">import</span> { <span class="func">VirtualList</span> } <span class="keyword">from</span> <span class="string">'svelte-virtual'</span>;
+<span class="keyword">let</span> messages = <span class="func">$state</span>([]);
+
+<span class="keyword">function</span> <span class="func">hideDeepSeekUI</span>() {
+  document.<span class="func">querySelector</span>(<span class="string">'main'</span>).style.display = <span class="string">'none'</span>;
+  <span class="comment">// Render our own Claude-style chat</span>
+}</div>
+          </div>
+
+          <div class="artifact" onclick="toggleCanvas()">
+            <div class="artifact-preview">
+              <div style="background:white; padding:20px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.15); transform:rotate(-2deg);">
+                <div style="width:120px; height:80px; background:linear-gradient(135deg, #4D6BFE, #D97757); border-radius:8px; margin-bottom:8px;"></div>
+                <div style="height:8px; background:#E5E7EB; border-radius:4px; margin-bottom:6px;"></div>
+                <div style="height:8px; background:#E5E7EB; border-radius:4px; width:60%;"></div>
+              </div>
+            </div>
+            <div class="artifact-info">
+              <div>
+                <div class="artifact-title">Claude-Level Composer Prototype</div>
+                <div class="artifact-desc">Liquid glass • Spring animations • 60fps</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+          </div>
+
+          <p>নিচে 3 টি ফাইল তৈরি করেছি:</p>
+          <ul style="margin:12px 0 0 20px; line-height:1.8; color:var(--ink-muted);">
+            <li><strong>AUDIT_REPORT.md</strong> - 7 critical bugs + performance analysis</li>
+            <li><strong>CLAUDE_REDESIGN_PLAN.md</strong> - 10 weeks roadmap to Claude-level</li>
+            <li><strong>এই Prototype</strong> - Live demo of liquid glass UI</li>
+          </ul>
+        </div>
+        <div class="msg-actions">
+          <button class="action-btn" title="Copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3"></path></svg></button>
+          <button class="action-btn" title="Retry"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
+          <button class="action-btn" title="Branch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg></button>
+          <button class="action-btn" title="Good"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPOSER -->
+  <div class="composer-wrapper">
+    <div class="composer-container">
+      <div class="slash-menu" id="slashMenu">
+        <div class="slash-item active">
+          <div class="slash-icon">🎨</div>
+          <div class="slash-info"><div class="slash-title">/liquid-glass</div><div class="slash-desc">Generate iOS 26 glass morphism UI</div></div>
+          <kbd style="font-size:11px; background:var(--paper); border:1px solid var(--border); padding:2px 6px; border-radius:6px;">Tab</kbd>
+        </div>
+        <div class="slash-item">
+          <div class="slash-icon">🔍</div>
+          <div class="slash-info"><div class="slash-title">/audit</div><div class="slash-desc">Deep security & performance audit</div></div>
+        </div>
+        <div class="slash-item">
+          <div class="slash-icon">🔌</div>
+          <div class="slash-info"><div class="slash-title">/mcp</div><div class="slash-desc">Connect Brave, GitHub, Weather tools</div></div>
+        </div>
+        <div class="slash-item">
+          <div class="slash-icon">📁</div>
+          <div class="slash-info"><div class="slash-title">/project</div><div class="slash-desc">Add files to current project</div></div>
+        </div>
+      </div>
+
+      <div class="file-carousel" id="fileCarousel" style="display:none;">
+        <div class="file-chip"><div class="file-chip-icon">📄</div> architecture.md <div class="file-chip-remove">✕</div></div>
+        <div class="file-chip"><div class="file-chip-icon">🖼️</div> claude-ui.png <div class="file-chip-remove">✕</div></div>
+      </div>
+
+      <div class="composer">
+        <button class="composer-plus" onclick="toggleSheet()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <textarea class="composer-input" id="composerInput" placeholder="Ask DeepSeek anything... (Press / for commands)" rows="1" oninput="handleInput(this)" onkeydown="handleKeydown(event)"></textarea>
+        <div class="composer-actions">
+          <button class="composer-icon" title="Voice"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></button>
+          <button class="composer-icon" id="modelToggle" onclick="toggleModel()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></button>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:11px; color:var(--ink-dim);">DeepSeek can make mistakes. Verify important info. • <span style="text-decoration:underline; cursor:pointer;">Claude-level prototype by Super DeepSeek</span></div>
+    </div>
+  </div>
+</main>
+
+<!-- CANVAS -->
+<aside class="canvas" id="canvas">
+  <div class="canvas-header">
+    <div class="canvas-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+      Composer Prototype • Live
+    </div>
+    <button class="icon-btn" onclick="toggleCanvas()">✕</button>
+  </div>
+  <div class="canvas-content">
+    <div class="preview-box">
+      <h3 style="font-family:'Sora'; margin-bottom:12px;">Liquid Glass Composer</h3>
+      <div style="background:rgba(255,255,255,0.8); backdrop-filter:blur(24px); border:1px solid rgba(0,0,0,0.08); border-radius:28px; padding:12px; display:flex; gap:8px; box-shadow:0 8px 32px rgba(0,0,0,0.08);">
+        <div style="width:36px; height:36px; border-radius:50%; background:black; display:flex; align-items:center; justify-content:center; color:white;">+</div>
+        <div style="flex:1; padding:8px; color:#9A9A9A;">Ask anything...</div>
+        <div style="width:36px; height:36px; border-radius:50%; background:black; display:flex; align-items:center; justify-content:center; color:white;">↗</div>
+      </div>
+      <p style="margin-top:16px; font-size:13px; line-height:1.6; color:#6B6B6B;">
+        This is the crazy UI: backdrop-filter blur 24px + saturate 180%, layered shadows, inner glow border, spring animation on focus. Feels like iOS 26.
+      </p>
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <div style="flex:1; height:80px; background:#FAF9F5; border:1px solid #E8E3DC; border-radius:12px; padding:12px;">
+          <div style="width:24px; height:24px; background:#4D6BFE; border-radius:8px; margin-bottom:8px;"></div>
+          <div style="height:6px; background:#E8E3DC; border-radius:3px; margin-bottom:4px;"></div>
+          <div style="height:6px; background:#E8E3DC; border-radius:3px; width:60%;"></div>
+        </div>
+        <div style="flex:1; height:80px; background:#FAF9F5; border:1px solid #E8E3DC; border-radius:12px; padding:12px;">
+          <div style="width:24px; height:24px; background:#D97757; border-radius:8px; margin-bottom:8px;"></div>
+          <div style="height:6px; background:#E8E3DC; border-radius:3px; margin-bottom:4px;"></div>
+          <div style="height:6px; background:#E8E3DC; border-radius:3px; width:60%;"></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px; padding:16px; background:#1A1A1A; border-radius:12px; border:1px solid #2A2A2A;">
+      <div style="font-family:'Geist Mono'; font-size:12px; color:#A1A1AA; margin-bottom:8px;">// Motion config - spring physics</div>
+      <div style="font-family:'Geist Mono'; font-size:13px; color:#E4E4E7; line-height:1.6;">
+        <span style="color:#C084FC;">const</span> spring = {<br>
+        &nbsp;&nbsp;stiffness: <span style="color:#86EFAC;">400</span>,<br>
+        &nbsp;&nbsp;damping: <span style="color:#86EFAC;">30</span>,<br>
+        &nbsp;&nbsp;ease: <span style="color:#86EFAC;">[0.16, 1, 0.3, 1]</span><br>
+        }
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ATTACH SHEET -->
+<div class="sheet-backdrop" id="sheetBackdrop" onclick="toggleSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">Add to chat</div>
+    <div style="font-size:12px; color:var(--ink-muted); margin-top:4px;">Choose what to attach • 50MB limit • Claude-style</div>
+  </div>
+  <div class="sheet-grid">
+    <div class="sheet-option" onclick="attachFile('camera')">
+      <div class="sheet-option-icon" style="background:#FEF3C7;">📷</div>
+      <div class="sheet-option-title">Camera</div>
+      <div class="sheet-option-desc">Take photo</div>
+    </div>
+    <div class="sheet-option" onclick="attachFile('gallery')">
+      <div class="sheet-option-icon" style="background:#DBEAFE;">🖼️</div>
+      <div class="sheet-option-title">Gallery</div>
+      <div class="sheet-option-desc">25MB images</div>
+    </div>
+    <div class="sheet-option" onclick="attachFile('files')">
+      <div class="sheet-option-icon" style="background:#D1FAE5;">📄</div>
+      <div class="sheet-option-title">Files</div>
+      <div class="sheet-option-desc">PDF, DOCX, ZIP</div>
+    </div>
+    <div class="sheet-option" onclick="attachFile('github')">
+      <div class="sheet-option-icon" style="background:#E0E7FF;">🐙</div>
+      <div class="sheet-option-title">GitHub</div>
+      <div class="sheet-option-desc">Import repo</div>
+    </div>
+    <div class="sheet-option" onclick="attachFile('research')">
+      <div class="sheet-option-icon" style="background:#FCE7F3;">🔍</div>
+      <div class="sheet-option-title">Deep Research</div>
+      <div class="sheet-option-desc">Web search + RAG</div>
+    </div>
+    <div class="sheet-option" onclick="attachFile('code')">
+      <div class="sheet-option-icon" style="background:#FFEDD5;">💻</div>
+      <div class="sheet-option-title">Deep Code</div>
+      <div class="sheet-option-desc">Local codebase</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  const btn = document.getElementById('mobileMenuBtn');
+  if (window.innerWidth <= 768) {
+    btn.style.display = document.getElementById('sidebar').classList.contains('open') ? 'none' : 'flex';
+  }
+}
+function toggleSheet() {
+  document.getElementById('sheet').classList.toggle('open');
+  document.getElementById('sheetBackdrop').classList.toggle('open');
+}
+function toggleCanvas() {
+  document.getElementById('canvas').classList.toggle('open');
+}
+function handleInput(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  const slashMenu = document.getElementById('slashMenu');
+  if (el.value.startsWith('/')) {
+    slashMenu.classList.add('open');
+  } else {
+    slashMenu.classList.remove('open');
+  }
+  document.getElementById('sendBtn').disabled = el.value.trim() === '';
+}
+function handleKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('slashMenu').classList.remove('open');
+  }
+}
+function sendMessage() {
+  const input = document.getElementById('composerInput');
+  if (!input.value.trim()) return;
+  
+  // Show sample messages as demo
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('sampleUser').style.display = 'flex';
+  document.getElementById('sampleAssistant').style.display = 'flex';
+  
+  // Scroll to bottom
+  document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+  
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('slashMenu').classList.remove('open');
+  document.getElementById('sendBtn').disabled = true;
+  
+  // Haptic simulation
+  if (navigator.vibrate) navigator.vibrate(12);
+}
+function usePrompt(text) {
+  const input = document.getElementById('composerInput');
+  input.value = text;
+  handleInput(input);
+  input.focus();
+}
+function attachFile(type) {
+  toggleSheet();
+  const carousel = document.getElementById('fileCarousel');
+  carousel.style.display = 'flex';
+  if (navigator.vibrate) navigator.vibrate(22);
+}
+function toggleModel() {
+  const btn = document.getElementById('modelToggle');
+  btn.classList.toggle('active');
+}
+function toggleModelMenu() {
+  // Model switcher animation
+  const picker = document.querySelector('.model-picker');
+  picker.style.transform = 'scale(0.98)';
+  setTimeout(() => picker.style.transform = '', 150);
+}
+
+// Mobile check
+if (window.innerWidth <= 768) {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobileMenuBtn').style.display = 'flex';
+}
+
+// Auto demo after 1s
+setTimeout(() => {
+  const input = document.getElementById('composerInput');
+  input.value = '/liquid-glass';
+  handleInput(input);
+}, 800);
+</script>
+</body>
+</html>
