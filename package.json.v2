@@ -1,0 +1,20 @@
+{
+  "name": "super-deepseek-v2",
+  "version": "2.0.0",
+  "description": "Super DeepSeek V2 - Rebuilt from scratch with Claude-level UI, exact copy of demo",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "build:android": "vite build && node scripts/copy-assets.js",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.28.2",
+    "vite": "^6.3.1"
+  },
+  "dependencies": {
+    "marked": "^18.0.3"
+  }
+}
