@@ -87,12 +87,13 @@ class MainActivity : ComponentActivity() {
 
         cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(cookieManager, true)
 
         bridge = WebViewBridge(applicationContext)
+        // Asset loader serves from android/app/src/main/assets/ root
+        // React SPA is built to android/app/src/main/assets/ with android-spa.html at root
         assetLoader = WebViewAssetLoader.Builder()
             .setDomain("appassets.androidplatform.net")
-            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this, "www"))
+            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
         // Main WebView - React SPA
@@ -188,6 +189,10 @@ class MainActivity : ComponentActivity() {
             webChromeClient = WebChromeClient()
             setBackgroundColor(Color.TRANSPARENT)
         }
+
+        // Enable third-party cookies for both WebViews (needed for DeepSeek WAF)
+        cookieManager.setAcceptThirdPartyCookies(mainWebView, true)
+        cookieManager.setAcceptThirdPartyCookies(hiddenWebView, true)
 
         // Link bridge to WebViews
         bridge.mainWebView = mainWebView

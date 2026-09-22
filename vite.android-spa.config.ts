@@ -12,18 +12,13 @@ export default defineConfig({
       name: 'copy-wasm',
       closeBundle() {
         const src = resolve(__dirname, 'public/ds/sha3_wasm_bg.wasm')
-        const destDir = resolve(__dirname, 'android/app/src/main/assets/www/ds')
+        const destDir = resolve(__dirname, 'android/app/src/main/assets/ds')
         const dest = resolve(destDir, 'sha3_wasm_bg.wasm')
-        const destRoot = resolve(__dirname, 'android/app/src/main/assets/ds/sha3_wasm_bg.wasm')
-        const destRootDir = resolve(__dirname, 'android/app/src/main/assets/ds')
         try {
           if (existsSync(src)) {
             mkdirSync(destDir, { recursive: true })
             copyFileSync(src, dest)
             console.log('[copy-wasm] copied to', dest)
-            mkdirSync(destRootDir, { recursive: true })
-            copyFileSync(src, destRoot)
-            console.log('[copy-wasm] copied to', destRoot)
           }
         } catch (e) {
           console.warn('[copy-wasm] failed', e)
@@ -37,7 +32,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'android/app/src/main/assets/www',
+    outDir: 'android/app/src/main/assets',
     emptyOutDir: true,
     rollupOptions: {
       input: resolve(__dirname, 'android-spa.html'),
