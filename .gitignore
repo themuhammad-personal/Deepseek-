@@ -63,3 +63,18 @@ FABLE.md
 # Ignore local development files
 .vscode/
 .idea/
+
+# --- SECURITY FIXES ADDED BY AUDIT 2026-09-22 ---
+# Keystore - NEVER commit
+*.jks
+*.keystore
+**/superdeepseek-release.jks
+**/ci-release.jks
+**/release.jks
+# Secrets
+.env
+.env.*
+!.env.example
+# Audit reports (local)
+AUDIT_REPORT.md
+CLAUDE_REDESIGN_PLAN.md
