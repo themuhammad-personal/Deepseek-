@@ -1,4 +1,5 @@
 import { extractArtifacts } from "./artifacts";
+import { createSseAcc, parseSseChunk } from "./deepseek/parse-sse";
 import { emptyMessage, useAppStore } from "./app-store";
 import { buildSystemPrompt } from "./ai/system-prompt";
 import { performHaptic } from "./haptics";
@@ -181,7 +182,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       useAppStore.getState().bindDsSession(chatId, sessionId);
     }
 
-    const res = await completeStream({
+    const completeOpts = {
       token: store.account.token,
       sessionId,
       prompt,
@@ -189,7 +190,8 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       search: webSearch || mode === "research",
       parentMessageId: null,
       signal: abort?.signal,
-    });
+    };
+    let res = await completeStream(completeOpts);
 
     if (res.status === 401) {
       useAppStore.getState().setAccount(null);
@@ -201,62 +203,102 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       return;
     }
 
-    if (!res.body) {
-      // completeStream throws on any error envelope, so reaching here means the
-      // response had no readable stream at all.
-      const errText = await res.text().catch(() => "");
+    const acc = createSseAcc();
+    let streamError: string | null = null;
+    let sawDone = false;
+
+    const applyToUi = () => {
+      const patch: Partial<Message> = { content: acc.text };
+      if (acc.thinking) patch.thinking = acc.thinking;
+      if (mode === "research") {
+        patch.researchSteps = advanceSteps(asst.researchSteps ?? researchSeed(), acc.text.length);
+      }
+      store.patchMessage(chatId, asst.id, patch);
+    };
+
+    const feedLine = (line: string) => {
+      const delta = parseSseChunk(line, acc);
+      if (!delta) return;
+      if (delta.error) {
+        streamError = delta.error;
+        return;
+      }
+      if (delta.done) {
+        sawDone = true;
+        return;
+      }
+      applyToUi();
+    };
+
+    const pump = async (body: ReadableStream<Uint8Array>) => {
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx: number;
+          while ((idx = buf.indexOf("\n")) !== -1) {
+            feedLine(buf.slice(0, idx));
+            buf = buf.slice(idx + 1);
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      if (buf.trim()) feedLine(buf);
+    };
+
+    // Android WebView surfaces abrupt HTTP/2 stream resets and flaky-link drops
+    // as `TypeError: network error`. The upstream answer has usually completed
+    // (or nearly so) by then; only a zero-progress death earns one full retry.
+    for (let attempt = 0; ; attempt++) {
+      if (!res.body) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(
+          errText
+            ? `DeepSeek returned an empty stream: ${errText.slice(0, 200)}`
+            : "DeepSeek returned an empty stream.",
+        );
+      }
+      try {
+        await pump(res.body);
+        break;
+      } catch (e) {
+        const hasProgress = acc.text.length > 0 || acc.thinking.length > 0;
+        if (
+          attempt === 0 &&
+          !sawDone &&
+          !hasProgress &&
+          e instanceof TypeError &&
+          abort?.signal.aborted !== true
+        ) {
+          console.warn("[SendChat] stream died with no progress; retrying completion once", e);
+          res = await completeStream(completeOpts);
+          continue;
+        }
+        if (hasProgress || sawDone) break; // keep whatever arrived
+        throw e;
+      }
+    }
+
+    const text = acc.text;
+    const thinking = acc.thinking;
+
+    if (streamError && !text) {
+      store.patchMessage(chatId, asst.id, { error: streamError, content: "" });
+      performHaptic("error", store.settings.haptics);
+      return;
+    }
+    if (!text && !thinking) {
       store.patchMessage(chatId, asst.id, {
-        error: errText
-          ? `DeepSeek returned an empty stream: ${errText.slice(0, 200)}`
-          : "DeepSeek returned an empty stream.",
+        error: "DeepSeek returned an empty reply. Send the message again.",
         content: "",
       });
       performHaptic("error", store.settings.haptics);
       return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let text = "";
-    let thinking = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const chunks = buf.split("\n\n");
-      buf = chunks.pop() ?? "";
-      for (const chunk of chunks) {
-        const line = chunk.split("\n").find((l) => l.startsWith("data:"));
-        if (!line) continue;
-        const raw = line.slice(5).trim();
-        if (!raw || raw === "[DONE]") continue;
-        try {
-          const ev = JSON.parse(raw) as {
-            type?: string;
-            text?: string;
-            thinking?: string;
-            error?: string;
-            sessionId?: string;
-          };
-          if (ev.sessionId) useAppStore.getState().bindDsSession(chatId, ev.sessionId);
-          if (ev.type === "error" && ev.error) {
-            store.patchMessage(chatId, asst.id, { error: ev.error });
-            continue;
-          }
-          if (typeof ev.thinking === "string") thinking = ev.thinking;
-          if (typeof ev.text === "string") text = ev.text;
-          const patch: Partial<Message> = { content: text };
-          if (thinking) patch.thinking = thinking;
-          if (mode === "research") {
-            patch.researchSteps = advanceSteps(asst.researchSteps ?? researchSeed(), text.length);
-          }
-          store.patchMessage(chatId, asst.id, patch);
-        } catch {
-          /* skip malformed */
-        }
-      }
     }
 
     const artifacts = extractArtifacts(text);
