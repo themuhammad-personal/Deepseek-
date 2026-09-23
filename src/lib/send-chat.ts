@@ -168,20 +168,61 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
   }
 
   try {
-    const res = await fetch("/api/ds/complete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${store.account.token}`,
-      },
-      signal: abort?.signal,
-      body: JSON.stringify({
-        prompt,
-        sessionId: chat?.dsSessionId,
-        thinking: mode === "think" || mode === "research",
-        search: webSearch || mode === "research",
-      }),
-    });
+    let res: Response;
+    const isAndroid = typeof window !== 'undefined' && (window as any).AndroidBridge?.dsChatNative;
+    if (isAndroid) {
+      // Use direct native client (official WebView bypass WAF)
+      const { dsCreateSessionDirect, dsCompleteStreamDirect } = await import("./deepseek/client-direct");
+      try {
+        let sessionId = chat?.dsSessionId;
+        if (!sessionId) {
+          console.log('[SendChat] Creating session via native...');
+          sessionId = await dsCreateSessionDirect(store.account.token);
+          useAppStore.getState().bindDsSession(chatId, sessionId);
+        }
+        console.log('[SendChat] Starting completion via native official WebView...');
+        res = await dsCompleteStreamDirect({
+          token: store.account.token,
+          sessionId,
+          prompt,
+          thinking: mode === "think" || mode === "research",
+          search: webSearch || mode === "research",
+          parentMessageId: null,
+          signal: abort?.signal,
+        });
+      } catch (nativeErr) {
+        console.warn('[SendChat] Native failed, fallback to /api/ds/complete', nativeErr);
+        res = await fetch("/api/ds/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${store.account.token}`,
+          },
+          signal: abort?.signal,
+          body: JSON.stringify({
+            prompt,
+            sessionId: chat?.dsSessionId,
+            thinking: mode === "think" || mode === "research",
+            search: webSearch || mode === "research",
+          }),
+        });
+      }
+    } else {
+      res = await fetch("/api/ds/complete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${store.account.token}`,
+        },
+        signal: abort?.signal,
+        body: JSON.stringify({
+          prompt,
+          sessionId: chat?.dsSessionId,
+          thinking: mode === "think" || mode === "research",
+          search: webSearch || mode === "research",
+        }),
+      });
+    }
 
     if (res.status === 401) {
       useAppStore.getState().setAccount(null);

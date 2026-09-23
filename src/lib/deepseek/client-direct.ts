@@ -37,6 +37,13 @@ declare global {
       switchToOfficialLogin?: () => void
     }
     _dsLoginCallbacks?: Record<string, { resolve: (v: any) => void; reject: (e: string) => void }>
+    _dsChatCallbacks?: Record<string, { 
+      onSession?: (sid: string) => void
+      onChunk?: (data: any) => void
+      onDone?: (data: any) => void
+      onError?: (err: any) => void
+      onNeedPow?: (challenge: any) => void
+    }>
   }
 }
 
@@ -196,6 +203,17 @@ export async function dsLoginDirect(body: DsLoginBody) {
 }
 
 export async function dsCreateSessionDirect(token: string): Promise<string> {
+  // Try native first (official WebView bypass WAF)
+  if (typeof window !== 'undefined' && (window as any).AndroidBridge?.dsChatNative) {
+    try {
+      console.log('[Session] Trying native official WebView...')
+      // Use chat native with empty prompt to just create session
+      const session = await dsCreateSessionViaNative(token)
+      if (session) return session
+    } catch (e) {
+      console.warn('[Session] Native failed, fallback to direct', e)
+    }
+  }
   const res = await fetch(`${DS_API}/chat_session/create`, {
     method: 'POST',
     headers: dsHeaders(token),
@@ -206,6 +224,80 @@ export async function dsCreateSessionDirect(token: string): Promise<string> {
   const id = data.chat_session?.id
   if (!id) throw new Error('Could not start a chat.')
   return id
+}
+
+function dsCreateSessionViaNative(token: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const bridge = (window as any).AndroidBridge
+    if (!bridge?.dsChatNative) {
+      reject('No native bridge')
+      return
+    }
+    const callbackId = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    window._dsChatCallbacks = window._dsChatCallbacks || {}
+    let resolved = false
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        delete window._dsChatCallbacks![callbackId]
+        reject('Session create timeout')
+      }
+    }, 20000)
+
+    window._dsChatCallbacks[callbackId] = {
+      onSession: (sid: string) => {
+        if (!resolved) {
+          resolved = true
+          clearTimeout(timer)
+          delete window._dsChatCallbacks![callbackId]
+          resolve(sid)
+        }
+      },
+      onChunk: () => {},
+      onDone: (data: any) => {
+        if (!resolved) {
+          resolved = true
+          clearTimeout(timer)
+          delete window._dsChatCallbacks![callbackId]
+          if (data?.sessionId) resolve(data.sessionId)
+          else reject('No session in done')
+        }
+      },
+      onError: (err: any) => {
+        if (!resolved) {
+          resolved = true
+          clearTimeout(timer)
+          delete window._dsChatCallbacks![callbackId]
+          reject(err?.error || err || 'Session error')
+        }
+      },
+      onNeedPow: async (challenge: any) => {
+        // Solve PoW via browser wasm
+        try {
+          const pow = await solvePow(challenge)
+          // Now we need to continue - but our current native flow expects PoW solved inside WebView
+          // For session creation, PoW not needed, so this shouldn't happen
+          // If it does, we fallback
+          console.log('[Session] PoW needed but not expected for session create')
+        } catch (e) {
+          if (!resolved) {
+            resolved = true
+            clearTimeout(timer)
+            delete window._dsChatCallbacks![callbackId]
+            reject(e)
+          }
+        }
+      }
+    }
+
+    try {
+      // For session creation, we send empty prompt but with flag
+      bridge.dsChatNative(JSON.stringify({ token, prompt: '', thinking: false, search: false, _action: 'create_session' }), callbackId)
+    } catch (e) {
+      clearTimeout(timer)
+      delete window._dsChatCallbacks![callbackId]
+      reject(e)
+    }
+  })
 }
 
 async function dsPowHeaderDirect(token: string, targetPath = '/api/v0/chat/completion'): Promise<string> {
@@ -229,6 +321,18 @@ export async function dsCompleteStreamDirect(opts: {
   parentMessageId?: string | null
   signal?: AbortSignal
 }): Promise<Response> {
+  // Try native official WebView first (bypass WAF)
+  if (typeof window !== 'undefined' && (window as any).AndroidBridge?.dsChatNative) {
+    try {
+      console.log('[Chat] Trying native official WebView streaming...')
+      const nativeRes = await dsCompleteStreamViaNative(opts)
+      return nativeRes
+    } catch (e) {
+      console.warn('[Chat] Native streaming failed, fallback to direct fetch', e)
+      // Fall through to direct fetch
+    }
+  }
+
   const pow = await dsPowHeaderDirect(opts.token)
   const upstream = await fetch(`${DS_API}/chat/completion`, {
     method: 'POST',
@@ -245,4 +349,240 @@ export async function dsCompleteStreamDirect(opts: {
     signal: opts.signal,
   })
   return upstream
+}
+
+function dsCompleteStreamViaNative(opts: {
+  token: string
+  sessionId: string
+  prompt: string
+  thinking: boolean
+  search: boolean
+  parentMessageId?: string | null
+  signal?: AbortSignal
+}): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const bridge = (window as any).AndroidBridge
+    if (!bridge?.dsChatNative) {
+      reject('No native bridge')
+      return
+    }
+    const callbackId = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    window._dsChatCallbacks = window._dsChatCallbacks || {}
+
+    // Create a ReadableStream that will be fed by native callbacks
+    let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+    let sessionIdFromNative: string | null = null
+    let textAcc = ''
+    let thinkingAcc = ''
+    const encoder = new TextEncoder()
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+        // Send initial session if we already have it
+        if (opts.sessionId) {
+          const init = JSON.stringify({ type: 'session', sessionId: opts.sessionId })
+          c.enqueue(encoder.encode(`data: ${init}\n\n`))
+        }
+      },
+      cancel() {
+        // Cleanup
+        delete window._dsChatCallbacks![callbackId]
+      }
+    })
+
+    // Create a Response with our stream
+    const response = new Response(stream, {
+      headers: { 'Content-Type': 'text/event-stream' }
+    })
+
+    const cleanup = () => {
+      delete window._dsChatCallbacks![callbackId]
+    }
+
+    window._dsChatCallbacks[callbackId] = {
+      onSession: (sid: string) => {
+        sessionIdFromNative = sid
+        console.log('[ChatNative] Session:', sid.slice(0,8))
+        if (controller) {
+          const data = JSON.stringify({ type: 'session', sessionId: sid })
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+        }
+      },
+      onChunk: (data: any) => {
+        if (!controller) return
+        try {
+          const text = data?.text || ''
+          const thinking = data?.thinking || ''
+          const deltaText = data?.deltaText || ''
+          const deltaThinking = data?.deltaThinking || ''
+          // Only send delta to match expected format
+          if (deltaText || deltaThinking || text !== textAcc || thinking !== thinkingAcc) {
+            textAcc = text
+            thinkingAcc = thinking
+            const payload = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+          }
+        } catch (e) {
+          console.error('[ChatNative] onChunk error', e)
+        }
+      },
+      onDone: (data: any) => {
+        if (!controller) return
+        try {
+          textAcc = data?.text || textAcc
+          thinkingAcc = data?.thinking || thinkingAcc
+          const final = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
+          controller.enqueue(encoder.encode(`data: ${final}\n\n`))
+          const done = JSON.stringify({ type: 'done', sessionId: data?.sessionId || sessionIdFromNative || opts.sessionId })
+          controller.enqueue(encoder.encode(`data: ${done}\n\n`))
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+          controller.close()
+        } catch (e) {
+          controller.error(e)
+        } finally {
+          cleanup()
+        }
+      },
+      onError: (err: any) => {
+        if (!controller) {
+          cleanup()
+          reject(err)
+          return
+        }
+        try {
+          const msg = typeof err === 'string' ? err : err?.error || err?.detail || JSON.stringify(err)
+          console.error('[ChatNative] Error:', msg)
+          // If error is stringified JSON with status, try to extract
+          let friendly = msg
+          try {
+            const parsed = typeof err === 'string' ? JSON.parse(err) : err
+            if (parsed?.error) friendly = parsed.error
+            if (parsed?.detail) friendly = parsed.detail
+          } catch {}
+          const errPayload = JSON.stringify({ type: 'error', error: friendly })
+          controller.enqueue(encoder.encode(`data: ${errPayload}\n\n`))
+          controller.close()
+        } catch (e) {
+          controller.error(e)
+        } finally {
+          cleanup()
+        }
+      },
+      onNeedPow: async (challenge: any) => {
+        console.log('[ChatNative] PoW needed, solving via wasm...')
+        try {
+          const pow = await solvePow(challenge)
+          console.log('[ChatNative] PoW solved, retrying via official WebView with pow', pow.slice(0,20))
+          // Retry via official WebView with solved PoW
+          const retryPayload = {
+            token: opts.token,
+            sessionId: opts.sessionId || sessionIdFromNative || '',
+            prompt: opts.prompt,
+            thinking: opts.thinking,
+            search: opts.search,
+            parentMessageId: opts.parentMessageId,
+            powResponse: pow
+          }
+          try {
+            // Call native again with powResponse
+            const bridge = (window as any).AndroidBridge
+            if (bridge?.dsChatNative) {
+              // Temporarily replace callback to continue using same controller
+              // We will keep same callbackId but need to re-trigger official WebView
+              // To avoid callback cleanup, we call dsChatNative again with same callbackId but pow
+              // The official WebView JS will see powResponseInput and skip challenge
+              bridge.dsChatNative(JSON.stringify(retryPayload), callbackId)
+              return
+            }
+          } catch (retryErr) {
+            console.warn('[ChatNative] Retry via official WebView failed, fallback to direct fetch', retryErr)
+          }
+          // Fallback direct fetch (may be blocked by WAF but try)
+          const directPowRes = await fetch(`${DS_API}/chat/completion`, {
+            method: 'POST',
+            headers: dsHeaders(opts.token, { 'X-Ds-Pow-Response': pow }),
+            body: JSON.stringify({
+              chat_session_id: opts.sessionId || sessionIdFromNative || '',
+              parent_message_id: opts.parentMessageId ?? null,
+              prompt: opts.prompt,
+              ref_file_ids: [],
+              thinking_enabled: opts.thinking,
+              search_enabled: opts.search,
+              preempt: false,
+            }),
+            signal: opts.signal,
+          })
+          if (!directPowRes.ok || !directPowRes.body) {
+            const errTxt = await directPowRes.text()
+            throw new Error(`Completion failed after PoW: ${directPowRes.status} ${errTxt.slice(0,200)}`)
+          }
+          const reader = directPowRes.body.getReader()
+          const decoder = new TextDecoder()
+          let buf = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const lines = buf.split('\n')
+            buf = lines.pop() || ''
+            for (const lineRaw of lines) {
+              let line = lineRaw.trim()
+              if (!line) continue
+              if (line.startsWith('data:')) line = line.slice(5).trim()
+              if (!line || line === '[DONE]') continue
+              try {
+                const ev = JSON.parse(line)
+                let t = ''
+                let th = ''
+                if (ev.choices?.[0]?.delta?.content) t = ev.choices[0].delta.content
+                if (ev.choices?.[0]?.delta?.reasoning_content) th = ev.choices[0].delta.reasoning_content
+                if (ev.v !== undefined && typeof ev.v === 'string') t = ev.v
+                if (t) textAcc += t
+                if (th) thinkingAcc += th
+                if (t || th) {
+                  const payload = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
+                  controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+                }
+              } catch {}
+            }
+          }
+          const done = JSON.stringify({ type: 'done', sessionId: opts.sessionId || sessionIdFromNative })
+          controller.enqueue(encoder.encode(`data: ${done}\n\n`))
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
+          controller.close()
+          cleanup()
+        } catch (e) {
+          console.error('[ChatNative] PoW fallback failed', e)
+          window._dsChatCallbacks![callbackId]?.onError?.(e instanceof Error ? e.message : String(e))
+        }
+      }
+    }
+
+    try {
+      bridge.dsChatNative(JSON.stringify({
+        token: opts.token,
+        sessionId: opts.sessionId,
+        prompt: opts.prompt,
+        thinking: opts.thinking,
+        search: opts.search,
+        parentMessageId: opts.parentMessageId
+      }), callbackId)
+      // Resolve immediately with our streaming Response
+      resolve(response)
+    } catch (e) {
+      cleanup()
+      reject(e)
+    }
+
+    // Handle abort
+    if (opts.signal) {
+      opts.signal.addEventListener('abort', () => {
+        try {
+          controller?.close()
+        } catch {}
+        cleanup()
+      })
+    }
+  })
 }

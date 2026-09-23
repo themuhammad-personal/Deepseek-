@@ -1963,6 +1963,364 @@ class WebViewBridge(
         evaluateJs?.invoke(script)
     }
 
+    // ── Super DeepSeek Official Chat via Official WebView (bypass WAF/CORS) ──
+    // All chat completion requests go through officialWebView origin https://chat.deepseek.com
+    // so they have correct cookies, Origin, and WAF tokens
+
+    @JavascriptInterface
+    fun dsChatNative(payloadJson: String?, callbackId: String?) {
+        val safeCallbackId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeCallbackId.isEmpty()) return
+        val official = officialWebView ?: hiddenWebView
+        if (official == null) {
+            deliverDsChatError(safeCallbackId, "Official WebView not ready")
+            return
+        }
+        val payloadStr = JSONObject.quote(payloadJson ?: "{}")
+        // JS that runs in official WebView context (origin https://chat.deepseek.com)
+        // Does PoW + session + completion streaming, delivering chunks via AndroidBridge
+        val js = """
+            (async () => {
+              const cbId = '$safeCallbackId';
+              try {
+                const opts = JSON.parse($payloadStr);
+                const token = opts.token || '';
+                const sessionIdInput = opts.sessionId || '';
+                const prompt = opts.prompt || '';
+                const thinking = !!opts.thinking;
+                const search = !!opts.search;
+                const parentMessageId = opts.parentMessageId || null;
+                const powResponseInput = opts.powResponse || '';
+                
+                console.log('[OfficialChat] start', cbId, 'session', sessionIdInput ? sessionIdInput.slice(0,8) : 'new', 'thinking', thinking);
+                
+                const headersBase = (extra) => {
+                  const h = {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token,
+                    'X-Client-Platform': 'web',
+                    'X-Client-Version': '1.0.0',
+                    'X-Client-Locale': 'en_US',
+                    ...extra
+                  };
+                  return h;
+                };
+                
+                // Helper to unwrap DeepSeek envelope
+                const unwrap = (json) => {
+                  const d = json.data;
+                  if (d && d.biz_code && d.biz_code !== 0) throw new Error(d.biz_msg || 'Biz error');
+                  if (!d || !d.biz_data) throw new Error(json.msg || 'No data');
+                  return d.biz_data;
+                };
+                
+                // 1. Get session if not provided
+                let sessionId = sessionIdInput;
+                const isCreateOnly = opts._action === 'create_session' || !prompt;
+                if (!sessionId) {
+                  console.log('[OfficialChat] creating session... isCreateOnly', isCreateOnly);
+                  const res = await fetch('/api/v0/chat_session/create', {
+                    method: 'POST',
+                    headers: headersBase({}),
+                    body: '{}',
+                    credentials: 'include'
+                  });
+                  const txt = await res.text();
+                  console.log('[OfficialChat] session create status', res.status, txt.slice(0,300));
+                  let j;
+                  try { j = JSON.parse(txt); } catch(e) { throw new Error('Session create failed: ' + txt.slice(0,200)); }
+                  if (!res.ok) throw new Error(j.msg || 'Session failed ' + res.status);
+                  const data = unwrap(j);
+                  sessionId = data.chat_session?.id;
+                  if (!sessionId) throw new Error('No session id');
+                  window.AndroidBridge.onChatSession(cbId, sessionId);
+                  if (isCreateOnly) {
+                    console.log('[OfficialChat] create only done', sessionId);
+                    window.AndroidBridge.onChatDone(cbId, JSON.stringify({sessionId: sessionId, text: '', thinking: ''}));
+                    return;
+                  }
+                } else if (isCreateOnly) {
+                  window.AndroidBridge.onChatSession(cbId, sessionId);
+                  window.AndroidBridge.onChatDone(cbId, JSON.stringify({sessionId: sessionId, text: '', thinking: ''}));
+                  return;
+                }
+                
+                // 2. PoW challenge - use provided powResponse if available (solved by React wasm)
+                let powAnswer = powResponseInput;
+                if (!powAnswer) {
+                  console.log('[OfficialChat] PoW challenge...');
+                  const powRes = await fetch('/api/v0/chat/create_pow_challenge', {
+                    method: 'POST',
+                    headers: headersBase({}),
+                    body: JSON.stringify({ target_path: '/api/v0/chat/completion' }),
+                    credentials: 'include'
+                  });
+                  const powTxt = await powRes.text();
+                  console.log('[OfficialChat] PoW status', powRes.status, powTxt.slice(0,400));
+                  let powJson;
+                  try { powJson = JSON.parse(powTxt); } catch(e) { throw new Error('PoW parse failed: ' + powTxt.slice(0,200)); }
+                  if (!powRes.ok) throw new Error(powJson.msg || 'PoW failed');
+                  const powData = unwrap(powJson);
+                  const challenge = powData.challenge;
+                  if (!challenge) throw new Error('No PoW challenge');
+                  
+                  try {
+                    if (typeof window.solvePow !== 'undefined') {
+                      powAnswer = await window.solvePow(challenge);
+                    } else if (window.DsPow && window.DsPow.solve) {
+                      powAnswer = await window.DsPow.solve(challenge);
+                    } else {
+                      console.log('[OfficialChat] No solver in official page, requesting React wasm solver...');
+                      window.AndroidBridge.onChatNeedPow(cbId, JSON.stringify(challenge));
+                      return;
+                    }
+                  } catch(e) {
+                    console.error('[OfficialChat] PoW solve error', e);
+                    window.AndroidBridge.onChatNeedPow(cbId, JSON.stringify(challenge));
+                    return;
+                  }
+                }
+                
+                console.log('[OfficialChat] PoW solved', powAnswer.slice(0,20));
+                
+                // 3. Completion streaming
+                console.log('[OfficialChat] starting completion stream...');
+                const compRes = await fetch('/api/v0/chat/completion', {
+                  method: 'POST',
+                  headers: headersBase({ 'X-Ds-Pow-Response': powAnswer }),
+                  body: JSON.stringify({
+                    chat_session_id: sessionId,
+                    parent_message_id: parentMessageId,
+                    prompt: prompt,
+                    ref_file_ids: [],
+                    thinking_enabled: thinking,
+                    search_enabled: search,
+                    preempt: false
+                  }),
+                  credentials: 'include'
+                });
+                
+                if (!compRes.ok) {
+                  const errTxt = await compRes.text();
+                  console.error('[OfficialChat] completion failed', compRes.status, errTxt.slice(0,500));
+                  window.AndroidBridge.onChatError(cbId, JSON.stringify({status: compRes.status, error: errTxt.slice(0,1000)}));
+                  return;
+                }
+                
+                if (!compRes.body) {
+                  window.AndroidBridge.onChatError(cbId, 'No body');
+                  return;
+                }
+                
+                const reader = compRes.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                let accText = '';
+                let accThinking = '';
+                let hasSession = false;
+                
+                while (true) {
+                  const {done, value} = await reader.read();
+                  if (done) break;
+                  buf += decoder.decode(value, {stream: true});
+                  const lines = buf.split('\n');
+                  buf = lines.pop() || '';
+                  for (const lineRaw of lines) {
+                    const line = lineRaw.trim();
+                    if (!line) continue;
+                    if (line.startsWith('event:')) continue;
+                    let dataStr = line;
+                    if (dataStr.startsWith('data:')) dataStr = dataStr.slice(5).trim();
+                    if (!dataStr || dataStr === '[DONE]') continue;
+                    try {
+                      const ev = JSON.parse(dataStr);
+                      // DeepSeek format: check for different shapes
+                      let textChunk = '';
+                      let thinkingChunk = '';
+                      let sessionChunk = null;
+                      
+                      if (ev.choices && ev.choices[0]) {
+                        const choice = ev.choices[0];
+                        if (choice.delta && choice.delta.content) textChunk = choice.delta.content;
+                        if (choice.delta && choice.delta.reasoning_content) thinkingChunk = choice.delta.reasoning_content;
+                      }
+                      // Alternative format: direct text
+                      if (ev.v !== undefined) {
+                        // JSON patch format used by DeepSeek
+                        if (typeof ev.v === 'string') textChunk = ev.v;
+                        // Might be object with thinking
+                        if (ev.p && ev.p.includes('thinking')) thinkingChunk = ev.v || '';
+                        if (ev.p && ev.p.includes('chat_session_id')) sessionChunk = ev.v;
+                      }
+                      if (ev.response && ev.response.text) textChunk = ev.response.text;
+                      if (ev.text) textChunk = ev.text;
+                      if (ev.thinking) thinkingChunk = ev.thinking;
+                      
+                      if (textChunk) accText += textChunk;
+                      if (thinkingChunk) accThinking += thinkingChunk;
+                      if (sessionChunk && !hasSession) {
+                        hasSession = true;
+                        window.AndroidBridge.onChatSession(cbId, sessionChunk);
+                      }
+                      
+                      if (textChunk || thinkingChunk) {
+                        window.AndroidBridge.onChatChunk(cbId, JSON.stringify({text: accText, thinking: accThinking, deltaText: textChunk, deltaThinking: thinkingChunk}));
+                      }
+                    } catch(e) {
+                      // ignore parse errors
+                    }
+                  }
+                }
+                
+                console.log('[OfficialChat] stream done, total text', accText.length);
+                window.AndroidBridge.onChatDone(cbId, JSON.stringify({text: accText, thinking: accThinking, sessionId: sessionId}));
+              } catch(e) {
+                console.error('[OfficialChat] error', e, e.stack);
+                window.AndroidBridge.onChatError(cbId, JSON.stringify({error: e.message || String(e)}));
+              }
+            })();
+        """.trimIndent()
+        official.post {
+            try {
+                official.evaluateJavascript(js, null)
+            } catch (e: Exception) {
+                Log.e(TAG, "Chat evaluate failed", e)
+                deliverDsChatError(safeCallbackId, "Evaluate failed: ${e.message}")
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun onChatSession(callbackId: String?, sessionId: String?) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        val sid = sessionId?.trim() ?: return
+        if (safeId.isEmpty() || sid.isEmpty()) return
+        val escaped = JSONObject.quote(sid)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$safeId'];
+                if(cb && cb.onSession) cb.onSession(JSON.parse($escaped));
+              } catch(e){ console.error('[Bridge] onChatSession failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
+    @JavascriptInterface
+    fun onChatChunk(callbackId: String?, chunkJson: String?) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeId.isEmpty()) return
+        val json = chunkJson ?: "{}"
+        val escaped = JSONObject.quote(json)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$safeId'];
+                if(cb && cb.onChunk) {
+                  const data = JSON.parse($escaped);
+                  const inner = typeof data === 'string' ? JSON.parse(data) : data;
+                  cb.onChunk(inner);
+                }
+              } catch(e){ console.error('[Bridge] onChatChunk failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
+    @JavascriptInterface
+    fun onChatDone(callbackId: String?, resultJson: String?) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeId.isEmpty()) return
+        val json = resultJson ?: "{}"
+        val escaped = JSONObject.quote(json)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$safeId'];
+                if(cb && cb.onDone) {
+                  const data = JSON.parse($escaped);
+                  const inner = typeof data === 'string' ? JSON.parse(data) : data;
+                  cb.onDone(inner);
+                  delete cbs['$safeId'];
+                }
+              } catch(e){ console.error('[Bridge] onChatDone failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
+    @JavascriptInterface
+    fun onChatError(callbackId: String?, errorJson: String?) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeId.isEmpty()) return
+        val err = errorJson ?: "Unknown error"
+        val escaped = JSONObject.quote(err)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$safeId'];
+                if(cb && cb.onError) {
+                  let data;
+                  try { data = JSON.parse($escaped); } catch(e){ data = $escaped; }
+                  cb.onError(data);
+                  delete cbs['$safeId'];
+                }
+              } catch(e){ console.error('[Bridge] onChatError failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
+    @JavascriptInterface
+    fun onChatNeedPow(callbackId: String?, challengeJson: String?) {
+        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
+        if (safeId.isEmpty()) return
+        val chal = challengeJson ?: "{}"
+        val escaped = JSONObject.quote(chal)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$safeId'];
+                if(cb && cb.onNeedPow) {
+                  const data = JSON.parse($escaped);
+                  const inner = typeof data === 'string' ? JSON.parse(data) : data;
+                  cb.onNeedPow(inner);
+                }
+              } catch(e){ console.error('[Bridge] onChatNeedPow failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
+    private fun deliverDsChatError(callbackId: String, error: String) {
+        val escaped = JSONObject.quote(error)
+        val script = """
+            (function(){
+              try {
+                const cbs = window._dsChatCallbacks || {};
+                const cb = cbs['$callbackId'];
+                if(cb && cb.onError) {
+                  cb.onError($escaped);
+                  delete cbs['$callbackId'];
+                }
+              } catch(e){ console.error('[Bridge] deliver chat error failed', e); }
+            })();
+        """.trimIndent()
+        mainWebView?.post { mainWebView?.evaluateJavascript(script, null) }
+        evaluateJs?.invoke(script)
+    }
+
     companion object {
         private const val TAG = "BdsWebViewBridge"
         // Shared with UpdateChecker, which keeps the update channel and the dismissed-build
