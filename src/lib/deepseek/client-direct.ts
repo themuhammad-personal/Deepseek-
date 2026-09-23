@@ -406,7 +406,7 @@ function dsCompleteStreamViaNative(opts: {
         console.log('[ChatNative] Session:', sid.slice(0,8))
         if (controller) {
           const data = JSON.stringify({ type: 'session', sessionId: sid })
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          try { controller!.enqueue(encoder.encode(`data: ${data}\n\n`)) } catch {}
         }
       },
       onChunk: (data: any) => {
@@ -416,30 +416,32 @@ function dsCompleteStreamViaNative(opts: {
           const thinking = data?.thinking || ''
           const deltaText = data?.deltaText || ''
           const deltaThinking = data?.deltaThinking || ''
-          // Only send delta to match expected format
           if (deltaText || deltaThinking || text !== textAcc || thinking !== thinkingAcc) {
             textAcc = text
             thinkingAcc = thinking
             const payload = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
-            controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+            controller!.enqueue(encoder.encode(`data: ${payload}\n\n`))
           }
         } catch (e) {
           console.error('[ChatNative] onChunk error', e)
         }
       },
       onDone: (data: any) => {
-        if (!controller) return
+        if (!controller) {
+          cleanup()
+          return
+        }
         try {
           textAcc = data?.text || textAcc
           thinkingAcc = data?.thinking || thinkingAcc
           const final = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
-          controller.enqueue(encoder.encode(`data: ${final}\n\n`))
+          controller!.enqueue(encoder.encode(`data: ${final}\n\n`))
           const done = JSON.stringify({ type: 'done', sessionId: data?.sessionId || sessionIdFromNative || opts.sessionId })
-          controller.enqueue(encoder.encode(`data: ${done}\n\n`))
-          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
-          controller.close()
+          controller!.enqueue(encoder.encode(`data: ${done}\n\n`))
+          controller!.enqueue(encoder.encode(`data: [DONE]\n\n`))
+          controller!.close()
         } catch (e) {
-          controller.error(e)
+          try { controller!.error(e) } catch {}
         } finally {
           cleanup()
         }
@@ -453,7 +455,6 @@ function dsCompleteStreamViaNative(opts: {
         try {
           const msg = typeof err === 'string' ? err : err?.error || err?.detail || JSON.stringify(err)
           console.error('[ChatNative] Error:', msg)
-          // If error is stringified JSON with status, try to extract
           let friendly = msg
           try {
             const parsed = typeof err === 'string' ? JSON.parse(err) : err
@@ -461,10 +462,10 @@ function dsCompleteStreamViaNative(opts: {
             if (parsed?.detail) friendly = parsed.detail
           } catch {}
           const errPayload = JSON.stringify({ type: 'error', error: friendly })
-          controller.enqueue(encoder.encode(`data: ${errPayload}\n\n`))
-          controller.close()
+          controller!.enqueue(encoder.encode(`data: ${errPayload}\n\n`))
+          controller!.close()
         } catch (e) {
-          controller.error(e)
+          try { controller!.error(e) } catch {}
         } finally {
           cleanup()
         }
@@ -542,15 +543,17 @@ function dsCompleteStreamViaNative(opts: {
                 if (th) thinkingAcc += th
                 if (t || th) {
                   const payload = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
-                  controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
+                  try { controller!.enqueue(encoder.encode(`data: ${payload}\n\n`)) } catch {}
                 }
               } catch {}
             }
           }
           const done = JSON.stringify({ type: 'done', sessionId: opts.sessionId || sessionIdFromNative })
-          controller.enqueue(encoder.encode(`data: ${done}\n\n`))
-          controller.enqueue(encoder.encode(`data: [DONE]\n\n`))
-          controller.close()
+          try {
+            controller!.enqueue(encoder.encode(`data: ${done}\n\n`))
+            controller!.enqueue(encoder.encode(`data: [DONE]\n\n`))
+            controller!.close()
+          } catch {}
           cleanup()
         } catch (e) {
           console.error('[ChatNative] PoW fallback failed', e)
