@@ -20,7 +20,7 @@
  * official web app's. In `npm run dev` the same relative path is handled by the
  * Vite proxy, so this module never needs to know where it is running.
  */
-import { solvePow, type PowChallenge } from "./pow-browser";
+import { solvePow, type PowChallenge } from "./pow-browser.ts";
 
 /** Relative on purpose — see the module comment. */
 export const DS_API_BASE = "/api/v0";
@@ -31,14 +31,17 @@ export type DsEnvelope<T> = {
   data?: T & { biz_code?: number; biz_msg?: string; biz_data?: unknown };
 };
 
+// NOTE: no TypeScript parameter properties here — Node's `--experimental-strip-types`
+// (used by `npm run test:app`) is strip-only and rejects them.
 export class DsApiError extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-    readonly code?: number,
-  ) {
+  readonly status?: number;
+  readonly code?: number;
+
+  constructor(message: string, status?: number, code?: number) {
     super(message);
     this.name = "DsApiError";
+    this.status = status;
+    this.code = code;
   }
 }
 

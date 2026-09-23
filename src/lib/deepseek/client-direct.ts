@@ -11,8 +11,8 @@
  * endpoints do not. So the credentials are handed to the native side, which runs
  * them inside the DeepSeek WebView, and we then verify the token we get back.
  */
-import { dsHeaders, newDeviceId } from "./headers";
-import { DS_API_BASE } from "./api";
+import { dsHeaders, newDeviceId } from "./headers.ts";
+import { DS_API_BASE } from "./api.ts";
 
 export type DsLoginBody = {
   email?: string;
@@ -75,7 +75,7 @@ function storeAccount(token: string, email = "", mobile = "") {
  * call would fail with no explanation.
  */
 export async function assertTokenWorks(token: string): Promise<void> {
-  const { currentUser } = await import("./api");
+  const { currentUser } = await import("./api.ts");
   try {
     await currentUser(token);
   } catch (e) {

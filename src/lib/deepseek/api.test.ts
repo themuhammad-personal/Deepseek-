@@ -11,7 +11,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { assertSolvable, completeStream, createSession, DsApiError } from "./api";
+import { assertSolvable, completeStream, createSession, DsApiError } from "./api.ts";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {

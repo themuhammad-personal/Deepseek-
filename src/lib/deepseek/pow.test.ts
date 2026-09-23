@@ -24,7 +24,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { solvePow, type PowChallenge } from "./pow";
+import { solvePow, type PowChallenge } from "./pow.ts";
 
 type HashExports = {
   memory: WebAssembly.Memory;

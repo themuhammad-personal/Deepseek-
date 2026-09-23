@@ -173,7 +173,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
     // JS<->Kotlin bridge and then fell back to `/api/ds/complete`, which does not
     // exist inside the APK — that fallback is what produced the misleading
     // "DeepSeek is unavailable right now." for every single failure.
-    const { createSession, completeStream } = await import("./deepseek/api");
+    const { createSession, completeStream } = await import("./deepseek/api.ts");
 
     let sessionId = chat?.dsSessionId;
     if (!sessionId) {
