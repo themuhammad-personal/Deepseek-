@@ -179,6 +179,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var reactWebView: WebView
     private lateinit var rootLayout: FrameLayout
     private lateinit var assetLoader: WebViewAssetLoader
+
+    /** Serves the engine bundle (assets/bds) at the bds-asset.local authority. */
+    private lateinit var bdsAssetLoader: WebViewAssetLoader
     private lateinit var bridge: WebViewBridge
     private lateinit var cookieManager: CookieManager
     private var isReactVisible = false
@@ -256,6 +259,13 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
+        // Engine bundle lives at assets/bds and is requested as
+        // https://bds-asset.local/bds/... by WebViewBridge.getAssetUrl().
+        bdsAssetLoader = WebViewAssetLoader.Builder()
+            .setDomain(getString(R.string.bds_asset_authority))
+            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
         // Official DeepSeek WebView - visible for official login
         officialWebView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -275,9 +285,13 @@ class MainActivity : ComponentActivity() {
             addJavascriptInterface(bridge, "AndroidBridge")
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                    // The login WebView must reach the real site so the AWS WAF
-                    // challenge can actually be solved and the session cookie set.
-                    // Intercepting it with local assets would break login.
+                    // Serve the engine's bundled assets (fish loading SVGs, icons, sandbox)
+                    // from assets/bds via the bds-asset.local authority. Real site traffic
+                    // (login/WAF) passes through untouched.
+                    val url = request.url
+                    if (url.host == getString(R.string.bds_asset_authority)) {
+                        return bdsAssetLoader.shouldInterceptRequest(url)
+                    }
                     return null
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -287,6 +301,14 @@ class MainActivity : ComponentActivity() {
                         startActivity(Intent(Intent.ACTION_VIEW, request.url))
                     } catch (_: Exception) {}
                     return true
+                }
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    // Cover the raw official page while it loads so the user sees our
+                    // branded dark boot screen instead of a white flash / unstyled site.
+                    if (url?.contains("chat.deepseek.com") == true) {
+                        injectBootOverlay(view)
+                    }
                 }
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
@@ -324,7 +346,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            setBackgroundColor(Color.WHITE)
+            // Dark background so there is no white flash while the page/engine loads.
+            setBackgroundColor(Color.parseColor("#14161a"))
         }
 
         // React SPA WebView - custom UI, hidden initially
@@ -573,7 +596,48 @@ class MainActivity : ComponentActivity() {
             readAsset("content.js")?.let { code ->
                 webView.evaluateJavascript(code) { Log.d("BDS", "content.js done") }
             }
+
+            // Once the engine is in, drop the boot overlay so the real UI shows.
+            removeBootOverlay(webView)
         }
+    }
+
+    /** Branded dark splash that hides the white flash + unstyled official page. */
+    private fun injectBootOverlay(webView: WebView) {
+        val js = """
+            (function(){
+              try{
+                document.documentElement.style.background='#14161a';
+                if(document.body)document.body.style.background='#14161a';
+                if(document.getElementById('bds-boot'))return;
+                var st=document.createElement('style');
+                st.textContent='@keyframes bdsboot{to{transform:rotate(360deg)}}';
+                (document.head||document.documentElement).appendChild(st);
+                var o=document.createElement('div');o.id='bds-boot';
+                o.style.cssText='position:fixed;inset:0;background:#14161a;z-index:2147483647;display:flex;align-items:center;justify-content:center;';
+                o.innerHTML='<div style="width:46px;height:46px;border:3px solid rgba(77,107,254,.25);border-top-color:#4d6bfe;border-radius:50%;animation:bdsboot .9s linear infinite"></div>';
+                (document.body||document.documentElement).appendChild(o);
+              }catch(e){}
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
+    }
+
+    /** Polls for the mounted engine then removes the boot overlay (force after ~3s). */
+    private fun removeBootOverlay(webView: WebView) {
+        val js = """
+            (function(){
+              var tries=0;
+              function rm(){
+                var o=document.getElementById('bds-boot');
+                var ready=document.querySelector('[id^="bds-"]:not(#bds-boot)')||document.querySelector('[class*="bds"]');
+                if(o&&(ready||tries>20)){o.style.opacity='0';o.style.transition='opacity .25s';setTimeout(function(){o.remove();},260);}
+                else{tries++;setTimeout(rm,150);}
+              }
+              rm();
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
     }
 
     private fun showReactUI(token: String) {
