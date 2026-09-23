@@ -146,30 +146,34 @@ jobs:
           tag_name: ${{ steps.rel_cfg.outputs.tag }}
           name: ${{ steps.rel_cfg.outputs.title }}
           body: |
-            ### Super DeepSeek - Real Project with Official Login (Hidden WebView + Native Bridge)
+            ### Super DeepSeek — same-origin DeepSeek client
 
             **Version:** `${{ steps.rel_cfg.outputs.version }}`
             **Build:** `${{ github.run_number }}`
             **Commit:** `${{ github.sha }}`
 
-            #### ✅ Fixed: Failed to fetch - Now with official login via hidden WebView
+            #### What changed in this build
 
-            **Problem:** DeepSeek API is behind CloudFront WAF that requires browser cookies. Direct fetch from file:// origin fails with CORS + WAF challenge (202).
+            Chat no longer goes through the WebView/Kotlin bridge. The SPA is served
+            from `chat.deepseek.com` itself, so every `/api/v0/...` call is
+            same-origin: no CORS preflight, real cookies, and traffic the API cannot
+            tell apart from the official web app's.
 
-            **Solution (as per user suggestion):**
-            - Hidden WebView loads https://chat.deepseek.com to obtain WAF cookies automatically
-            - Native OkHttp bridge uses CookieManager cookies to POST to /api/v0/users/login with proper headers
-            - Fallback to hidden WebView JS fetch if WAF challenge blocks OkHttp
-            - React SPA calls window.AndroidBridge.dsLoginNative() first, bypassing CORS entirely
+            Only sign-in still uses the native WebView, because `POST /users/login`
+            is the one endpoint behind the AWS WAF JS challenge. The token it
+            produces is verified against `/users/current` before the app trusts it.
 
-            #### Features:
-            - ✅ React Standalone UI (OLED black, exact copy from demo)
-            - ✅ 100% Official DeepSeek login via native bridge + hidden WebView (bypass WAF/CORS)
-            - ✅ Real DeepSeek API chat with PoW WASM (26KB)
-            - ✅ All features: DeepThink, Search, Research, RAG, MCP, Projects, Memories, Skills, Characters
-            - ✅ 611KB JS + 40KB CSS
+            Failures are now reported with their real cause instead of a blanket
+            "DeepSeek is unavailable right now." See `docs/ARCHITECTURE.md` and
+            `docs/DIAGNOSIS-AND-FIX-PLAN.md`.
 
-            Install APK on Android 8.0+, sign in with official DeepSeek account - now works!
+            #### Features
+            - Official DeepSeek email / phone sign-in, token verified on login
+            - Direct DeepSeek API chat with WASM proof-of-work (DeepSeekHashV1)
+            - DeepThink, web search, Deep Research, RAG, MCP, projects, memories
+            - OLED dark UI, offline queue, artifacts
+
+            Install on Android 8.0+ and sign in with your DeepSeek account.
           files: |
             *.apk
             *.sha256
