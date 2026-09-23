@@ -123,7 +123,10 @@ internal object UiPolish {
 
     /**
      * True when a click on the given element is on the engine's own composer
-     * attach controls. Used by tests to pin the "+"-icon repair contract.
+     * attach controls. Mirrors the engine's own hit-test (its `MW` function):
+     * plus button, the deep-research toggle/mount, deep-code mount, expand
+     * toggle, the attach-menu mount, or anywhere inside #bds-root.
+     * Used by tests to pin the "+"-icon repair contract.
      */
     internal fun isEngineComposerControl(className: String, id: String): Boolean {
         val cls = className.lowercase()
@@ -132,6 +135,7 @@ internal object UiPolish {
             cls.contains("bds-attach-menu-mount") ||
             cls.contains("bds-attach-wrapper") ||
             cls.contains("bds-deep-research-mount") ||
+            cls.contains("bds-deep-research-toggle") ||
             cls.contains("bds-deep-code-mount") ||
             cls.contains("bds-expand-toggle")
     }
