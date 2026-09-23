@@ -471,92 +471,33 @@ function dsCompleteStreamViaNative(opts: {
         }
       },
       onNeedPow: async (challenge: any) => {
-        console.log('[ChatNative] PoW needed, solving via wasm...')
+        console.log('[ChatNative] PoW needed, solving via wasm... challenge len', JSON.stringify(challenge).length)
         try {
           const pow = await solvePow(challenge)
-          console.log('[ChatNative] PoW solved, retrying via official WebView with pow', pow.slice(0,20))
-          // Retry via official WebView with solved PoW
-          const retryPayload = {
-            token: opts.token,
-            sessionId: opts.sessionId || sessionIdFromNative || '',
-            prompt: opts.prompt,
-            thinking: opts.thinking,
-            search: opts.search,
-            parentMessageId: opts.parentMessageId,
-            powResponse: pow
+          console.log('[ChatNative] PoW solved, sending to native onPowSolved', pow.slice(0,80))
+          const bridge = (window as any).AndroidBridge
+          if (bridge?.onPowSolved) {
+            bridge.onPowSolved(callbackId, pow)
+            return
           }
-          try {
-            // Call native again with powResponse
-            const bridge = (window as any).AndroidBridge
-            if (bridge?.dsChatNative) {
-              // Temporarily replace callback to continue using same controller
-              // We will keep same callbackId but need to re-trigger official WebView
-              // To avoid callback cleanup, we call dsChatNative again with same callbackId but pow
-              // The official WebView JS will see powResponseInput and skip challenge
-              bridge.dsChatNative(JSON.stringify(retryPayload), callbackId)
-              return
-            }
-          } catch (retryErr) {
-            console.warn('[ChatNative] Retry via official WebView failed, fallback to direct fetch', retryErr)
-          }
-          // Fallback direct fetch (may be blocked by WAF but try)
-          const directPowRes = await fetch(`${DS_API}/chat/completion`, {
-            method: 'POST',
-            headers: dsHeaders(opts.token, { 'X-Ds-Pow-Response': pow }),
-            body: JSON.stringify({
-              chat_session_id: opts.sessionId || sessionIdFromNative || '',
-              parent_message_id: opts.parentMessageId ?? null,
+          if (bridge?.dsChatNative) {
+            // Fallback old path: retry with powResponse
+            console.log('[ChatNative] onPowSolved not available, fallback dsChatNative retry')
+            const retryPayload = {
+              token: opts.token,
+              sessionId: opts.sessionId || sessionIdFromNative || '',
               prompt: opts.prompt,
-              ref_file_ids: [],
-              thinking_enabled: opts.thinking,
-              search_enabled: opts.search,
-              preempt: false,
-            }),
-            signal: opts.signal,
-          })
-          if (!directPowRes.ok || !directPowRes.body) {
-            const errTxt = await directPowRes.text()
-            throw new Error(`Completion failed after PoW: ${directPowRes.status} ${errTxt.slice(0,200)}`)
-          }
-          const reader = directPowRes.body.getReader()
-          const decoder = new TextDecoder()
-          let buf = ''
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buf += decoder.decode(value, { stream: true })
-            const lines = buf.split('\n')
-            buf = lines.pop() || ''
-            for (const lineRaw of lines) {
-              let line = lineRaw.trim()
-              if (!line) continue
-              if (line.startsWith('data:')) line = line.slice(5).trim()
-              if (!line || line === '[DONE]') continue
-              try {
-                const ev = JSON.parse(line)
-                let t = ''
-                let th = ''
-                if (ev.choices?.[0]?.delta?.content) t = ev.choices[0].delta.content
-                if (ev.choices?.[0]?.delta?.reasoning_content) th = ev.choices[0].delta.reasoning_content
-                if (ev.v !== undefined && typeof ev.v === 'string') t = ev.v
-                if (t) textAcc += t
-                if (th) thinkingAcc += th
-                if (t || th) {
-                  const payload = JSON.stringify({ type: 'delta', text: textAcc, thinking: thinkingAcc })
-                  try { controller!.enqueue(encoder.encode(`data: ${payload}\n\n`)) } catch {}
-                }
-              } catch {}
+              thinking: opts.thinking,
+              search: opts.search,
+              parentMessageId: opts.parentMessageId,
+              powResponse: pow
             }
+            bridge.dsChatNative(JSON.stringify(retryPayload), callbackId)
+            return
           }
-          const done = JSON.stringify({ type: 'done', sessionId: opts.sessionId || sessionIdFromNative })
-          try {
-            controller!.enqueue(encoder.encode(`data: ${done}\n\n`))
-            controller!.enqueue(encoder.encode(`data: [DONE]\n\n`))
-            controller!.close()
-          } catch {}
-          cleanup()
+          throw new Error('No native bridge for PoW solve')
         } catch (e) {
-          console.error('[ChatNative] PoW fallback failed', e)
+          console.error('[ChatNative] PoW solve failed', e)
           window._dsChatCallbacks![callbackId]?.onError?.(e instanceof Error ? e.message : String(e))
         }
       }
