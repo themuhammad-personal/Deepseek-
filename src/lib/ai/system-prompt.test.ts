@@ -32,6 +32,35 @@ test("buildSystemPrompt includes mode, language, memories and skills", () => {
   assert.match(text, /Live web search is ON/);
 });
 
+test("identity, capability list and MCP tool catalog are injected", () => {
+  const text = buildSystemPrompt({
+    mode: "instant",
+    webSearch: false,
+    locale: "en",
+    mcp: [],
+    rag: "",
+    mcpTools: [
+      {
+        server: "exa",
+        endpoint: "https://mcp.exa.ai/mcp",
+        tools: [
+          {
+            name: "web_search_exa",
+            description: "Search the web with Exa",
+            inputSchema: { properties: { query: { type: "string" } } },
+          },
+        ],
+      },
+    ],
+  });
+  assert.match(text, /Super DeepSeek/);
+  assert.match(text, /who you are/i);
+  assert.match(text, /CONNECTED MCP TOOLS/);
+  assert.match(text, /web_search_exa/);
+  assert.match(text, /args: query/);
+  assert.match(text, /SDS:AUTO:MCP/);
+});
+
 test("disableCore with no custom prompt is empty", () => {
   assert.equal(
     buildSystemPrompt({

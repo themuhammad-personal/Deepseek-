@@ -1,5 +1,10 @@
 import { extractArtifacts } from "./artifacts";
+import { buildWireHistory } from "./deepseek/history";
 import { createSseAcc, parseSseChunk } from "./deepseek/parse-sse";
+import type { McpToolCatalog } from "./ai/system-prompt";
+import { callTool, listTools } from "./mcp-client";
+import { extractMcpCalls, stripToolTags } from "./tool-tags";
+import type { McpServer } from "./types";
 import { emptyMessage, useAppStore } from "./app-store";
 import { buildSystemPrompt } from "./ai/system-prompt";
 import { performHaptic } from "./haptics";
@@ -40,6 +45,29 @@ function advanceSteps(steps: ResearchStep[], chars: number): ResearchStep[] {
   }));
 }
 
+/** Tool discovery is cached per server for 5 minutes so only the first send pays for it. */
+const mcpToolsCache = new Map<string, { at: number; tools: Awaited<ReturnType<typeof listTools>> }>();
+
+async function discoverMcpTools(servers: McpServer[]): Promise<McpToolCatalog[]> {
+  const now = Date.now();
+  const out: McpToolCatalog[] = [];
+  await Promise.allSettled(
+    servers.map(async (s) => {
+      if (s.endpoint.startsWith("builtin://")) return;
+      const hit = mcpToolsCache.get(s.id);
+      const tools =
+        hit && now - hit.at < 5 * 60_000
+          ? hit.tools
+          : await listTools(s, 4000).then((t) => {
+              mcpToolsCache.set(s.id, { at: now, tools: t });
+              return t;
+            });
+      out.push({ server: s.name, endpoint: s.endpoint, tools });
+    }),
+  );
+  return out;
+}
+
 function shouldInjectPrompt(userCount: number): boolean {
   const freq = useAppStore.getState().settings.systemPromptInjectionFrequency;
   const n = useAppStore.getState().settings.systemPromptInjectionInterval || 3;
@@ -53,6 +81,7 @@ function composePrompt(
   attachments: Attachment[],
   isFirst: boolean,
   userCount: number,
+  mcpTools: McpToolCatalog[],
 ): string {
   const store = useAppStore.getState();
   const custom = store.prompts.find((p) => p.id === store.settings.activeSystemPromptId);
@@ -65,6 +94,7 @@ function composePrompt(
         webSearch: store.ui.webSearch,
         locale: store.settings.locale,
         mcp: store.mcp.filter((m) => m.enabled).map((m) => m.id),
+        mcpTools,
         rag: "",
         preferredLang: store.settings.preferredLang,
         injectDate: store.settings.injectSystemDateTime,
@@ -147,7 +177,12 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
   const chat = useAppStore.getState().chats.find((c) => c.id === chatId);
   const userCount = chat?.messages.filter((m) => m.role === "user").length ?? 1;
   const isFirst = userCount <= 1;
-  let prompt = composePrompt(userMsg.content, attachments, isFirst, userCount);
+  // Connected MCP servers' real tool schemas go into the system prompt so the
+  // model can see (and auto-invoke) them — the old build only sent server ids.
+  const mcpTools = await discoverMcpTools(
+    useAppStore.getState().mcp.filter((s) => s.enabled),
+  ).catch(() => [] as McpToolCatalog[]);
+  let prompt = composePrompt(userMsg.content, attachments, isFirst, userCount, mcpTools);
   if (rag) prompt += `\n\n${rag}`;
 
   if (
@@ -182,6 +217,15 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       useAppStore.getState().bindDsSession(chatId, sessionId);
     }
 
+    // Full conversation history (official wire format) so the model remembers
+    // earlier turns of this chat — `prompt` alone is single-turn.
+    const history = buildWireHistory(
+      (useAppStore.getState().chats.find((c) => c.id === chatId)?.messages ?? []).filter(
+        (m) => m.id !== userMsg.id,
+      ),
+    );
+    history.push({ role: "user", content: prompt });
+
     const completeOpts = {
       token: store.account.token,
       sessionId,
@@ -189,8 +233,110 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       thinking: mode === "think" || mode === "research",
       search: webSearch || mode === "research",
       parentMessageId: null,
+      messages: history,
       signal: abort?.signal,
     };
+
+    /**
+     * Consume one SSE response into a message, with the ~8Hz UI coalescing and
+     * the zero-progress network retry. Returns the accumulated text/thinking.
+     */
+    const consumeStream = async (
+      firstRes: Response,
+      targetId: string,
+      seedSteps: ResearchStep[] | undefined,
+      retryOpts: typeof completeOpts,
+    ): Promise<{ text: string; thinking: string; error: string | null }> => {
+      const acc = createSseAcc();
+      let streamError: string | null = null;
+      let sawDone = false;
+      let uiTimer: ReturnType<typeof setTimeout> | null = null;
+      const pushUi = () => {
+        const patch: Partial<Message> = { content: acc.text };
+        if (acc.thinking) patch.thinking = acc.thinking;
+        if (mode === "research" && seedSteps) {
+          patch.researchSteps = advanceSteps(seedSteps, acc.text.length);
+        }
+        store.patchMessage(chatId, targetId, patch);
+      };
+      const applyToUi = () => {
+        if (uiTimer != null) return;
+        uiTimer = setTimeout(() => {
+          uiTimer = null;
+          pushUi();
+        }, 120);
+      };
+      const feedLine = (line: string) => {
+        const delta = parseSseChunk(line, acc);
+        if (!delta) return;
+        if (delta.error) {
+          streamError = delta.error;
+          return;
+        }
+        if (delta.done) {
+          sawDone = true;
+          return;
+        }
+        applyToUi();
+      };
+      const pump = async (body: ReadableStream<Uint8Array>) => {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            let idx: number;
+            while ((idx = buf.indexOf("\n")) !== -1) {
+              feedLine(buf.slice(0, idx));
+              buf = buf.slice(idx + 1);
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        if (buf.trim()) feedLine(buf);
+      };
+
+      let res = firstRes;
+      for (let attempt = 0; ; attempt++) {
+        if (!res.body) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(
+            errText
+              ? `DeepSeek returned an empty stream: ${errText.slice(0, 200)}`
+              : "DeepSeek returned an empty stream.",
+          );
+        }
+        try {
+          await pump(res.body);
+          break;
+        } catch (e) {
+          const hasProgress = acc.text.length > 0 || acc.thinking.length > 0;
+          if (
+            attempt === 0 &&
+            !sawDone &&
+            !hasProgress &&
+            e instanceof TypeError &&
+            abort?.signal.aborted !== true
+          ) {
+            console.warn("[SendChat] stream died with no progress; retrying completion once", e);
+            res = await completeStream(retryOpts);
+            continue;
+          }
+          if (hasProgress || sawDone) break;
+          throw e;
+        }
+      }
+      if (uiTimer != null) {
+        clearTimeout(uiTimer);
+        uiTimer = null;
+      }
+      return { text: acc.text, thinking: acc.thinking, error: streamError };
+    };
+
     let res = await completeStream(completeOpts);
 
     if (res.status === 401) {
@@ -203,113 +349,17 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       return;
     }
 
-    const acc = createSseAcc();
-    let streamError: string | null = null;
-    let sawDone = false;
+    const first = await consumeStream(res, asst.id, asst.researchSteps, completeOpts);
+    let reply = first.text;
+    let lastThinking = first.thinking;
+    let lastAsstId = asst.id;
 
-    // Patching the store on every SSE delta re-rendered (and re-parsed) the whole
-    // thread dozens of times per second — that is what froze the app on long
-    // code/thinking answers. Coalesce to ~8 UI updates per second; the final
-    // patch below restores full fidelity.
-    let uiTimer: ReturnType<typeof setTimeout> | null = null;
-    const pushUi = () => {
-      const patch: Partial<Message> = { content: acc.text };
-      if (acc.thinking) patch.thinking = acc.thinking;
-      if (mode === "research") {
-        patch.researchSteps = advanceSteps(asst.researchSteps ?? researchSeed(), acc.text.length);
-      }
-      store.patchMessage(chatId, asst.id, patch);
-    };
-    const applyToUi = () => {
-      if (uiTimer != null) return;
-      uiTimer = setTimeout(() => {
-        uiTimer = null;
-        pushUi();
-      }, 120);
-    };
-
-    const feedLine = (line: string) => {
-      const delta = parseSseChunk(line, acc);
-      if (!delta) return;
-      if (delta.error) {
-        streamError = delta.error;
-        return;
-      }
-      if (delta.done) {
-        sawDone = true;
-        return;
-      }
-      applyToUi();
-    };
-
-    const pump = async (body: ReadableStream<Uint8Array>) => {
-      const reader = body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let idx: number;
-          while ((idx = buf.indexOf("\n")) !== -1) {
-            feedLine(buf.slice(0, idx));
-            buf = buf.slice(idx + 1);
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-      if (buf.trim()) feedLine(buf);
-    };
-
-    // Android WebView surfaces abrupt HTTP/2 stream resets and flaky-link drops
-    // as `TypeError: network error`. The upstream answer has usually completed
-    // (or nearly so) by then; only a zero-progress death earns one full retry.
-    for (let attempt = 0; ; attempt++) {
-      if (!res.body) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(
-          errText
-            ? `DeepSeek returned an empty stream: ${errText.slice(0, 200)}`
-            : "DeepSeek returned an empty stream.",
-        );
-      }
-      try {
-        await pump(res.body);
-        break;
-      } catch (e) {
-        const hasProgress = acc.text.length > 0 || acc.thinking.length > 0;
-        if (
-          attempt === 0 &&
-          !sawDone &&
-          !hasProgress &&
-          e instanceof TypeError &&
-          abort?.signal.aborted !== true
-        ) {
-          console.warn("[SendChat] stream died with no progress; retrying completion once", e);
-          res = await completeStream(completeOpts);
-          continue;
-        }
-        if (hasProgress || sawDone) break; // keep whatever arrived
-        throw e;
-      }
-    }
-
-    if (uiTimer != null) {
-      clearTimeout(uiTimer);
-      uiTimer = null;
-    }
-
-    const text = acc.text;
-    const thinking = acc.thinking;
-
-    if (streamError && !text) {
-      store.patchMessage(chatId, asst.id, { error: streamError, content: "" });
+    if (first.error && !reply) {
+      store.patchMessage(chatId, asst.id, { error: first.error, content: "" });
       performHaptic("error", store.settings.haptics);
       return;
     }
-    if (!text && !thinking) {
+    if (!reply && !lastThinking) {
       store.patchMessage(chatId, asst.id, {
         error: "DeepSeek returned an empty reply. Send the message again.",
         content: "",
@@ -318,15 +368,77 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       return;
     }
 
-    const artifacts = extractArtifacts(text);
+    // ── Auto-tool loop: the model may answer with <SDS:AUTO:MCP …> invocations.
+    // Execute them against the configured servers, feed the results back as a
+    // hidden follow-up turn, and stream the continuation — up to 3 hops.
+    let wire = history;
+    for (let guard = 0; guard < 3; guard++) {
+      const calls = extractMcpCalls(reply);
+      if (calls.length === 0) break;
+
+      const servers = useAppStore.getState().mcp;
+      const results: string[] = [];
+      for (const call of calls.slice(0, 3)) {
+        const server = servers.find(
+          (s) =>
+            s.enabled &&
+            (s.name === call.server || s.endpoint === call.server || s.id === call.server),
+        );
+        if (!server) {
+          results.push(`[MCP] Server "${call.server}" is not enabled in Settings → Integrations.`);
+          continue;
+        }
+        try {
+          const out = await callTool(server, call.tool, call.args, store.settings.mcpInlineMaxChars);
+          results.push(`[MCP ${server.name} / ${call.tool} result]\n${out}`);
+        } catch (e) {
+          results.push(
+            `[MCP ${server.name} / ${call.tool} failed] ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+
+      const clean = stripToolTags(reply) || "(using a connected tool…)";
+      store.patchMessage(chatId, lastAsstId, { content: clean });
+
+      const cont = emptyMessage({
+        role: "assistant",
+        content: "",
+        thinking: mode === "think" || mode === "research" ? "" : undefined,
+        researchSteps: mode === "research" ? researchSeed() : undefined,
+      });
+      store.appendMessage(chatId, cont);
+      store.setStreaming(cont.id);
+
+      wire = [
+        ...wire,
+        { role: "assistant", content: clean },
+        { role: "user", content: `${results.join("\n\n")}\n\n(Continue using the tool result above.)` },
+      ];
+      const retryOpts = { ...completeOpts, messages: wire };
+      const res2 = await completeStream(retryOpts);
+      const next = await consumeStream(res2, cont.id, cont.researchSteps, retryOpts);
+      if (next.error && !next.text) {
+        store.patchMessage(chatId, cont.id, { error: next.error, content: "" });
+        performHaptic("error", store.settings.haptics);
+        return;
+      }
+      reply = next.text;
+      lastThinking = next.thinking;
+      lastAsstId = cont.id;
+      if (!reply) break;
+    }
+
+    const finalText = stripToolTags(reply) || reply;
+    const artifacts = extractArtifacts(finalText);
     const steps = (
-      useAppStore.getState().chats.find((c) => c.id === chatId)?.messages.find((m) => m.id === asst.id)
+      useAppStore.getState().chats.find((c) => c.id === chatId)?.messages.find((m) => m.id === lastAsstId)
         ?.researchSteps ?? []
     ).map((s) => ({ ...s, status: "done" as const }));
 
-    store.patchMessage(chatId, asst.id, {
-      content: text,
-      thinking: thinking || undefined,
+    store.patchMessage(chatId, lastAsstId, {
+      content: finalText,
+      thinking: lastThinking || undefined,
       thinkingMs: Date.now() - started,
       artifacts: artifacts.length ? artifacts : undefined,
       researchSteps: mode === "research" ? steps : undefined,

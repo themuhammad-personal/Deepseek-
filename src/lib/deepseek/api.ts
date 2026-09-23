@@ -217,6 +217,8 @@ export type CompleteOptions = {
   thinking: boolean;
   search: boolean;
   parentMessageId?: string | null;
+  /** Full conversation history (official wire format) — gives the model multi-turn memory. */
+  messages?: { role: "user" | "assistant"; content: string }[];
   signal?: AbortSignal;
 };
 
@@ -228,10 +230,16 @@ export type CompleteOptions = {
  * challenge, which is what the official client does too.
  */
 export async function completeStream(opts: CompleteOptions): Promise<Response> {
+  // The official web client sends the whole conversation as a `messages`
+  // array; `prompt` alone is the single-turn/edit path and makes the model
+  // forget earlier turns. Send both: when `messages` is present the server
+  // takes the history path and ignores `prompt`, and ancient fallbacks that
+  // only understand `prompt` still work.
   const body = JSON.stringify({
     chat_session_id: opts.sessionId,
     parent_message_id: opts.parentMessageId ?? null,
     prompt: opts.prompt,
+    ...(opts.messages?.length ? { messages: opts.messages } : {}),
     ref_file_ids: [],
     thinking_enabled: opts.thinking,
     search_enabled: opts.search,
