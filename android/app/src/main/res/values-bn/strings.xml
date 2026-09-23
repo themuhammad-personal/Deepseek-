@@ -18,4 +18,7 @@
     <string name="bds_update_download_failed">ডাউনলোড ব্যর্থ হয়েছে (%1$s)।</string>
     <string name="bds_update_need_permission">Super DeepSeek-এর জন্য অজানা অ্যাপ ইনস্টল করার অনুমতি দিন, তারপর আবার চেষ্টা করুন।</string>
     <string name="bds_update_install_failed">প্যাকেজ ইনস্টলার চালু করা যায়নি।</string>
+    <!-- Branded boot overlay -->
+    <string name="bds_boot_title">Super DeepSeek</string>
+    <string name="bds_boot_subtitle">আপনার ওয়ার্কস্পেস লোড হচ্ছে…</string>
 </resources>

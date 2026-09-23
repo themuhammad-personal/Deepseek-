@@ -817,6 +817,37 @@ class WebViewBridge(
         }
     }
 
+    /**
+     * Simple duration-based vibration the engine bundle calls
+     * (`AndroidBridge.vibrate(ms)`) for menu open / toggle haptics. Clamped so a
+     * page script can never hold the motor.
+     */
+    @JavascriptInterface
+    fun vibrate(millis: Long) {
+        val ms = millis.coerceIn(1, 60)
+        try {
+            val vibrator =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val manager =
+                                context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE)
+                                        as? VibratorManager
+                        manager?.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    } ?: return
+            if (!vibrator.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(ms)
+            }
+        } catch (_: Throwable) {
+            // Device without a vibrator — haptics are optional polish.
+        }
+    }
+
     private fun writeBytesToDownloads(
             bytes: ByteArray,
             fileName: String,

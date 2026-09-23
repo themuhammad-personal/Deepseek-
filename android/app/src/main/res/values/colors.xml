@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="launcher_background">#021026</color>
-    <color name="bds_splash_bg">#021026</color>
+    <!--
+      Launch pipeline palette. Every surface between "tap icon" and "chat
+      visible" uses the same warm charcoal so there is no white flash and no
+      color jump: system splash → window background → WebView → boot overlay.
+    -->
+    <color name="launcher_background">#262624</color>
+    <color name="bds_splash_bg">#262624</color>
+    <color name="bds_window_bg">#262624</color>
     <color name="bds_accent">#4D6BFE</color>
     <color name="bds_electric">#00E5FF</color>
 </resources>

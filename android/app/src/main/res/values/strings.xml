@@ -23,4 +23,8 @@
     <!-- App Shortcuts -->
     <string name="shortcut_new_chat">New Chat</string>
     <string name="shortcut_deep_research">Deep Research</string>
+
+    <!-- Branded boot overlay (shown while the engine page loads) -->
+    <string name="bds_boot_title">Super DeepSeek</string>
+    <string name="bds_boot_subtitle">Loading your workspace…</string>
 </resources>

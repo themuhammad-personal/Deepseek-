@@ -210,6 +210,12 @@ class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var tokenPollingRunnable: Runnable? = null
 
+    /** Flipped once the engine page paints; releases the system splash. */
+    @Volatile private var firstPaintReady = false
+
+    /** Cap on splash hold so a stalled network can never trap the launch. */
+    private val SPLASH_FAILSAFE_MS = 4000L
+
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
@@ -233,7 +239,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        splashScreen.setKeepOnScreenCondition { false }
+
+        // The system splash stays up until the WebView has actually painted
+        // something (first page start = branded boot overlay injected). This is
+        // what removes the "white screen → official page → our UI" three-stage
+        // launch: splash (branded) → boot overlay (branded) → app. The failsafe
+        // timer keeps a cold network from pinning the user on the splash.
+        splashScreen.setKeepOnScreenCondition { !firstPaintReady }
+        handler.postDelayed({ firstPaintReady = true }, SPLASH_FAILSAFE_MS)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
@@ -308,6 +321,9 @@ class MainActivity : ComponentActivity() {
                     // branded dark boot screen instead of a white flash / unstyled site.
                     if (url?.contains("chat.deepseek.com") == true) {
                         injectBootOverlay(view)
+                        // The very first paint releases the system splash — from here
+                        // on the user is inside our branded shell, never a white frame.
+                        firstPaintReady = true
                     }
                 }
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -347,7 +363,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             // Dark background so there is no white flash while the page/engine loads.
-            setBackgroundColor(Color.parseColor("#14161a"))
+            setBackgroundColor(Color.parseColor("#262624")) // warm charcoal — matches the design frame & boot overlay
         }
 
         // React SPA WebView - custom UI, hidden initially
@@ -426,7 +442,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#262624"))
         }
 
         cookieManager.setAcceptThirdPartyCookies(officialWebView, true)
@@ -451,7 +467,7 @@ class MainActivity : ComponentActivity() {
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#262624"))
             addView(officialWebView)
             addView(reactWebView)
         }
@@ -610,15 +626,22 @@ class MainActivity : ComponentActivity() {
         val js = """
             (function(){
               try{
-                document.documentElement.style.background='#14161a';
-                if(document.body)document.body.style.background='#14161a';
+                var BG='#262624';
+                document.documentElement.style.background=BG;
+                if(document.body)document.body.style.background=BG;
                 if(document.getElementById('bds-boot'))return;
                 var st=document.createElement('style');
-                st.textContent='@keyframes bdsboot{to{transform:rotate(360deg)}}';
+                st.textContent='@keyframes bdsboot{to{transform:rotate(360deg)}}'
+                  +'@keyframes bdsbootfade{from{opacity:0}to{opacity:1}}'
+                  +'.bds-boot-word{font-family:Georgia,serif;font-size:17px;font-weight:700;letter-spacing:.2px;color:#f5f4ef}'
+                  +'.bds-boot-sub{font-size:11.5px;color:#8f8d82;margin-top:6px;letter-spacing:.3px}';
                 (document.head||document.documentElement).appendChild(st);
                 var o=document.createElement('div');o.id='bds-boot';
-                o.style.cssText='position:fixed;inset:0;background:#14161a;z-index:2147483647;display:flex;align-items:center;justify-content:center;';
-                o.innerHTML='<div style="width:46px;height:46px;border:3px solid rgba(77,107,254,.25);border-top-color:#4d6bfe;border-radius:50%;animation:bdsboot .9s linear infinite"></div>';
+                o.style.cssText='position:fixed;inset:0;background:'+BG+';z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;animation:bdsbootfade .3s ease';
+                o.innerHTML='<div style="width:52px;height:52px;border-radius:14px;background:#4d6bfe;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(77,107,254,.35)">'
+                  +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>'
+                  +'<div style="text-align:center"><div class="bds-boot-word">${org.json.JSONObject.quote(getString(R.string.bds_boot_title))}</div><div class="bds-boot-sub">${org.json.JSONObject.quote(getString(R.string.bds_boot_subtitle))}</div></div>'
+                  +'<div style="width:26px;height:26px;border:3px solid rgba(109,139,255,.2);border-top-color:#6d8bff;border-radius:50%;animation:bdsboot .85s linear infinite"></div>';
                 (document.body||document.documentElement).appendChild(o);
               }catch(e){}
             })();
@@ -644,34 +667,12 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Hides features that are out of scope for this build (the voice / auto-read
-     * feature) from the settings drawer, and adds a little hover polish. The engine
-     * renders settings lazily, so we watch the DOM and hide matching rows on insert.
+     * Hides entries that are dead in this app (excluded features, upstream
+     * chrome, clutter) and keeps them hidden as the engine lazily re-renders.
+     * The rules live in [UiPolish] so they are unit-testable.
      */
     private fun injectUiPolish(webView: WebView) {
-        val js = """
-            (function(){
-              if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;
-              var HIDE=[/Voice Mode/i,/Auto-read responses/i,/ভয়েস মোড/i,/অটো-রিড/i];
-              function hideRows(){
-                var rows=document.querySelectorAll('.bds-settings-row');
-                for(var i=0;i<rows.length;i++){
-                  var t=rows[i].textContent||'';
-                  for(var j=0;j<HIDE.length;j++){
-                    if(HIDE[j].test(t)){rows[i].style.display='none';break;}
-                  }
-                }
-              }
-              hideRows();
-              var pend=false;
-              var mo=new MutationObserver(function(){
-                if(pend)return;pend=true;
-                setTimeout(function(){pend=false;hideRows();},120);
-              });
-              mo.observe(document.documentElement,{childList:true,subtree:true});
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(js, null)
+        webView.evaluateJavascript(UiPolish.buildScript(), null)
     }
 
     private fun showReactUI(token: String) {

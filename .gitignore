@@ -5,3 +5,11 @@ dist-android/
 .tanstack/
 .env
 *.log
+
+# bds-sync.sh working clone of the upstream engine source
+.bds-upstream/
+
+# design-preview generated cascade copies (regenerate via setup.sh)
+design-preview/content.css
+design-preview/our-skin.css
+design-preview/runtime-styles.css
