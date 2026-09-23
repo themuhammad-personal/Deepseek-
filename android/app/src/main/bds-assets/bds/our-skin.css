@@ -1,36 +1,196 @@
 /* ==========================================================================
    Super DeepSeek — design frame (our skin) on top of the better-deepseek engine.
    The engine exposes its palette as --bds-* custom properties; overriding them
-   reskins the engine UI to match our app without touching its logic.
+   reskins the engine UI to match our brand without touching its logic. We also
+   polish the drawer / settings / buttons / switches / scrollbars below.
    ========================================================================== */
 
+/* ── Brand tokens (light) ─────────────────────────────────────────────── */
 :root {
   --bds-accent: #4d6bfe;
-  --bds-accent-rgb: 77, 107, 254;
+  --bds-accent-glow: rgba(77, 107, 254, 0.28);
   --bds-accent-hover: #5f7bff;
+  --bds-ai-color: #4d6bfe;
   --bds-radius: 14px;
-  --bds-radius-md: 12px;
   --bds-transition: 0.2s ease;
-  --bds-bg-elevated: rgba(255, 255, 255, 0.92);
+  --bds-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+  --bds-bg-panel: #ffffff;
+  --bds-bg-elevated: #f6f7fb;
+  --bds-bg-card: #ffffff;
+  --bds-bg-input: #f2f3f8;
+  --bds-bg-hover: rgba(77, 107, 254, 0.08);
+  --bds-border: #e6e8f0;
+  --bds-border-hover: #c9cfe6;
+  --bds-text-primary: #17181c;
+  --bds-text-secondary: #4b4f58;
+  --bds-text-tertiary: #8a8f99;
+  --bds-text-muted: #a6abb5;
+  --bds-danger: #ef4444;
 }
 
+/* ── Brand tokens (dark) ──────────────────────────────────────────────── */
 .dark {
   --bds-accent: #4d6bfe;
-  --bds-accent-rgb: 77, 107, 254;
+  --bds-accent-glow: rgba(77, 107, 254, 0.32);
   --bds-accent-hover: #6180ff;
-  --bds-bg-panel: #1a1c20;
-  --bds-bg-elevated: #22252b;
-  --bds-bg-inset: #15171a;
-  --bds-text-1: #eaecef;
-  --bds-text-2: #b4b8c0;
-  --bds-text-3: #7b8089;
-  --bds-border: #2a2d34;
-  --bds-border-strong: #3a3e47;
-  --bds-success: #4ade80;
+  --bds-ai-color: #6180ff;
+  --bds-bg-panel: #1a1d22;
+  --bds-bg-elevated: #22262c;
+  --bds-bg-card: #1e2126;
+  --bds-bg-input: #15171b;
+  --bds-bg-hover: rgba(77, 107, 254, 0.12);
+  --bds-bg-chat-user: rgba(77, 107, 254, 0.16);
+  --bds-border: #2a2e35;
+  --bds-border-hover: #3a3f49;
+  --bds-text-primary: #eaecef;
+  --bds-text-secondary: #b4b8c0;
+  --bds-text-tertiary: #7b8089;
+  --bds-text-muted: #6b7078;
   --bds-danger: #f87171;
+  --bds-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
 }
 
-/* Subtle brand touch on the engine's floating action button */
-#bds-floating-btn {
-  border-radius: var(--bds-radius) !important;
+/* ── Base ─────────────────────────────────────────────────────────────── */
+#bds-root {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Themed, thin scrollbars inside engine surfaces */
+#bds-root ::-webkit-scrollbar,
+#bds-drawer ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+#bds-root ::-webkit-scrollbar-thumb,
+#bds-drawer ::-webkit-scrollbar-thumb {
+  background: var(--bds-border-hover);
+  border-radius: 99px;
+}
+#bds-root ::-webkit-scrollbar-track,
+#bds-drawer ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Drawer / sidebar ─────────────────────────────────────────────────── */
+#bds-drawer {
+  background: var(--bds-bg-panel);
+  border-right: 1px solid var(--bds-border);
+  box-shadow: var(--bds-shadow);
+}
+.bds-drawer-header {
+  border-bottom: 1px solid var(--bds-border);
+}
+.bds-drawer-header::after {
+  content: "";
+  display: block;
+  height: 2px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--bds-accent), transparent);
+}
+.bds-drawer-body {
+  background: var(--bds-bg-panel);
+}
+.bds-drawer-btn {
+  border-radius: 10px;
+  transition: background var(--bds-transition), color var(--bds-transition);
+}
+.bds-drawer-btn:hover {
+  background: var(--bds-bg-hover);
+  color: var(--bds-accent);
+}
+.bds-drawer-footer {
+  border-top: 1px solid var(--bds-border);
+}
+.bds-drawer-backdrop {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.bds-btn {
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all var(--bds-transition);
+}
+.bds-btn:active {
+  transform: scale(0.97);
+}
+.bds-api-btn-primary,
+.bds-btn-export {
+  background: linear-gradient(135deg, var(--bds-accent), var(--bds-accent-hover));
+  box-shadow: 0 4px 14px var(--bds-accent-glow);
+  border: none;
+  color: #fff;
+}
+.bds-api-btn-primary:hover,
+.bds-btn-export:hover {
+  filter: brightness(1.08);
+}
+.bds-api-btn-danger,
+.bds-btn-danger {
+  background: color-mix(in srgb, var(--bds-danger) 14%, transparent);
+  color: var(--bds-danger);
+  border: 1px solid color-mix(in srgb, var(--bds-danger) 35%, transparent);
+}
+.bds-btn-outlined {
+  border: 1px solid var(--bds-border);
+  background: transparent;
+}
+.bds-btn-outlined:hover {
+  border-color: var(--bds-accent);
+  color: var(--bds-accent);
+}
+
+/* ── Inputs / selects / switches ──────────────────────────────────────── */
+.bds-select,
+.bds-edit-select,
+.bds-api-select,
+.bds-drawer-search-input,
+.bds-edit-input {
+  background: var(--bds-bg-input);
+  border: 1px solid var(--bds-border);
+  border-radius: 10px;
+  color: var(--bds-text-primary);
+}
+.bds-select:focus,
+.bds-drawer-search-input:focus,
+.bds-edit-input:focus {
+  border-color: var(--bds-accent);
+  box-shadow: 0 0 0 3px var(--bds-accent-glow);
+  outline: none;
+}
+.bds-ios-switch {
+  border-radius: 99px;
+}
+
+/* ── Popups / modals / toasts ─────────────────────────────────────────── */
+.bds-memory-popup,
+.bds-api-modal,
+.bds-manage-popover {
+  background: var(--bds-bg-elevated);
+  border: 1px solid var(--bds-border);
+  border-radius: var(--bds-radius);
+  box-shadow: var(--bds-shadow);
+}
+.bds-api-modal-overlay,
+.bds-memory-popup-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+}
+.bds-api-toast {
+  border-radius: 12px;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+.bds-saved-tab--active,
+.bds-api-tab-active {
+  color: var(--bds-accent);
+}
+
+/* ── Floating action button ───────────────────────────────────────────── */
+#bds-floating-btn,
+#bds-header-btn {
+  border-radius: var(--bds-radius);
 }
