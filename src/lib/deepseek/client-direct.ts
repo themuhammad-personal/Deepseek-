@@ -32,9 +32,51 @@ declare global {
     AndroidBridge?: {
       dsLoginNative?: (payloadJson: string, callbackId: string) => void
       dsChatNative?: (payloadJson: string, callbackId: string) => void
+      onOfficialToken?: (token: string) => void
+      getOfficialToken?: () => string | null
+      switchToOfficialLogin?: () => void
     }
     _dsLoginCallbacks?: Record<string, { resolve: (v: any) => void; reject: (e: string) => void }>
   }
+}
+
+// Listen for official token from Android official WebView
+if (typeof window !== 'undefined') {
+  window.addEventListener('sds:official-token', ((e: CustomEvent) => {
+    const token = (e.detail as any)?.token
+    if (token && token.length > 20) {
+      console.log('[Official] Token received via event, length:', token.length)
+      // Dispatch to store if available
+      try {
+        const w = window as any
+        if (w.useAppStore?.getState) {
+          w.useAppStore.getState().setAccount({ token, email: '', mobile: '' })
+        }
+      } catch {}
+    }
+  }) as EventListener)
+
+  // Also check if AndroidBridge already has token on load
+  const checkOfficialToken = () => {
+    try {
+      const bridge = (window as any).AndroidBridge
+      if (bridge?.getOfficialToken) {
+        const t = bridge.getOfficialToken()
+        if (t && t.length > 20) {
+          console.log('[Official] Found saved token on startup')
+          const w = window as any
+          if (w.useAppStore?.getState) {
+            const acc = w.useAppStore.getState().account
+            if (!acc?.token || acc.token.length < 20) {
+              w.useAppStore.getState().setAccount({ token: t, email: '', mobile: '' })
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  if (document.readyState === 'complete') checkOfficialToken()
+  else window.addEventListener('load', () => setTimeout(checkOfficialToken, 1000))
 }
 
 function dsLoginViaNative(body: DsLoginBody): Promise<{ token: string; email: string; mobile: string }> {

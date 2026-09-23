@@ -446,6 +446,11 @@ export const useAppStore = create<AppState & Actions>()(
   ),
 );
 
+if (typeof window !== 'undefined') {
+  (window as any).useAppStore = useAppStore;
+  (window as any).K = useAppStore; // compat
+}
+
 export function useActiveChat(): Chat | undefined {
   return useAppStore((s) => s.chats.find((c) => c.id === s.activeChatId));
 }

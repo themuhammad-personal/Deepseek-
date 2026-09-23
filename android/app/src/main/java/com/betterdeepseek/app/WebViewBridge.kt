@@ -1618,11 +1618,53 @@ class WebViewBridge(
         return transcriptArray
     }
 
-    // ── DeepSeek Official Login via Native OkHttp + Hidden WebView WAF Cookies ──
-
+    // ── Super DeepSeek Official Login Architecture ──
+    // Official WebView loads https://chat.deepseek.com for 100% official login
+    // React WebView shows custom OLED UI after token extracted
     @Volatile var mainWebView: android.webkit.WebView? = null
     @Volatile var hiddenWebView: android.webkit.WebView? = null
+    @Volatile var officialWebView: android.webkit.WebView? = null
+    @Volatile var reactWebView: android.webkit.WebView? = null
     @Volatile var evaluateHiddenJs: ((String) -> Unit)? = null
+    @Volatile var onOfficialLogin: ((String) -> Unit)? = null
+    @Volatile var onSwitchToOfficial: (() -> Unit)? = null
+    @Volatile var lastToken: String? = null
+
+    @JavascriptInterface
+    fun onOfficialToken(token: String?) {
+        val t = token?.trim() ?: ""
+        if (t.length < 20) {
+            Log.w(TAG, "onOfficialToken: invalid token length ${t.length}")
+            return
+        }
+        Log.d(TAG, "onOfficialToken: received token length ${t.length}")
+        lastToken = t
+        // Persist
+        try {
+            prefs.edit().putString("ds_official_token", t).apply()
+        } catch (_: Exception) {}
+        onOfficialLogin?.invoke(t)
+    }
+
+    @JavascriptInterface
+    fun getOfficialToken(): String? {
+        return lastToken ?: prefs.getString("ds_official_token", null)
+    }
+
+    @JavascriptInterface
+    fun switchToOfficialLogin() {
+        // Called from React UI when user wants to re-login
+        lastToken = null
+        prefs.edit().remove("ds_official_token").apply()
+        mainHandler.post {
+            try {
+                onSwitchToOfficial?.invoke()
+                officialWebView?.post {
+                    officialWebView?.loadUrl("https://chat.deepseek.com/")
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     @JavascriptInterface
     fun dsLoginNative(payloadJson: String?, callbackId: String?) {

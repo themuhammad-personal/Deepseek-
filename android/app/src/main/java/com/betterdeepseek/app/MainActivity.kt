@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -27,14 +29,12 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewFeature
 
-// ── Helper functions for unit tests (from original better-deepseek) ──
-
+// Helper functions for unit tests
 internal fun applyRootWindowInsets(view: View, windowInsets: WindowInsetsCompat): WindowInsetsCompat {
     val systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
     val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
@@ -49,6 +49,7 @@ internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local
     if (scheme != "http" && scheme != "https") return false
     val host = url.host?.lowercase() ?: return false
     if (host == assetHost.lowercase()) return false
+    if (host == "appassets.androidplatform.net") return false
     if (host == "deepseek.com" || host.endsWith(".deepseek.com")) return false
     if (host == "hcaptcha.com" || host.endsWith(".hcaptcha.com")) return false
     if (isGoogleAuthHost(host)) return false
@@ -57,21 +58,14 @@ internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local
 
 internal fun isGoogleAuthHost(host: String): Boolean {
     val h = host.lowercase()
-    return h == "google.com" ||
-            h.endsWith(".google.com") ||
-            h == "accounts.youtube.com" ||
-            h == "googleusercontent.com" ||
-            h.endsWith(".googleusercontent.com")
+    return h == "google.com" || h.endsWith(".google.com") || h == "accounts.youtube.com" || h == "googleusercontent.com" || h.endsWith(".googleusercontent.com")
 }
 
 internal fun shouldCapturePopupInApp(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
     return !shouldOpenExternally(url, assetHost)
 }
 
-internal fun shouldOpenRequestExternally(
-        request: WebResourceRequest,
-        assetHost: String = "bds-asset.local"
-): Boolean {
+internal fun shouldOpenRequestExternally(request: WebResourceRequest, assetHost: String = "bds-asset.local"): Boolean {
     if (!request.isForMainFrame) return false
     val url = request.url ?: return false
     if (!shouldOpenExternally(url, assetHost)) return false
@@ -79,11 +73,7 @@ internal fun shouldOpenRequestExternally(
 }
 
 internal fun deriveWebViewUserAgent(defaultUserAgent: String): String {
-    return defaultUserAgent
-            .replace(Regex(""";\s*wv(?=\))"""), "")
-            .replace(Regex("""\bVersion/\d+(?:\.\d+)*\s*"""), "")
-            .replace(Regex("""\s+"""), " ")
-            .trim()
+    return defaultUserAgent.replace(Regex(""";\s*wv(?=\))"""), "").replace(Regex("""\bVersion/\d+(?:\.\d+)*\s*"""), "").replace(Regex("""\s+"""), " ").trim()
 }
 
 internal fun parseChromeMajorVersion(ua: String): String? {
@@ -95,13 +85,7 @@ internal fun parseAndroidPlatformVersion(ua: String): String? {
 }
 
 internal fun parseDeviceModel(ua: String): String? {
-    val inner =
-            Regex("""Android\s+[\d.]+;\s*([^;)]+)""")
-                    .find(ua)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.trim()
-                    ?: return null
+    val inner = Regex("""Android\s+[\d.]+;\s*([^;)]+)""").find(ua)?.groupValues?.get(1)?.trim() ?: return null
     return inner.substringBefore(" Build/").trim().ifBlank { null }
 }
 
@@ -110,24 +94,11 @@ internal fun buildUserAgentMetadata(derivedUa: String): UserAgentMetadata {
     val chromeVersion = CHROME_VERSION_REGEX.find(derivedUa)?.groupValues?.get(1)
     if (chromeVersion != null) {
         val majorVersion = chromeVersion.substringBefore('.')
-        val brandVersions =
-                listOf(
-                        UserAgentMetadata.BrandVersion.Builder()
-                                .setBrand("Not/A)Brand")
-                                .setMajorVersion("8")
-                                .setFullVersion("8.0.0.0")
-                                .build(),
-                        UserAgentMetadata.BrandVersion.Builder()
-                                .setBrand("Chromium")
-                                .setMajorVersion(majorVersion)
-                                .setFullVersion(chromeVersion)
-                                .build(),
-                        UserAgentMetadata.BrandVersion.Builder()
-                                .setBrand("Google Chrome")
-                                .setMajorVersion(majorVersion)
-                                .setFullVersion(chromeVersion)
-                                .build(),
-                )
+        val brandVersions = listOf(
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Not/A)Brand").setMajorVersion("8").setFullVersion("8.0.0.0").build(),
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Chromium").setMajorVersion(majorVersion).setFullVersion(chromeVersion).build(),
+            UserAgentMetadata.BrandVersion.Builder().setBrand("Google Chrome").setMajorVersion(majorVersion).setFullVersion(chromeVersion).build(),
+        )
         builder.setFullVersion(chromeVersion).setBrandVersionList(brandVersions)
     }
     builder.setArchitecture("").setBitness(UserAgentMetadata.BITNESS_DEFAULT)
@@ -140,13 +111,9 @@ internal fun buildFileChooserIntent(acceptTypes: Array<String>?, allowMultiple: 
     return Intent(Intent.ACTION_GET_CONTENT).apply {
         addCategory(Intent.CATEGORY_OPENABLE)
         type = "*/*"
-        if (allowMultiple) {
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
+        if (allowMultiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         val mimeTypes = mapAcceptTypes(acceptTypes)
-        if (mimeTypes.isNotEmpty()) {
-            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
-        }
+        if (mimeTypes.isNotEmpty()) putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
     }
 }
 
@@ -155,38 +122,24 @@ internal fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>?
     val uris = linkedSetOf<Uri>()
     val clipData = data?.clipData
     if (clipData != null) {
-        for (i in 0 until clipData.itemCount) {
-            clipData.getItemAt(i).uri?.let { uris.add(it) }
-        }
+        for (i in 0 until clipData.itemCount) clipData.getItemAt(i).uri?.let { uris.add(it) }
     } else {
         data?.data?.let { uris.add(it) }
     }
     if (uris.isNotEmpty()) return uris.toTypedArray()
-    return runCatching { WebChromeClient.FileChooserParams.parseResult(resultCode, data) }
-            .getOrNull()
-            ?.takeIf { it.isNotEmpty() }
+    return runCatching { WebChromeClient.FileChooserParams.parseResult(resultCode, data) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
 private fun mapAcceptTypes(acceptTypes: Array<String>?): List<String> {
-    val tokens =
-            acceptTypes
-                    ?.flatMap { it.split(',') }
-                    ?.map { it.trim() }
-                    ?.filter { it.isNotEmpty() }
-                    .orEmpty()
+    val tokens = acceptTypes?.flatMap { it.split(',') }?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
     if (tokens.isEmpty()) return emptyList()
     val mapped = linkedSetOf<String>()
     for (token in tokens) {
-        val mimeType =
-                when {
-                    "/" in token -> token
-                    token.startsWith(".") ->
-                            MimeTypeMap.getSingleton()
-                                    .getMimeTypeFromExtension(
-                                            token.removePrefix(".").lowercase()
-                                    )
-                    else -> null
-                }
+        val mimeType = when {
+            "/" in token -> token
+            token.startsWith(".") -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(token.removePrefix(".").lowercase())
+            else -> null
+        }
         if (mimeType.isNullOrBlank()) return emptyList()
         mapped.add(mimeType)
     }
@@ -196,26 +149,33 @@ private fun mapAcceptTypes(acceptTypes: Array<String>?): List<String> {
 private val CHROME_VERSION_REGEX = Regex("""\bChrome/(\d+(?:\.\d+)*)""")
 
 /**
- * Super DeepSeek - React standalone + hidden DeepSeek WebView for official login
+ * Super DeepSeek - Official DeepSeek login via visible WebView + custom React UI overlay
+ * 
+ * As per user request: Directly load https://chat.deepseek.com official login page,
+ * let user login officially, extract token from localStorage.userToken, then show
+ * custom React SPA UI (exact copy from demo) with that token.
  * 
  * Architecture:
- * - mainWebView: loads local React SPA from https://appassets.androidplatform.net/android-spa.html
- *   All UI, features, settings are here. It tries to login via native bridge first.
- * - hiddenWebView: invisible, loads https://chat.deepseek.com to obtain WAF cookies and 
- *   CloudFront challenge tokens. This solves "Failed to fetch" because DeepSeek API is behind
- *   AWS WAF that requires browser cookies. The hidden WebView's cookies are shared via
- *   CookieManager and used by OkHttp in WebViewBridge for official API calls.
+ * - officialWebView: visible, loads https://chat.deepseek.com official site for 100% official login
+ *   After login, token is extracted from localStorage: JSON.parse(localStorage.getItem("userToken")).value
+ * - reactWebView: invisible initially, loads custom React SPA from local assets (OLED black UI)
+ *   After official login token obtained, it becomes visible and receives token via JS bridge
+ * 
+ * This solves WAF/CORS completely because login happens on official domain with official cookies.
  */
 class MainActivity : ComponentActivity() {
 
-    private lateinit var mainWebView: WebView
-    private lateinit var hiddenWebView: WebView
+    private lateinit var officialWebView: WebView
+    private lateinit var reactWebView: WebView
     private lateinit var rootLayout: FrameLayout
     private lateinit var assetLoader: WebViewAssetLoader
     private lateinit var bridge: WebViewBridge
     private lateinit var cookieManager: CookieManager
-
+    private var isReactVisible = false
     private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var tokenPollingRunnable: Runnable? = null
+
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
@@ -224,11 +184,8 @@ class MainActivity : ComponentActivity() {
                 if (result.resultCode == Activity.RESULT_OK) {
                     result.data?.let { intent ->
                         val clip = intent.clipData
-                        if (clip != null) {
-                            Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
-                        } else {
-                            intent.data?.let { arrayOf(it) }
-                        }
+                        if (clip != null) Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+                        else intent.data?.let { arrayOf(it) }
                     }
                 } else null
             )
@@ -253,11 +210,68 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
-        mainWebView = WebView(this).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+        // Official DeepSeek WebView - visible for official login
+        officialWebView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                mediaPlaybackRequiresUserGesture = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                cacheMode = WebSettings.LOAD_DEFAULT
+                userAgentString = deriveWebViewUserAgent(WebSettings.getDefaultUserAgent(this@MainActivity))
+                setSupportMultipleWindows(true)
+                javaScriptCanOpenWindowsAutomatically = true
+            }
+            addJavascriptInterface(bridge, "AndroidBridge")
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    assetLoader.shouldInterceptRequest(request.url)?.let { return it }
+                    return null
+                }
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    if (!shouldOpenRequestExternally(request, "appassets.androidplatform.net")) return false
+                    // Open external links in browser
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                    } catch (_: Exception) {}
+                    return true
+                }
+                override fun onPageFinished(view: WebView, url: String?) {
+                    super.onPageFinished(view, url)
+                    Log.d("SuperDeepSeek", "Official WebView loaded: $url")
+                    // Inject token polling script
+                    if (url?.contains("chat.deepseek.com") == true) {
+                        injectTokenPolling(view)
+                    }
+                }
+            }
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
+                    pendingFileChooser?.onReceiveValue(null)
+                    val callback = filePathCallback ?: return true
+                    pendingFileChooser = callback
+                    return try {
+                        fileChooserLauncher.launch(buildFileChooserIntent(fileChooserParams?.acceptTypes, fileChooserParams?.mode == MODE_OPEN_MULTIPLE))
+                        true
+                    } catch (t: Throwable) {
+                        Log.e("SuperDeepSeek", "File chooser failed", t)
+                        pendingFileChooser = null
+                        callback.onReceiveValue(null)
+                        true
+                    }
+                }
+            }
+            setBackgroundColor(Color.WHITE)
+        }
+
+        // React SPA WebView - custom UI, hidden initially
+        reactWebView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            visibility = View.GONE
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -272,108 +286,65 @@ class MainActivity : ComponentActivity() {
             }
             addJavascriptInterface(bridge, "AndroidBridge")
             webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): WebResourceResponse? {
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                     return assetLoader.shouldInterceptRequest(request.url)
-                }
-                override fun shouldOverrideUrlLoading(
-                    view: WebView,
-                    request: WebResourceRequest
-                ): Boolean {
-                    // Use same logic as original better-deepseek for unit tests
-                    if (!shouldOpenRequestExternally(request, "appassets.androidplatform.net")) {
-                        return false
-                    }
-                    // For external URLs with gesture, open in browser (return true)
-                    // In real app we'd launch intent, but for test we just return true
-                    return true
                 }
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     view.evaluateJavascript("""
                         window.isAndroidApp = true;
                         window.isOfficialDeepSeekLoginEnabled = true;
-                        console.log('[SuperDeepSeek] React app loaded, native bridge ready, hidden DeepSeek WebView solving WAF...');
+                        console.log('[SuperDeepSeek] React app loaded');
                     """.trimIndent(), null)
+                    // If we already have token, inject it
+                    bridge.lastToken?.let { token ->
+                        injectTokenToReact(token)
+                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {
-                override fun onShowFileChooser(
-                    webView: WebView,
-                    filePathCallback: ValueCallback<Array<Uri>>,
-                    fileChooserParams: FileChooserParams
-                ): Boolean {
+                override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
                     pendingFileChooser?.onReceiveValue(null)
-                    pendingFileChooser = filePathCallback
-                    try {
-                        val intent = fileChooserParams.createIntent()
-                        fileChooserLauncher.launch(intent)
+                    val callback = filePathCallback ?: return true
+                    pendingFileChooser = callback
+                    return try {
+                        fileChooserLauncher.launch(fileChooserParams!!.createIntent())
+                        true
                     } catch (e: Exception) {
                         pendingFileChooser = null
-                        filePathCallback.onReceiveValue(null)
-                        return false
+                        callback.onReceiveValue(null)
+                        false
                     }
-                    return true
                 }
             }
             setBackgroundColor(Color.BLACK)
         }
 
-        hiddenWebView = WebView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(1, 1).apply {
-                leftMargin = -10
-                topMargin = -10
+        cookieManager.setAcceptThirdPartyCookies(officialWebView, true)
+        cookieManager.setAcceptThirdPartyCookies(reactWebView, true)
+
+        bridge.officialWebView = officialWebView
+        bridge.reactWebView = reactWebView
+        bridge.mainWebView = reactWebView
+        bridge.hiddenWebView = officialWebView
+        bridge.evaluateJs = { script -> reactWebView.post { reactWebView.evaluateJavascript(script, null) } }
+        bridge.evaluateHiddenJs = { script -> officialWebView.post { officialWebView.evaluateJavascript(script, null) } }
+        bridge.onOfficialLogin = { token -> 
+            handler.post {
+                onOfficialTokenFound(token)
             }
-            visibility = View.INVISIBLE
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                cacheMode = WebSettings.LOAD_DEFAULT
-                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
-            }
-            addJavascriptInterface(bridge, "AndroidBridge")
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String?) {
-                    super.onPageFinished(view, url)
-                    Log.d("SuperDeepSeek", "Hidden DeepSeek WebView loaded: $url")
-                    view.evaluateJavascript("""
-                        console.log('[Hidden] DeepSeek page loaded, cookies: ' + document.cookie.length);
-                        window._dsWafReady = true;
-                    """.trimIndent(), null)
-                    cookieManager.flush()
-                }
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    // Hidden WebView should stay in-app for DeepSeek, hCaptcha, Google OAuth
-                    if (!shouldOpenRequestExternally(request, "appassets.androidplatform.net")) {
-                        return false
-                    }
-                    return true
-                }
-            }
-            webChromeClient = WebChromeClient()
-            setBackgroundColor(Color.TRANSPARENT)
         }
-
-        cookieManager.setAcceptThirdPartyCookies(mainWebView, true)
-        cookieManager.setAcceptThirdPartyCookies(hiddenWebView, true)
-
-        bridge.mainWebView = mainWebView
-        bridge.hiddenWebView = hiddenWebView
-        bridge.evaluateJs = { script -> mainWebView.post { mainWebView.evaluateJavascript(script, null) } }
-        bridge.evaluateHiddenJs = { script -> hiddenWebView.post { hiddenWebView.evaluateJavascript(script, null) } }
+        bridge.onSwitchToOfficial = {
+            handler.post {
+                showOfficialUI()
+            }
+        }
 
         rootLayout = FrameLayout(this).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             setBackgroundColor(Color.BLACK)
-            addView(mainWebView)
-            addView(hiddenWebView)
+            addView(officialWebView)
+            addView(reactWebView)
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, insets ->
@@ -386,20 +357,178 @@ class MainActivity : ComponentActivity() {
 
         setContentView(rootLayout)
 
-        hiddenWebView.loadUrl("https://chat.deepseek.com/")
-        
-        mainWebView.postDelayed({
-            mainWebView.loadUrl("https://appassets.androidplatform.net/android-spa.html")
-        }, 500)
+        // Check if we already have token from previous session
+        val savedToken = bridge.getStorage("ds_official_token")
+        if (!savedToken.isNullOrEmpty() && savedToken.length > 20) {
+            Log.d("SuperDeepSeek", "Found saved token, loading React UI directly")
+            reactWebView.loadUrl("https://appassets.androidplatform.net/android-spa.html")
+            officialWebView.loadUrl("https://chat.deepseek.com/")
+            // Poll for token to confirm still valid, but show React UI immediately
+            handler.postDelayed({
+                showReactUI(savedToken)
+            }, 1000)
+        } else {
+            // Load official DeepSeek for login
+            officialWebView.loadUrl("https://chat.deepseek.com/")
+            reactWebView.loadUrl("https://appassets.androidplatform.net/android-spa.html")
+        }
 
-        onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (mainWebView.canGoBack()) mainWebView.goBack() else moveTaskToBack(true)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isReactVisible) {
+                    reactWebView.evaluateJavascript("(function(){ var btn=document.querySelector('#bds-close, .bds-sheet-close'); if(btn&&btn.offsetParent!==null){btn.click(); return true;} return false;})()") { result ->
+                        if (result != "true" && result != "\"true\"") {
+                            if (reactWebView.canGoBack()) reactWebView.goBack()
+                            else {
+                                // Go back to official login
+                                showOfficialUI()
+                            }
+                        }
+                    }
+                } else {
+                    if (officialWebView.canGoBack()) officialWebView.goBack()
+                    else moveTaskToBack(true)
                 }
             }
-        )
+        })
+    }
+
+    private fun injectTokenPolling(webView: WebView) {
+        // Cancel previous polling
+        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
+        
+        val pollScript = """
+            (function(){
+              if (window._dsTokenPolling) return;
+              window._dsTokenPolling = true;
+              console.log('[Official] Starting token polling...');
+              let attempts = 0;
+              const maxAttempts = 60;
+              const poll = () => {
+                attempts++;
+                try {
+                  const raw = localStorage.getItem('userToken');
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    const token = parsed.value || parsed.token || '';
+                    if (token && token.length > 20) {
+                      console.log('[Official] Token found! Length:', token.length);
+                      if (window.AndroidBridge && window.AndroidBridge.onOfficialToken) {
+                        window.AndroidBridge.onOfficialToken(token);
+                        window._dsTokenPolling = false;
+                        return;
+                      }
+                    }
+                  }
+                  // Also check for user info
+                  const userInfo = localStorage.getItem('user_info') || sessionStorage.getItem('userToken');
+                  if (userInfo && attempts % 5 === 0) {
+                    console.log('[Official] Checking alternative storage...');
+                  }
+                } catch(e) {
+                  console.log('[Official] Poll error', e);
+                }
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 1500);
+                } else {
+                  console.log('[Official] Token polling stopped after max attempts');
+                  window._dsTokenPolling = false;
+                }
+              };
+              setTimeout(poll, 2000);
+            })();
+        """.trimIndent()
+        
+        webView.evaluateJavascript(pollScript, null)
+        
+        // Also schedule periodic re-injection in case of navigation
+        tokenPollingRunnable = Runnable {
+            if (!isReactVisible) {
+                webView.evaluateJavascript(pollScript, null)
+                handler.postDelayed(tokenPollingRunnable!!, 5000)
+            }
+        }
+        handler.postDelayed(tokenPollingRunnable!!, 5000)
+    }
+
+    private fun onOfficialTokenFound(token: String) {
+        Log.d("SuperDeepSeek", "Official token found! Length: ${token.length}, switching to React UI")
+        bridge.setStorage("ds_official_token", token)
+        bridge.lastToken = token
+        showReactUI(token)
+    }
+
+    private fun showReactUI(token: String) {
+        if (isReactVisible) return
+        isReactVisible = true
+        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
+        
+        // Inject token to React WebView
+        injectTokenToReact(token)
+        
+        // Switch visibility
+        officialWebView.visibility = View.GONE
+        reactWebView.visibility = View.VISIBLE
+        
+        // Also save email if available
+        officialWebView.evaluateJavascript("""
+            (function(){
+              try {
+                const raw = localStorage.getItem('userToken');
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  return JSON.stringify({email: parsed.email || '', mobile: parsed.mobile || ''});
+                }
+              } catch(e) {}
+              return JSON.stringify({});
+            })();
+        """.trimIndent()) { result ->
+            try {
+                val clean = result.trim().removeSurrounding("\"").replace("\\\"", "\"").replace("\\\\", "\\")
+                Log.d("SuperDeepSeek", "User info: $clean")
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun showOfficialUI() {
+        isReactVisible = false
+        reactWebView.visibility = View.GONE
+        officialWebView.visibility = View.VISIBLE
+        injectTokenPolling(officialWebView)
+    }
+
+    private fun injectTokenToReact(token: String) {
+        val escaped = token.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"").replace("\n", "\\n")
+        val script = """
+            (function(){
+              try {
+                const token = "$escaped";
+                console.log('[React] Injecting official token, length:', token.length);
+                // Store in our app's expected storage
+                localStorage.setItem('ds_token', token);
+                // Try to set account via store if available
+                if (window.useAppStore && window.useAppStore.getState) {
+                  const state = window.useAppStore.getState();
+                  if (state.setAccount) {
+                    state.setAccount({token: token, email: '', mobile: ''});
+                    console.log('[React] setAccount called');
+                  }
+                }
+                // Also dispatch event for app to pick up
+                window.dispatchEvent(new CustomEvent('sds:official-token', {detail: {token: token}}));
+                // Directly call setAccount if K is available (zustand)
+                if (typeof K !== 'undefined' && K.getState) {
+                  K.getState().setAccount({token: token, email: '', mobile: ''});
+                }
+              } catch(e) {
+                console.error('[React] Token inject failed', e);
+              }
+            })();
+        """.trimIndent()
+        reactWebView.post {
+            reactWebView.evaluateJavascript(script, null)
+        }
+        bridge.evaluateJs?.invoke(script)
     }
 
     override fun onResume() {
@@ -413,12 +542,14 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
         try {
-            mainWebView.removeJavascriptInterface("AndroidBridge")
-            mainWebView.destroy()
+            officialWebView.removeJavascriptInterface("AndroidBridge")
+            officialWebView.destroy()
         } catch (_: Exception) {}
         try {
-            hiddenWebView.destroy()
+            reactWebView.removeJavascriptInterface("AndroidBridge")
+            reactWebView.destroy()
         } catch (_: Exception) {}
         super.onDestroy()
     }

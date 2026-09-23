@@ -19,14 +19,51 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [wafStatus, setWafStatus] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  const [isOfficialAvailable, setIsOfficialAvailable] = useState(false);
 
   useEffect(() => {
     const bridge = (window as any).AndroidBridge;
-    if (bridge?.dsLoginNative) {
-      setWafStatus("✅ Native bridge ready - hidden WebView solving WAF in background (2-3 sec)...");
-      setTimeout(() => setWafStatus(""), 4000);
+    if (bridge) {
+      if (bridge.getOfficialToken) {
+        const saved = bridge.getOfficialToken();
+        if (saved && saved.length > 20) {
+          setWafStatus("✅ Official token found! Signing in...");
+          const store = useAppStore.getState();
+          store.setAccount({ token: saved, email: "", mobile: "" });
+          return;
+        }
+      }
+      if (bridge.switchToOfficialLogin) {
+        setIsOfficialAvailable(true);
+        setWafStatus("🌐 Official DeepSeek login available - tap 'Official Login Page' for 100% official login");
+        setTimeout(() => setWafStatus(""), 5000);
+      } else if (bridge.dsLoginNative) {
+        setWafStatus("✅ Native bridge ready - hidden WebView solving WAF...");
+        setTimeout(() => setWafStatus(""), 4000);
+      }
     }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as any;
+      const token = detail?.token;
+      if (token && token.length > 20) {
+        setWafStatus("🎉 Official login detected! Loading custom UI...");
+        const store = useAppStore.getState();
+        store.setAccount({ token, email: "", mobile: "" });
+      }
+    };
+    window.addEventListener('sds:official-token', handler as any);
+    return () => window.removeEventListener('sds:official-token', handler as any);
   }, []);
+
+  function openOfficialLogin() {
+    const bridge = (window as any).AndroidBridge;
+    if (bridge?.switchToOfficialLogin) {
+      setWafStatus("🌐 Opening official DeepSeek login page...");
+      bridge.switchToOfficialLogin();
+    } else {
+      setWafStatus("Official WebView not available, using API login");
+    }
+  }
 
   async function doLogin(attempt = 0): Promise<{ token: string; email: string; mobile: string }> {
     return dsLoginDirect(
@@ -67,35 +104,40 @@ export function LoginScreen() {
           throw new Error(json.error || "Login failed")
         }
       } catch (err) {
-        console.log("[Login] Server API failed, trying official DeepSeek via hidden WebView:", err)
+        console.log("[Login] Server API failed, trying official DeepSeek:", err)
         
-        // Try up to 3 times with WAF wait
+        // If official WebView available, suggest it
+        if (isOfficialAvailable) {
+          setWafStatus("💡 Server login failed - use Official Login Page for 100% official login (no WAF)")
+          // Try direct anyway
+        }
+        
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             if (attempt === 0) {
-              setWafStatus("🔐 Trying official DeepSeek login via hidden WebView (bypass WAF)...")
+              setWafStatus("🔐 Trying official DeepSeek login...")
             } else {
-              setWafStatus(`⏳ WAF solving... retry ${attempt + 1}/3 (wait 3 sec)...`)
-              await new Promise(r => setTimeout(r, 3000))
+              setWafStatus(`⏳ Retry ${attempt + 1}/3...`)
+              await new Promise(r => setTimeout(r, 2000))
             }
             
             const direct = await doLogin(attempt);
             token = direct.token
             retEmail = direct.email
             retMobile = direct.mobile
-            setWafStatus("✅ Login success via official API!")
+            setWafStatus("✅ Login success!")
             break
           } catch (directErr) {
             const msg = directErr instanceof Error ? directErr.message : "Sign in failed"
             console.error(`[Login] Attempt ${attempt + 1} failed:`, msg)
             
             if (msg.includes("WAF") && attempt < 2) {
-              setWafStatus(`🛡️ WAF challenge solving... Please wait 5 sec and retry (${attempt + 1}/3)`)
+              setWafStatus(`🛡️ WAF detected - Try Official Login Page (100% official, no WAF) - retry ${attempt + 1}/3`)
               setRetryCount(attempt + 1)
               continue
             }
             
-            store.setLoginError(msg)
+            store.setLoginError(msg + (isOfficialAvailable ? " • Try Official Login Page" : ""))
             return
           }
         }
@@ -217,19 +259,38 @@ export function LoginScreen() {
           {error ? (
             <div className="space-y-2">
               <p className="rounded-[var(--radius-sm)] bg-danger/10 px-3 py-2 text-xs text-danger">{error}</p>
-              {error.includes("WAF") ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWafStatus("🔄 Retrying after WAF wait...");
-                    setTimeout(() => onSubmit(new Event('submit') as any), 1000)
-                  }}
-                  className="w-full rounded-[var(--radius-sm)] bg-elevated px-3 py-2 text-xs text-accent"
-                >
-                  Retry after 3 sec (attempt {retryCount + 1})
-                </button>
+              {error.includes("WAF") || error.includes("Official") ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={openOfficialLogin}
+                    className="w-full rounded-[var(--radius-sm)] bg-accent px-3 py-2.5 text-xs font-medium text-white"
+                  >
+                    🌐 Open Official DeepSeek Login Page (100% Official, No WAF)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWafStatus("🔄 Retrying after WAF wait...");
+                      setTimeout(() => onSubmit(new Event('submit') as any), 1000)
+                    }}
+                    className="w-full rounded-[var(--radius-sm)] bg-elevated px-3 py-2 text-xs text-accent"
+                  >
+                    Retry API after 3 sec (attempt {retryCount + 1})
+                  </button>
+                </div>
               ) : null}
             </div>
+          ) : null}
+
+          {isOfficialAvailable ? (
+            <button
+              type="button"
+              onClick={openOfficialLogin}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[#0a0a0a] px-4 text-sm font-medium text-white shadow-[var(--shadow-border)] border border-white/10"
+            >
+              <span>🌐</span> Official DeepSeek Login Page (Recommended)
+            </button>
           ) : null}
 
           <button
@@ -241,7 +302,9 @@ export function LoginScreen() {
           </button>
 
           <p className="pt-2 text-center text-[11px] leading-4 text-faint">
-            {t(locale, "loginFooter")} • Official login via hidden WebView (bypass WAF) • Auto-retry 3x
+            {isOfficialAvailable 
+              ? "🌐 Official login loads https://chat.deepseek.com directly • After login, custom OLED UI overlays • 100% official account"
+              : `${t(locale, "loginFooter")} • Official login via hidden WebView (bypass WAF)`}
           </p>
         </form>
       </div>
