@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                     val callback = filePathCallback ?: return true
                     pendingFileChooser = callback
                     return try {
-                        fileChooserLauncher.launch(buildFileChooserIntent(fileChooserParams?.acceptTypes, fileChooserParams?.mode == MODE_OPEN_MULTIPLE))
+                        fileChooserLauncher.launch(buildFileChooserIntent(fileChooserParams?.acceptTypes, fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE))
                         true
                     } catch (t: Throwable) {
                         Log.e("SuperDeepSeek", "File chooser failed", t)
