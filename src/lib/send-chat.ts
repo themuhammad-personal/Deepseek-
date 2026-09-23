@@ -207,13 +207,25 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
     let streamError: string | null = null;
     let sawDone = false;
 
-    const applyToUi = () => {
+    // Patching the store on every SSE delta re-rendered (and re-parsed) the whole
+    // thread dozens of times per second — that is what froze the app on long
+    // code/thinking answers. Coalesce to ~8 UI updates per second; the final
+    // patch below restores full fidelity.
+    let uiTimer: ReturnType<typeof setTimeout> | null = null;
+    const pushUi = () => {
       const patch: Partial<Message> = { content: acc.text };
       if (acc.thinking) patch.thinking = acc.thinking;
       if (mode === "research") {
         patch.researchSteps = advanceSteps(asst.researchSteps ?? researchSeed(), acc.text.length);
       }
       store.patchMessage(chatId, asst.id, patch);
+    };
+    const applyToUi = () => {
+      if (uiTimer != null) return;
+      uiTimer = setTimeout(() => {
+        uiTimer = null;
+        pushUi();
+      }, 120);
     };
 
     const feedLine = (line: string) => {
@@ -282,6 +294,11 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
         if (hasProgress || sawDone) break; // keep whatever arrived
         throw e;
       }
+    }
+
+    if (uiTimer != null) {
+      clearTimeout(uiTimer);
+      uiTimer = null;
     }
 
     const text = acc.text;

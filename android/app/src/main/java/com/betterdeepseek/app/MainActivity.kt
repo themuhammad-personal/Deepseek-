@@ -26,6 +26,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.FrameLayout
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -180,6 +183,26 @@ class MainActivity : ComponentActivity() {
     private lateinit var cookieManager: CookieManager
     private var isReactVisible = false
     private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
+    private var cameraPhotoUri: Uri? = null
+
+    /**
+     * `<input capture>` must launch a real camera intent; the document picker
+     * that FileChooserParams.createIntent() builds rarely offers one, which is
+     * why "Camera" appeared dead. The photo lands in our cache via FileProvider
+     * and is handed back through [fileChooserLauncher].
+     */
+    private fun buildCameraCaptureIntent(): Intent? {
+        return try {
+            val file = File(cacheDir, "capture-${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+            cameraPhotoUri = uri
+            Intent(MediaStore.ACTION_IMAGE_CAPTURE).putExtra(MediaStore.EXTRA_OUTPUT, uri)
+        } catch (t: Throwable) {
+            Log.e("SuperDeepSeek", "Camera intent failed", t)
+            cameraPhotoUri = null
+            null
+        }
+    }
     private var spaRetries = 0
     private val handler = Handler(Looper.getMainLooper())
     private var tokenPollingRunnable: Runnable? = null
@@ -188,6 +211,8 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
             pendingFileChooser = null
+            val captureUri = cameraPhotoUri
+            cameraPhotoUri = null
             callback?.onReceiveValue(
                 if (result.resultCode == Activity.RESULT_OK) {
                     result.data?.let { intent ->
@@ -195,6 +220,8 @@ class MainActivity : ComponentActivity() {
                         if (clip != null) Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
                         else intent.data?.let { arrayOf(it) }
                     }
+                        // Camera capture returns no data intent; the photo is at EXTRA_OUTPUT.
+                        ?: captureUri?.let { arrayOf(it) }
                 } else null
             )
         }
@@ -276,7 +303,17 @@ class MainActivity : ComponentActivity() {
                     val callback = filePathCallback ?: return true
                     pendingFileChooser = callback
                     return try {
-                        fileChooserLauncher.launch(buildFileChooserIntent(fileChooserParams?.acceptTypes, fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE))
+                        val capture = fileChooserParams?.isCaptureEnabled == true
+                        val intent = if (capture) {
+                            buildCameraCaptureIntent()
+                                ?: buildFileChooserIntent(fileChooserParams?.acceptTypes, false)
+                        } else {
+                            buildFileChooserIntent(
+                                fileChooserParams?.acceptTypes,
+                                fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE,
+                            )
+                        }
+                        fileChooserLauncher.launch(intent)
                         true
                     } catch (t: Throwable) {
                         Log.e("SuperDeepSeek", "File chooser failed", t)
@@ -346,10 +383,20 @@ class MainActivity : ComponentActivity() {
                     val callback = filePathCallback ?: return true
                     pendingFileChooser = callback
                     return try {
-                        fileChooserLauncher.launch(fileChooserParams!!.createIntent())
+                        val capture = fileChooserParams?.isCaptureEnabled == true
+                        val intent = if (capture) {
+                            buildCameraCaptureIntent() ?: fileChooserParams!!.createIntent()
+                        } else {
+                            buildFileChooserIntent(
+                                fileChooserParams?.acceptTypes,
+                                fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE,
+                            )
+                        }
+                        fileChooserLauncher.launch(intent)
                         true
                     } catch (e: Exception) {
                         pendingFileChooser = null
+                        cameraPhotoUri = null
                         callback.onReceiveValue(null)
                         false
                     }

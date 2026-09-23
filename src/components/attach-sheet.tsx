@@ -11,7 +11,7 @@ import {
 import { BottomSheet } from "./ui/bottom-sheet";
 import { useAppStore } from "@/lib/app-store";
 import { t } from "@/lib/i18n";
-import { compressImage } from "@/lib/compress-image";
+import { compressImage, readAsDataUrl } from "@/lib/compress-image";
 import { indexFiles, ragList } from "@/lib/rag";
 import { uid } from "@/lib/utils";
 import type { Attachment } from "@/lib/types";
@@ -30,15 +30,34 @@ async function fileToAttachment(file: File): Promise<Attachment | null> {
   if (isImg && file.size > IMG_MAX) return null;
   if (!isImg && file.size > DOC_MAX) return null;
   if (isImg) {
-    const packed = await compressImage(file);
-    return {
-      id: uid("att"),
-      kind: "image",
-      name: file.name,
-      mime: "image/jpeg",
-      size: packed.bytes,
-      dataUrl: packed.dataUrl,
-    };
+    // Canvas re-encode can throw on HEIC/exotic decoders inside a WebView; fall
+    // back to the raw bytes so the user at least sees their photo attached.
+    try {
+      const packed = await compressImage(file);
+      return {
+        id: uid("att"),
+        kind: "image",
+        name: file.name,
+        mime: "image/jpeg",
+        size: packed.bytes,
+        dataUrl: packed.dataUrl,
+      };
+    } catch {
+      if (file.size <= 8 * 1024 * 1024) {
+        const dataUrl = await readAsDataUrl(file).catch(() => null);
+        if (dataUrl) {
+          return {
+            id: uid("att"),
+            kind: "image",
+            name: file.name,
+            mime: file.type || "image/jpeg",
+            size: file.size,
+            dataUrl,
+          };
+        }
+      }
+      return null;
+    }
   }
   let text: string | undefined;
   if (
@@ -82,12 +101,21 @@ export function AttachSheet({ onAdd }: Props) {
     if (!files?.length) return;
     performHaptic("select", haptics);
     const items: Attachment[] = [];
+    let failed = 0;
     for (const f of Array.from(files)) {
-      const a = await fileToAttachment(f);
+      const a = await fileToAttachment(f).catch(() => null);
       if (a) items.push(a);
+      else failed++;
+    }
+    if (failed > 0) {
+      setErr(
+        failed === 1
+          ? `Could not attach "${files[0].name}".`
+          : `Could not attach ${failed} file(s).`,
+      );
     }
     if (items.length) onAdd(items);
-    close();
+    if (items.length) close();
   }
 
   async function indexFolder(files: FileList | null) {

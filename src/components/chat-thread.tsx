@@ -98,6 +98,7 @@ function Bubble({
             ) : msg.content ? (
               <MarkdownView
                 markdown={msg.content}
+                live={streaming}
                 copyLabel={t(locale, "copy")}
                 copiedLabel={t(locale, "copied")}
                 runLabel={t(locale, "run")}
@@ -147,9 +148,19 @@ export function ChatThread({
   const locale = useAppStore((s) => s.settings.locale);
   const bottom = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const lastCount = useRef(messages.length);
 
+  // Auto-follow the stream only while the user is at the bottom. Smooth
+  // scrolling on every delta used to queue overlapping animations and made the
+  // thread bounce; instant jumps are imperceptible at 10Hz patch rates.
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const grew = messages.length > lastCount.current;
+    lastCount.current = messages.length;
+    const last = messages[messages.length - 1];
+    if (grew && last?.role === "user") nearBottom.current = true;
+    if (!nearBottom.current) return;
+    bottom.current?.scrollIntoView({ block: "end" });
   }, [messages, streamingId]);
 
   if (messages.length === 0) {
@@ -189,7 +200,14 @@ export function ChatThread({
   }
 
   return (
-    <div ref={scroller} className="overscroll-chat min-h-0 flex-1 overflow-y-auto pt-2">
+    <div
+      ref={scroller}
+      onScroll={() => {
+        const el = scroller.current;
+        if (el) nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+      }}
+      className="overscroll-chat min-h-0 flex-1 overflow-y-auto pt-2"
+    >
       {messages.map((m) => (
         <Bubble key={m.id} msg={m} streaming={streamingId === m.id} />
       ))}

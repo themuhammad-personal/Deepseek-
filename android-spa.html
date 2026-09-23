@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- interactive-widget=resizes-content: when the IME opens, shrink the layout
+       viewport (not just the visual one) so the composer stays above the
+       keyboard on modern WebView; the Kotlin inset padding covers older ones. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Super DeepSeek</title>
 </head>
 <body>

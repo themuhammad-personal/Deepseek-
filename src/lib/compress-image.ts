@@ -32,6 +32,16 @@ export async function compressImage(file: File): Promise<{ dataUrl: string; widt
   }
 }
 
+/** Plain FileReader fallback — works even when canvas/decoding fails (HEIC etc.). */
+export function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error ?? new Error("read failed"));
+    r.readAsDataURL(file);
+  });
+}
+
 /**
  * Lightweight "OCR": prefer embedded text from the file name / alt, then
  * attempt to read EXIF-less plain-text sidecar. Real ML Kit lives on Android;

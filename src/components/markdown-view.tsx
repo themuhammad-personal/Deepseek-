@@ -73,6 +73,8 @@ function escapeText(s: string): string {
 type CodeProps = {
   lang: string;
   code: string;
+  /** While streaming, skip hljs — highlighting a growing blob on every delta is what froze the app. */
+  live?: boolean;
   onRun?: (code: string) => void;
   onOpenArtifact?: (art: Artifact) => void;
   copyLabel: string;
@@ -84,6 +86,7 @@ type CodeProps = {
 function CodeBlock({
   lang,
   code,
+  live,
   onRun,
   onOpenArtifact,
   copyLabel,
@@ -92,7 +95,7 @@ function CodeBlock({
   artifactLabel,
 }: CodeProps) {
   const [copied, setCopied] = useState(false);
-  const html = useMemo(() => highlight(code, lang), [code, lang]);
+  const html = useMemo(() => (live ? escapeText(code) : highlight(code, lang)), [code, lang, live]);
   const runnable = lang === "javascript" || lang === "js";
   const isArt =
     ["html", "svg", "xml", "jsx", "tsx", "css"].includes(lang) ||
@@ -188,6 +191,7 @@ function inlineTokens(tokens: Tokens.Generic[] | undefined): ReactNode {
 
 export function MarkdownView({
   markdown,
+  live,
   copyLabel = "Copy",
   copiedLabel = "Copied",
   runLabel = "Run",
@@ -196,6 +200,8 @@ export function MarkdownView({
   onOpenArtifact,
 }: {
   markdown: string;
+  /** True while the message is still streaming — enables cheap rendering. */
+  live?: boolean;
   copyLabel?: string;
   copiedLabel?: string;
   runLabel?: string;
@@ -240,6 +246,7 @@ export function MarkdownView({
                 key={i}
                 lang={(c.lang ?? "").split(" ")[0] ?? ""}
                 code={c.text}
+                live={live}
                 onRun={onRun}
                 onOpenArtifact={onOpenArtifact}
                 copyLabel={copyLabel}
