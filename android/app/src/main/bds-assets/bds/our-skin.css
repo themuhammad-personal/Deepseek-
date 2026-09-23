@@ -194,3 +194,15 @@
 #bds-header-btn {
   border-radius: var(--bds-radius);
 }
+
+/* ── Settings rows / tools-drawer polish ─────────────────────────────── */
+.bds-settings-row {
+  transition: background var(--bds-transition);
+}
+.bds-settings-row:hover {
+  background: var(--bds-bg-hover);
+}
+.bds-settings-icon,
+.bds-card-icon {
+  border-radius: 12px;
+}

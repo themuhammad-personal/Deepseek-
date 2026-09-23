@@ -599,6 +599,9 @@ class MainActivity : ComponentActivity() {
 
             // Once the engine is in, drop the boot overlay so the real UI shows.
             removeBootOverlay(webView)
+
+            // Hide out-of-scope features (voice) and apply small UI polish.
+            injectUiPolish(webView)
         }
     }
 
@@ -635,6 +638,37 @@ class MainActivity : ComponentActivity() {
                 else{tries++;setTimeout(rm,150);}
               }
               rm();
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
+    }
+
+    /**
+     * Hides features that are out of scope for this build (the voice / auto-read
+     * feature) from the settings drawer, and adds a little hover polish. The engine
+     * renders settings lazily, so we watch the DOM and hide matching rows on insert.
+     */
+    private fun injectUiPolish(webView: WebView) {
+        val js = """
+            (function(){
+              if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;
+              var HIDE=[/Voice Mode/i,/Auto-read responses/i,/ভয়েস মোড/i,/অটো-রিড/i];
+              function hideRows(){
+                var rows=document.querySelectorAll('.bds-settings-row');
+                for(var i=0;i<rows.length;i++){
+                  var t=rows[i].textContent||'';
+                  for(var j=0;j<HIDE.length;j++){
+                    if(HIDE[j].test(t)){rows[i].style.display='none';break;}
+                  }
+                }
+              }
+              hideRows();
+              var pend=false;
+              var mo=new MutationObserver(function(){
+                if(pend)return;pend=true;
+                setTimeout(function(){pend=false;hideRows();},120);
+              });
+              mo.observe(document.documentElement,{childList:true,subtree:true});
             })();
         """.trimIndent()
         webView.evaluateJavascript(js, null)
