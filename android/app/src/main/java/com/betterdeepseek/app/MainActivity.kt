@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -165,6 +166,12 @@ private val CHROME_VERSION_REGEX = Regex("""\bChrome/(\d+(?:\.\d+)*)""")
  */
 class MainActivity : ComponentActivity() {
 
+    /** Host the asset loader owns — chosen so API calls from the SPA are same-origin. */
+    private val DS_HOST = "chat.deepseek.com"
+
+    /** Bundled React SPA, served out of assets by [assetLoader]. */
+    private val SPA_URL = "https://chat.deepseek.com/android-spa.html"
+
     private lateinit var officialWebView: WebView
     private lateinit var reactWebView: WebView
     private lateinit var rootLayout: FrameLayout
@@ -173,6 +180,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var cookieManager: CookieManager
     private var isReactVisible = false
     private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
+    private var spaRetries = 0
     private val handler = Handler(Looper.getMainLooper())
     private var tokenPollingRunnable: Runnable? = null
 
@@ -205,8 +213,19 @@ class MainActivity : ComponentActivity() {
         cookieManager.setAcceptCookie(true)
 
         bridge = WebViewBridge(applicationContext)
+        // Serve the bundled SPA from chat.deepseek.com itself.
+        //
+        // That makes every /api/v0/... fetch from the SPA same-origin, which is
+        // the whole point: DeepSeek answers an OPTIONS preflight with 403 and
+        // sends no Access-Control-Allow-Origin, so a cross-origin fetch carrying
+        // an Authorization header is blocked by the browser. Same-origin requests
+        // never preflight, carry the real cookies, and look exactly like the
+        // official web app's traffic.
+        //
+        // Paths the asset loader does not own (i.e. /api/*) fall through to the
+        // network, which is precisely what the API calls need.
         assetLoader = WebViewAssetLoader.Builder()
-            .setDomain("appassets.androidplatform.net")
+            .setDomain(DS_HOST)
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
@@ -229,7 +248,9 @@ class MainActivity : ComponentActivity() {
             addJavascriptInterface(bridge, "AndroidBridge")
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                    assetLoader.shouldInterceptRequest(request.url)?.let { return it }
+                    // The login WebView must reach the real site so the AWS WAF
+                    // challenge can actually be solved and the session cookie set.
+                    // Intercepting it with local assets would break login.
                     return null
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -282,12 +303,29 @@ class MainActivity : ComponentActivity() {
                 allowUniversalAccessFromFileURLs = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 cacheMode = WebSettings.LOAD_DEFAULT
-                userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+                // Same UA as the login WebView: DeepSeek sees one consistent
+                // fingerprint for both the token and the API calls made with it.
+                userAgentString = deriveWebViewUserAgent(WebSettings.getDefaultUserAgent(this@MainActivity))
             }
             addJavascriptInterface(bridge, "AndroidBridge")
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                    return assetLoader.shouldInterceptRequest(request.url)
+                    val url = request.url
+                    // API traffic must reach the real server, never the asset loader.
+                    if (url?.path?.startsWith("/api/") == true) return null
+                    return assetLoader.shouldInterceptRequest(url)
+                }
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: WebResourceError,
+                ) {
+                    super.onReceivedError(view, request, error)
+                    if (request.isForMainFrame && request.url?.toString() == SPA_URL && spaRetries < 3) {
+                        spaRetries++
+                        Log.e("SuperDeepSeek", "SPA load failed (${error.description}); retry $spaRetries/3")
+                        view.postDelayed({ view.loadUrl(SPA_URL) }, 400)
+                    }
                 }
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
@@ -361,7 +399,7 @@ class MainActivity : ComponentActivity() {
         val savedToken = bridge.getStorage("ds_official_token")
         if (!savedToken.isNullOrEmpty() && savedToken.length > 20) {
             Log.d("SuperDeepSeek", "Found saved token, loading React UI directly")
-            reactWebView.loadUrl("https://appassets.androidplatform.net/android-spa.html")
+            reactWebView.loadUrl(SPA_URL)
             officialWebView.loadUrl("https://chat.deepseek.com/")
             // Poll for token to confirm still valid, but show React UI immediately
             handler.postDelayed({
@@ -370,7 +408,7 @@ class MainActivity : ComponentActivity() {
         } else {
             // Load official DeepSeek for login
             officialWebView.loadUrl("https://chat.deepseek.com/")
-            reactWebView.loadUrl("https://appassets.androidplatform.net/android-spa.html")
+            reactWebView.loadUrl(SPA_URL)
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

@@ -37,7 +37,7 @@ async function loadWasm(): Promise<WebAssembly.Module> {
   if (!wasmBytes) {
     const candidates = [
       join(process.cwd(), "public/ds/sha3_wasm_bg.wasm"),
-      join(process.cwd(), "android/app/src/main/assets/www/sha3_wasm_bg.wasm"),
+      join(process.cwd(), "android/app/src/main/assets/ds/sha3_wasm_bg.wasm"),
     ];
     let lastErr: unknown;
     for (const p of candidates) {

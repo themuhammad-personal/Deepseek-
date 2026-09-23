@@ -168,61 +168,28 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
   }
 
   try {
-    let res: Response;
-    const isAndroid = typeof window !== 'undefined' && (window as any).AndroidBridge?.dsChatNative;
-    if (isAndroid) {
-      // Use direct native client (official WebView bypass WAF)
-      const { dsCreateSessionDirect, dsCompleteStreamDirect } = await import("./deepseek/client-direct");
-      try {
-        let sessionId = chat?.dsSessionId;
-        if (!sessionId) {
-          console.log('[SendChat] Creating session via native...');
-          sessionId = await dsCreateSessionDirect(store.account.token);
-          useAppStore.getState().bindDsSession(chatId, sessionId);
-        }
-        console.log('[SendChat] Starting completion via native official WebView...');
-        res = await dsCompleteStreamDirect({
-          token: store.account.token,
-          sessionId,
-          prompt,
-          thinking: mode === "think" || mode === "research",
-          search: webSearch || mode === "research",
-          parentMessageId: null,
-          signal: abort?.signal,
-        });
-      } catch (nativeErr) {
-        console.warn('[SendChat] Native failed, fallback to /api/ds/complete', nativeErr);
-        res = await fetch("/api/ds/complete", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${store.account.token}`,
-          },
-          signal: abort?.signal,
-          body: JSON.stringify({
-            prompt,
-            sessionId: chat?.dsSessionId,
-            thinking: mode === "think" || mode === "research",
-            search: webSearch || mode === "research",
-          }),
-        });
-      }
-    } else {
-      res = await fetch("/api/ds/complete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${store.account.token}`,
-        },
-        signal: abort?.signal,
-        body: JSON.stringify({
-          prompt,
-          sessionId: chat?.dsSessionId,
-          thinking: mode === "think" || mode === "research",
-          search: webSearch || mode === "research",
-        }),
-      });
+    // One code path for the APK and the web app: `/api/v0/...` is same-origin in
+    // both (see src/lib/deepseek/api.ts). The old Android branch went through a
+    // JS<->Kotlin bridge and then fell back to `/api/ds/complete`, which does not
+    // exist inside the APK — that fallback is what produced the misleading
+    // "DeepSeek is unavailable right now." for every single failure.
+    const { createSession, completeStream } = await import("./deepseek/api");
+
+    let sessionId = chat?.dsSessionId;
+    if (!sessionId) {
+      sessionId = await createSession(store.account.token);
+      useAppStore.getState().bindDsSession(chatId, sessionId);
     }
+
+    const res = await completeStream({
+      token: store.account.token,
+      sessionId,
+      prompt,
+      thinking: mode === "think" || mode === "research",
+      search: webSearch || mode === "research",
+      parentMessageId: null,
+      signal: abort?.signal,
+    });
 
     if (res.status === 401) {
       useAppStore.getState().setAccount(null);
@@ -234,16 +201,16 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       return;
     }
 
-    if (!res.ok || !res.body) {
+    if (!res.body) {
+      // completeStream throws on any error envelope, so reaching here means the
+      // response had no readable stream at all.
       const errText = await res.text().catch(() => "");
-      let friendly = "DeepSeek is unavailable right now.";
-      try {
-        const j = JSON.parse(errText) as { error?: string };
-        if (j.error) friendly = j.error;
-      } catch {
-        /* keep */
-      }
-      store.patchMessage(chatId, asst.id, { error: friendly, content: "" });
+      store.patchMessage(chatId, asst.id, {
+        error: errText
+          ? `DeepSeek returned an empty stream: ${errText.slice(0, 200)}`
+          : "DeepSeek returned an empty stream.",
+        content: "",
+      });
       performHaptic("error", store.settings.haptics);
       return;
     }
@@ -316,8 +283,15 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       });
       return;
     }
+    // Surface the real reason. A blanket "Could not reach DeepSeek" is what made
+    // this project impossible to debug for 86 builds.
+    const message = err instanceof Error ? err.message : String(err ?? "unknown error");
+    console.error("[SendChat] DeepSeek call failed:", err);
+    if (/sign in again|expired/i.test(message)) {
+      useAppStore.getState().setAccount(null);
+    }
     store.patchMessage(chatId, asst.id, {
-      error: "Could not reach DeepSeek. Your message is safe.",
+      error: message,
     });
     performHaptic("error", store.settings.haptics);
   } finally {

@@ -150,6 +150,18 @@ export default defineConfig(({ command, isPreview }) => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    // The DeepSeek client (src/lib/deepseek/api.ts) calls the relative
+    // "/api/v0/*". Inside the APK that is same-origin because the asset loader
+    // serves the SPA from chat.deepseek.com; in `npm run dev` this proxy provides
+    // the same path. DeepSeek rejects cross-origin requests (OPTIONS -> 403, no
+    // Access-Control-Allow-Origin), so proxying server-side is required.
+    proxy: {
+      "/api/v0": {
+        target: "https://chat.deepseek.com",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   preview: {
     host: "127.0.0.1",
