@@ -52,6 +52,33 @@ function bearer(token: string): string {
 }
 
 /**
+ * The header set the official web client sends. DeepSeek keys behaviour off
+ * `x-client-version`; a client that omits it (or reports a bogus version like
+ * 1.0.0) can be handed empty envelopes or rejected outright. This mirrors the
+ * exact set used by known-good reverse-engineered clients.
+ *
+ * `origin` / `referer` / `user-agent` are supplied by the WebView itself inside
+ * the APK (same origin) and are not overridable from fetch, so we set only the
+ * x-client-* trio plus accept.
+ */
+function dsRequestHeaders(token?: string, extra?: Record<string, string>): Record<string, string> {
+  return {
+    accept: "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "x-client-platform": "web",
+    "x-client-version": "2.4.2",
+    "x-client-locale": "en_US",
+    ...(token ? { Authorization: bearer(token) } : {}),
+    ...extra,
+  };
+}
+
+/** Compact, human-readable dump of an unexpected response, for the UI and log. */
+function summarize(status: number, body: string): string {
+  return `HTTP ${status} :: ${body.replace(/\s+/g, " ").slice(0, 200) || "(empty body)"}`;
+}
+
+/**
  * Unwrap DeepSeek's `{code, msg, data:{biz_code, biz_msg, biz_data}}` envelope.
  * The outer `code` is the transport-level status; `biz_code` is the business one.
  */
@@ -71,10 +98,7 @@ function unwrap<T>(json: { code?: number; msg?: string; data?: Biz<T> | null }, 
 async function post<T>(path: string, token: string, body: unknown, fallback: string): Promise<T> {
   const res = await fetch(`${DS_API_BASE}${path}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: bearer(token),
-    },
+    headers: { "Content-Type": "application/json", ...dsRequestHeaders(token) },
     body: JSON.stringify(body),
   });
   const text = await res.text();
@@ -86,32 +110,32 @@ async function post<T>(path: string, token: string, body: unknown, fallback: str
     throw new DsApiError(
       res.status === 202
         ? "DeepSeek's anti-bot challenge blocked the request. Reopen the app to solve it."
-        : `DeepSeek returned a non-JSON response (HTTP ${res.status}).`,
+        : `DeepSeek returned a non-JSON response. ${summarize(res.status, text)}`,
       res.status,
     );
   }
   if (!res.ok && !json.code) {
-    throw new DsApiError(`DeepSeek error ${res.status}`, res.status);
+    throw new DsApiError(`${fallback} ${summarize(res.status, text)}`, res.status);
   }
-  return unwrap<T>(json, fallback);
+  return unwrap<T>(json, `${fallback} ${summarize(res.status, text)}`);
 }
 
 async function get<T>(path: string, token: string, fallback: string): Promise<T> {
   const res = await fetch(`${DS_API_BASE}${path}`, {
-    headers: { Authorization: bearer(token) },
+    headers: dsRequestHeaders(token),
   });
   const text = await res.text();
   let json: { code?: number; msg?: string; data?: Biz<T> | null };
   try {
     json = JSON.parse(text) as typeof json;
   } catch {
-    throw new DsApiError(`DeepSeek returned a non-JSON response (HTTP ${res.status}).`, res.status);
+    throw new DsApiError(`DeepSeek returned a non-JSON response. ${summarize(res.status, text)}`, res.status);
   }
   if (json.code === 40003) {
     throw new DsApiError("Session expired. Please sign in again.", res.status, json.code);
   }
-  if (!res.ok && !json.code) throw new DsApiError(`DeepSeek error ${res.status}`, res.status);
-  return unwrap<T>(json, fallback);
+  if (!res.ok && !json.code) throw new DsApiError(`${fallback} ${summarize(res.status, text)}`, res.status);
+  return unwrap<T>(json, `${fallback} ${summarize(res.status, text)}`);
 }
 
 /** Validate a token before trusting it. Returns the signed-in user. */
@@ -124,15 +148,33 @@ export async function currentUser(token: string) {
 }
 
 export async function createSession(token: string): Promise<string> {
-  const data = await post<{ chat_session?: { id?: string } }>(
+  const data = await post<Record<string, unknown>>(
     "/chat_session/create",
     token,
     {},
     "Could not start a chat.",
   );
-  const id = data.chat_session?.id;
-  if (!id) throw new DsApiError("Could not start a chat.");
+  const id = extractSessionId(data);
+  if (!id) {
+    throw new DsApiError(`Could not start a chat (no session id in ${JSON.stringify(data).slice(0, 200)}).`);
+  }
   return id;
+}
+
+/** The id has moved between API versions; accept every observed shape. */
+function extractSessionId(data: Record<string, unknown>): string | undefined {
+  const cs = data.chat_session as { id?: unknown } | undefined;
+  const candidates = [
+    cs?.id,
+    data.id,
+    data.chat_session_id,
+    data.session_id,
+    (data.chat_session as Record<string, unknown> | undefined)?.session_id,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) return c;
+  }
+  return undefined;
 }
 
 export async function createPowChallenge(token: string): Promise<PowChallenge> {
@@ -211,9 +253,9 @@ export async function completeStream(opts: CompleteOptions): Promise<Response> {
     const res = await fetch(`${DS_API_BASE}/chat/completion`, {
       method: "POST",
       headers: {
-        Accept: "text/event-stream",
         "Content-Type": "application/json",
-        Authorization: bearer(opts.token),
+        ...dsRequestHeaders(opts.token),
+        Accept: "text/event-stream",
         "X-Ds-Pow-Response": pow,
       },
       body,

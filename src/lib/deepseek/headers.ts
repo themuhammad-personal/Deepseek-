@@ -13,7 +13,9 @@ export function dsHeaders(token?: string, extra?: Record<string, string>): Heade
     Referer: `${DS_ORIGIN}/`,
     "User-Agent": DESKTOP_UA,
     "X-Client-Platform": "web",
-    "X-Client-Version": "1.0.0",
+    // DeepSeek keys behaviour off this; 1.0.0 got clients rejected or handed
+    // empty envelopes. 2.4.2 matches the current official web build.
+    "X-Client-Version": "2.4.2",
     "X-Client-Locale": "en_US",
     ...extra,
   };
