@@ -291,9 +291,10 @@ class MainActivity : ComponentActivity() {
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     Log.d("SuperDeepSeek", "Official WebView loaded: $url")
-                    // Inject token polling script
                     if (url?.contains("chat.deepseek.com") == true) {
+                        // Inject token polling (legacy) + the proven engine bundle.
                         injectTokenPolling(view)
+                        injectBdsScripts(view)
                     }
                 }
             }
@@ -442,21 +443,12 @@ class MainActivity : ComponentActivity() {
 
         setContentView(rootLayout)
 
-        // Check if we already have token from previous session
-        val savedToken = bridge.getStorage("ds_official_token")
-        if (!savedToken.isNullOrEmpty() && savedToken.length > 20) {
-            Log.d("SuperDeepSeek", "Found saved token, loading React UI directly")
-            reactWebView.loadUrl(SPA_URL)
-            officialWebView.loadUrl("https://chat.deepseek.com/")
-            // Poll for token to confirm still valid, but show React UI immediately
-            handler.postDelayed({
-                showReactUI(savedToken)
-            }, 1000)
-        } else {
-            // Load official DeepSeek for login
-            officialWebView.loadUrl("https://chat.deepseek.com/")
-            reactWebView.loadUrl(SPA_URL)
-        }
+        // New architecture: the official DeepSeek site IS the chat surface. The
+        // better-deepseek engine (assets/bds) is injected on page load to provide
+        // multi-turn memory, MCP, tools, memory/skills and the skinned frame —
+        // it is proven against the live protocol, unlike a hand-rolled API client.
+        // The React SPA is no longer the chat surface, so we never flip to it.
+        officialWebView.loadUrl("https://chat.deepseek.com/")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -537,10 +529,51 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onOfficialTokenFound(token: String) {
-        Log.d("SuperDeepSeek", "Official token found! Length: ${token.length}, switching to React UI")
+        // The engine (official site) is now the chat surface; we just persist the
+        // token for session restore instead of flipping to the removed React SPA.
+        Log.d("SuperDeepSeek", "Official token found! Length: ${token.length}")
         bridge.setStorage("ds_official_token", token)
         bridge.lastToken = token
-        showReactUI(token)
+    }
+
+    private fun readAsset(name: String): String? = try {
+        assets.open("bds/$name").bufferedReader().use { it.readText() }
+    } catch (e: Exception) { null }
+
+    /**
+     * Inject the better-deepseek engine into the live official chat page.
+     * Order matters: injected.js must be in the page context before content.js runs.
+     * content.css is inserted as a <style> (not a link) so it applies immediately.
+     */
+    private fun injectBdsScripts(webView: WebView) {
+        runOnUiThread {
+            readAsset("injected.js")?.let { code ->
+                webView.evaluateJavascript(code) { Log.d("BDS", "injected.js done") }
+            }
+
+            val css = buildString {
+                readAsset("content.css")?.let { append(it).append("\n") }
+                // Our design frame on top of the engine's UI.
+                readAsset("our-skin.css")?.let { append(it) }
+            }
+            if (css.isNotBlank()) {
+                val cssJs = """
+                    (function(){
+                      var old = document.getElementById('bds-css');
+                      if (old) old.remove();
+                      var s = document.createElement('style');
+                      s.id = 'bds-css';
+                      s.textContent = ${org.json.JSONObject.quote(css)};
+                      document.head.appendChild(s);
+                    })();
+                """.trimIndent()
+                webView.evaluateJavascript(cssJs) { Log.d("BDS", "content.css done") }
+            }
+
+            readAsset("content.js")?.let { code ->
+                webView.evaluateJavascript(code) { Log.d("BDS", "content.js done") }
+            }
+        }
     }
 
     private fun showReactUI(token: String) {

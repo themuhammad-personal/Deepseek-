@@ -1,0 +1,36 @@
+/* ==========================================================================
+   Super DeepSeek — design frame (our skin) on top of the better-deepseek engine.
+   The engine exposes its palette as --bds-* custom properties; overriding them
+   reskins the engine UI to match our app without touching its logic.
+   ========================================================================== */
+
+:root {
+  --bds-accent: #4d6bfe;
+  --bds-accent-rgb: 77, 107, 254;
+  --bds-accent-hover: #5f7bff;
+  --bds-radius: 14px;
+  --bds-radius-md: 12px;
+  --bds-transition: 0.2s ease;
+  --bds-bg-elevated: rgba(255, 255, 255, 0.92);
+}
+
+.dark {
+  --bds-accent: #4d6bfe;
+  --bds-accent-rgb: 77, 107, 254;
+  --bds-accent-hover: #6180ff;
+  --bds-bg-panel: #1a1c20;
+  --bds-bg-elevated: #22252b;
+  --bds-bg-inset: #15171a;
+  --bds-text-1: #eaecef;
+  --bds-text-2: #b4b8c0;
+  --bds-text-3: #7b8089;
+  --bds-border: #2a2d34;
+  --bds-border-strong: #3a3e47;
+  --bds-success: #4ade80;
+  --bds-danger: #f87171;
+}
+
+/* Subtle brand touch on the engine's floating action button */
+#bds-floating-btn {
+  border-radius: var(--bds-radius) !important;
+}
