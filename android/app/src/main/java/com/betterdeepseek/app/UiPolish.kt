@@ -5,24 +5,33 @@ package com.betterdeepseek.app
  *
  * The engine (bundled better-deepseek fork) is shipped, not rebuilt, so its UI
  * is shaped here — the same way the original extension build is themed via
- * CSS. Two jobs:
+ * CSS. Four jobs:
  *
- *  1. **Hide out-of-scope / dead entries.** Features this app intentionally
- *     excludes (voice, Deep Code), entries that point at the upstream project
- *     (GitHub footer), and pure clutter (tip bar) never reach the user.
- *  2. **Repair the composer "+" trigger.** On phones the official composer's
- *     own attach button and the engine's "+" can double up after the page
- *     re-renders; the badge is collapsed to a single quiet control.
+ *  1. **Hide out-of-scope feature entries** (voice, Deep Code) — the exact row
+ *     or collapsible section only. NEVER an ancestor container: the settings
+ *     drawer groups many unrelated rows into one card, so hiding a group would
+ *     wipe unrelated settings along with the hidden feature.
+ *  2. **Remove dead chrome** (upstream GitHub footer, tip strip, desktop-only
+ *     category nav, the Deep Code row inside the "+" sheet).
+ *  3. **Trim the "+" attach sheet**: DeepThink and Web Search already have
+ *     their own composer chips, so their sheet rows are redundant — hide them
+ *     by title text, scoped to the sheet only (settings entries with the same
+ *     words must survive).
+ *  4. **Repair raw i18n keys** the bundled locale data misses (e.g.
+ *     "SETTINGS.ABOUT" shown verbatim) with locale-aware labels.
  *
  * Everything here is a pure function of strings so the rules are unit-testable
  * without a WebView (matches the repo's test convention).
  */
 internal object UiPolish {
 
+    // ── 1. Settings entries hidden everywhere (feature is out of scope) ──
+
     /**
-     * A settings row / group whose visible text matches any of these is hidden.
-     * Bangla variants are included because the engine UI follows the device
-     * locale (NEXT_LOCALE cookie seeded from the system locale).
+     * A settings row / collapsible section whose visible text matches any of
+     * these is hidden — THE ROW ITSELF plus (for collapsible headers) its
+     * content wrapper. Bangla variants are included because the engine UI
+     * follows the device locale (NEXT_LOCALE seeded from the system locale).
      */
     val HIDDEN_TEXT_PATTERNS: List<Regex> = listOf(
         // Voice feature — intentionally out of scope for this app.
@@ -37,7 +46,16 @@ internal object UiPolish {
         Regex("ডিপ কোড"),
     )
 
-    /** Single selectors hidden wholesale (dead weight / upstream chrome). */
+    /** Elements whose textContent matches any pattern gets hidden. */
+    val TEXT_SWEEP_SELECTORS: List<String> = listOf(
+        ".bds-settings-row",
+        ".bds-toggle-row",
+        ".bds-settings-group-title",
+        ".bds-section-title",
+    )
+
+    // ── 2. Elements hidden wholesale (dead weight / upstream chrome) ─────
+
     val HIDDEN_SELECTORS: List<String> = listOf(
         ".bds-tip-bar", // rotating tip strip — clutter
         ".bds-github-link", // footer link to the upstream repo
@@ -46,8 +64,36 @@ internal object UiPolish {
         ".bds-category-nav", // desktop-only settings nav strip
     )
 
+    // ── 3. "+" attach sheet rows hidden (redundant with composer chips) ──
+
+    /**
+     * Attach-sheet items whose title matches any of these are hidden. DeepThink
+     * and Web Search already live as chips in the composer, so the sheet rows
+     * only add noise. Scoped to [ATTACH_ITEM_SELECTOR] — the settings sections
+     * that share these words are NOT touched by this list.
+     */
+    val ATTACH_HIDDEN_TEXT_PATTERNS: List<Regex> = listOf(
+        Regex("Deep\\s*Think", RegexOption.IGNORE_CASE),
+        Regex("Web\\s*Search", RegexOption.IGNORE_CASE),
+        Regex("ডিপথিঙ্ক"),
+        Regex("ডিপ\\s*থিঙ্ক"),
+        Regex("ওয়েব\\s*সার্চ"),
+    )
+    internal const val ATTACH_ITEM_SELECTOR = ".bds-attach-dropdown .bds-attach-item"
+
+    // ── 4. Raw i18n keys repaired with real labels ───────────────────────
+
+    /** Raw key → (english label, bangla label). Exact textContent match only. */
+    val LABEL_FIXES: Map<String, Pair<String, String>> = mapOf(
+        "SETTINGS.ABOUT" to ("About" to "সম্পর্কে"),
+        "mcp.tools" to ("MCP Tools" to "MCP টুলস"),
+    )
+
     internal fun shouldHideText(text: String): Boolean =
         HIDDEN_TEXT_PATTERNS.any { it.containsMatchIn(text) }
+
+    internal fun shouldHideAttachItem(text: String): Boolean =
+        ATTACH_HIDDEN_TEXT_PATTERNS.any { it.containsMatchIn(text) }
 
     /**
      * Minimal JSON string escaping for embedding the patterns into the injected
@@ -74,47 +120,91 @@ internal object UiPolish {
         return sb.toString()
     }
 
+    private fun regexArray(patterns: List<Regex>): String {
+        val flags = if (patterns.any { it.options.contains(RegexOption.IGNORE_CASE) }) "i" else ""
+        val literals = patterns.joinToString(",") { jsonEscape(it.pattern) }
+        return "[${literals}].map(function(p){try{return new RegExp(p,\"${flags}\")}catch(e){return null}}).filter(Boolean)"
+    }
+
     /**
      * The JS injected once per page load. Idempotent, MutationObserver-driven:
      * the engine renders settings lazily, so hidden rows are re-hidden as they
-     * appear (rows hidden by [HIDDEN_TEXT_PATTERNS], nodes matching
-     * [HIDDEN_SELECTORS] removed).
+     * appear.
+     *
+     * Contract (pinned by [UiPolishTest]):
+     *  - a matched settings row hides ITSELF (plus a collapsible's content
+     *    wrapper) — never an ancestor group;
+     *  - attach-sheet rows are matched only inside `.bds-attach-dropdown`;
+     *  - label repairs replace exact raw keys only.
      */
     fun buildScript(): String {
-        val patterns = HIDDEN_TEXT_PATTERNS.map { jsonEscape(it.pattern) }
-            .joinToString(",")
-        val flags = if (HIDDEN_TEXT_PATTERNS.any { it.options.contains(RegexOption.IGNORE_CASE) }) "i" else ""
-        val selectors = HIDDEN_SELECTORS.joinToString(",") { jsonEscape(it) }
+        val sweepRe = regexArray(HIDDEN_TEXT_PATTERNS)
+        val attachRe = regexArray(ATTACH_HIDDEN_TEXT_PATTERNS)
+        val sweepSel = TEXT_SWEEP_SELECTORS.joinToString(",")
+        val deadSel = HIDDEN_SELECTORS.joinToString(",")
+        val labelFixes = LABEL_FIXES.entries.joinToString(",") {
+            "${jsonEscape(it.key)}:[${jsonEscape(it.value.first)},${jsonEscape(it.value.second)}]"
+        }
         return """
             (function(){
               if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;
-              var RE=[${patterns}].map(function(p){try{return new RegExp(p,"$flags")}catch(e){return null}}).filter(Boolean);
-              var SEL=[${selectors}].join(",");
-              function hideTextNodes(root){
-                var rows=root.querySelectorAll('.bds-settings-row,.bds-settings-group-title,.bds-toggle-row,.bds-section-title');
+              var RE=$sweepRe;
+              var ARE=$attachRe;
+              var SEL="$deadSel";
+              var SWEEP="$sweepSel";
+              var ATTACH="$ATTACH_ITEM_SELECTOR";
+              var BN=(navigator.language||"").toLowerCase().indexOf("bn")===0;
+              var FIX={$labelFixes};
+              function sweepText(root){
+                var rows=root.querySelectorAll(SWEEP);
                 for(var i=0;i<rows.length;i++){
-                  var t=rows[i].textContent||'';
+                  var t=rows[i].textContent||"";
                   for(var j=0;j<RE.length;j++){
                     if(RE[j].test(t)){
-                      var target=rows[i].closest('.bds-settings-group')||rows[i];
-                      target.style.display='none';
+                      rows[i].style.display="none";
+                      if(rows[i].classList.contains("bds-toggle-row")){
+                        var sib=rows[i].nextElementSibling;
+                        if(sib&&sib.querySelector(".bds-sub-inner"))sib.style.display="none";
+                      }
                       break;
                     }
                   }
                 }
               }
-              function hideSelectors(root){
+              function sweepAttach(root){
+                var items=root.querySelectorAll(ATTACH);
+                for(var a=0;a<items.length;a++){
+                  var tx=items[a].textContent||"";
+                  for(var b=0;b<ARE.length;b++){
+                    if(ARE[b].test(tx)){items[a].style.display="none";break;}
+                  }
+                }
+              }
+              function sweepDead(root){
                 try{
                   var dead=root.querySelectorAll(SEL);
-                  for(var k=0;k<dead.length;k++){dead[k].style.display='none';}
+                  for(var k=0;k<dead.length;k++){dead[k].style.display="none";}
                 }catch(e){}
               }
-              function sweep(){hideSelectors(document);hideTextNodes(document);}
-              sweep();
+              function fixLabels(root){
+                var all=(root.body||root.documentElement).querySelectorAll("*");
+                for(var w=0;w<all.length;w++){
+                  var el=all[w];
+                  if(el.children.length)continue;
+                  var t=(el.textContent||"").trim();
+                  if(t.length>24)continue;
+                  var fix=FIX[t];
+                  if(fix)el.textContent=BN?fix[1]:fix[0];
+                }
+              }
+              function sweep(root){
+                sweepDead(root);sweepText(root);sweepAttach(root);fixLabels(root);
+              }
+              sweep(document);
               var pend=false;
               var mo=new MutationObserver(function(){
                 if(pend)return;pend=true;
-                setTimeout(function(){pend=false;sweep();},120);
+                setTimeout(function(){pend=false;sweep(document);},120);
               });
               mo.observe(document.documentElement,{childList:true,subtree:true});
             })();

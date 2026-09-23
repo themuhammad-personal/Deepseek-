@@ -7,7 +7,7 @@ import org.junit.Test
 
 class UiPolishTest {
 
-    // ── Hidden text rules ────────────────────────────────────────────────
+    // ── Settings text rules ──────────────────────────────────────────────
 
     @Test
     fun `voice feature rows are hidden in english and bangla`() {
@@ -37,6 +37,48 @@ class UiPolishTest {
         assertFalse(UiPolish.shouldHideText("মেমোরি লাইব্রেরি"))
         assertFalse(UiPolish.shouldHideText("Deep Research"))
         assertFalse(UiPolish.shouldHideText("Show timestamps"))
+        // Web Search keeps its SETTINGS section — the sheet row is what goes.
+        assertFalse(UiPolish.shouldHideText("Web Search"))
+    }
+
+    // ── Attach sheet rules (scoped!) ─────────────────────────────────────
+
+    @Test
+    fun `attach sheet rows for deepthink and web search are hidden`() {
+        assertTrue(UiPolish.shouldHideAttachItem("DeepThink"))
+        assertTrue(UiPolish.shouldHideAttachItem("Deep Think"))
+        assertTrue(UiPolish.shouldHideAttachItem("Web Search"))
+        assertTrue(UiPolish.shouldHideAttachItem("ডিপথিঙ্ক"))
+        assertTrue(UiPolish.shouldHideAttachItem("ওয়েব সার্চ"))
+    }
+
+    @Test
+    fun `attach sheet keeps upload and fetch rows`() {
+        assertFalse(UiPolish.shouldHideAttachItem("Upload File"))
+        assertFalse(UiPolish.shouldHideAttachItem("Upload Folder"))
+        assertFalse(UiPolish.shouldHideAttachItem("GitHub Repo"))
+        assertFalse(UiPolish.shouldHideAttachItem("Fetch Web Page"))
+        assertFalse(UiPolish.shouldHideAttachItem("ওয়েব পেজ ফেচ"))
+        assertFalse(UiPolish.shouldHideAttachItem("Camera"))
+    }
+
+    @Test
+    fun `attach rule is scoped to the sheet selector only`() {
+        assertEquals(
+            ".bds-attach-dropdown .bds-attach-item",
+            UiPolish.ATTACH_ITEM_SELECTOR,
+        )
+    }
+
+    // ── Label repairs ────────────────────────────────────────────────────
+
+    @Test
+    fun `raw i18n keys have localized replacements`() {
+        val about = UiPolish.LABEL_FIXES["SETTINGS.ABOUT"]
+        assertEquals("About", about?.first)
+        assertEquals("সম্পর্কে", about?.second)
+        val tools = UiPolish.LABEL_FIXES["mcp.tools"]
+        assertEquals("MCP Tools", tools?.first)
     }
 
     // ── Injected script contract ─────────────────────────────────────────
@@ -46,18 +88,42 @@ class UiPolishTest {
         val script = UiPolish.buildScript()
         assertTrue(script.contains("__bdsUiPolished"))
         assertTrue(script.contains("MutationObserver"))
-        UiPolish.HIDDEN_SELECTORS.forEach { assertTrue(script.contains(it.removePrefix("[data-testid=\"").split("\"")[0])) }
-        assertTrue(script.contains(".bds-tip-bar"))
-        assertTrue(script.contains(".bds-github-link"))
-        assertTrue(script.contains(".bds-deep-code-mount"))
+        UiPolish.HIDDEN_SELECTORS.forEach { selector ->
+            val bare = selector
+                .removePrefix("[data-testid=\"").removeSuffix("\"]")
+                .removePrefix(".")
+            assertTrue("script must embed selector: $selector", script.contains(bare))
+        }
+    }
+
+    @Test
+    fun `script never hides an ancestor group`() {
+        // Regression guard for the wiped-advanced-settings bug: the sweep must
+        // not climb to `.bds-settings-group` (or use closest at all).
+        val script = UiPolish.buildScript()
+        assertFalse(script.contains("closest("))
+        assertFalse(script.contains("bds-settings-group\"") && script.contains("closest"))
+    }
+
+    @Test
+    fun `script sweeps only dedicated row selectors`() {
+        val script = UiPolish.buildScript()
+        UiPolish.TEXT_SWEEP_SELECTORS.forEach { assertTrue(script.contains(it)) }
+    }
+
+    @Test
+    fun `script scopes attach hiding to the sheet`() {
+        val script = UiPolish.buildScript()
+        assertTrue(script.contains(UiPolish.ATTACH_ITEM_SELECTOR))
     }
 
     @Test
     fun `script escapes regex patterns as json strings`() {
         val script = UiPolish.buildScript()
-        // Bangla patterns must survive as quoted JS strings
         assertTrue(script.contains("ভয়েস মোড"))
         assertTrue(script.contains("ডিপ কোড"))
+        // \s inside a pattern survives as \\s in the JSON-escaped JS string
+        assertTrue(script.contains("Deep\\\\s*Think"))
         // Ignore-case flag is present because some rules are case-insensitive
         assertTrue(script.contains("new RegExp(p,\"i\")"))
     }
@@ -69,6 +135,7 @@ class UiPolishTest {
         assertTrue(UiPolish.isEngineComposerControl("bds-plus-btn", ""))
         assertTrue(UiPolish.isEngineComposerControl("bds-attach-menu-mount svelte-x", ""))
         assertTrue(UiPolish.isEngineComposerControl("bds-deep-research-toggle", ""))
+        assertTrue(UiPolish.isEngineComposerControl("bds-deep-research-mount", ""))
         assertTrue(UiPolish.isEngineComposerControl("", "bds-root"))
     }
 
@@ -93,7 +160,6 @@ class UiPolishTest {
             ),
             UiPolish.HIDDEN_SELECTORS,
         )
-        // Every selector stays inside the engine's namespace.
         UiPolish.HIDDEN_SELECTORS.forEach { selector ->
             val insideEngineNs = selector.startsWith(".bds-") ||
                 selector.startsWith("[data-testid=\"attach-")

@@ -216,6 +216,69 @@ class MainActivity : ComponentActivity() {
     /** Cap on splash hold so a stalled network can never trap the launch. */
     private val SPLASH_FAILSAFE_MS = 4000L
 
+    /** Engine native-pick request waiting for [nativePickLauncher]: id to mode. */
+    private var nativePickRequest: Pair<String, String>? = null
+
+    /**
+     * The engine (injected into the official DeepSeek page) asks the native
+     * side to pick files (`AndroidBridge.pickFiles(mode, requestId)`) and waits
+     * for a CustomEvent delivered back INTO THE SAME WebView. Without this
+     * launcher every native pick died with "picker-launch-failed", which is why
+     * camera/file/folder uploads looked broken.
+     */
+    private val nativePickLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val request = nativePickRequest
+            nativePickRequest = null
+            if (request == null) return@registerForActivityResult
+            val (requestId, mode) = request
+            if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+                bridge.deliverPickError(requestId, "cancelled")
+                return@registerForActivityResult
+            }
+            try {
+                val data = result.data
+                if (mode.startsWith("folder")) {
+                    val tree = data?.data
+                    if (tree == null) {
+                        bridge.deliverPickError(requestId, "cancelled")
+                        return@registerForActivityResult
+                    }
+                    runCatching {
+                        contentResolver.takePersistableUriPermission(
+                            tree, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    }
+                    val read = bridge.readPickedFolderTree(tree, mode.contains("images"))
+                    bridge.deliverPickedFiles(requestId, read.files, read.skipped, read.folderName)
+                } else {
+                    val uris = linkedSetOf<Uri>()
+                    data?.clipData?.let { clip ->
+                        for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
+                    }
+                    data?.data?.let { uris.add(it) }
+                    if (uris.isEmpty()) {
+                        bridge.deliverPickError(requestId, "cancelled")
+                        return@registerForActivityResult
+                    }
+                    val acceptImages = mode.contains("images")
+                    val files = ArrayList<PickedFile>()
+                    val skipped = ArrayList<SkippedFile>()
+                    for (uri in uris) {
+                        when (val picked = bridge.readPickedContentUri(uri, acceptImages)) {
+                            is PickedItemResult.Ok -> files.add(picked.file)
+                            is PickedItemResult.Skipped -> skipped.add(SkippedFile(picked.name, picked.reason))
+                        }
+                    }
+                    if (files.isEmpty()) bridge.deliverPickError(requestId, "no-readable-files")
+                    else bridge.deliverPickedFiles(requestId, files, skipped, null)
+                }
+            } catch (t: Throwable) {
+                Log.e("SuperDeepSeek", "Native pick handling failed", t)
+                bridge.deliverPickError(requestId, "read-failed")
+            }
+        }
+
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
@@ -363,7 +426,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             // Dark background so there is no white flash while the page/engine loads.
-            setBackgroundColor(Color.parseColor("#262624")) // warm charcoal — matches the design frame & boot overlay
+            setBackgroundColor(Color.parseColor("#1e1f23")) // engine panel dark — matches the official page
         }
 
         // React SPA WebView - custom UI, hidden initially
@@ -442,7 +505,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            setBackgroundColor(Color.parseColor("#262624"))
+            setBackgroundColor(Color.parseColor("#1e1f23"))
         }
 
         cookieManager.setAcceptThirdPartyCookies(officialWebView, true)
@@ -450,10 +513,46 @@ class MainActivity : ComponentActivity() {
 
         bridge.officialWebView = officialWebView
         bridge.reactWebView = reactWebView
-        bridge.mainWebView = reactWebView
+        // Legacy login-path handles: the hidden-WebView login flow and the
+        // dsLoginNative callbacks all run against the official page now.
+        bridge.mainWebView = officialWebView
         bridge.hiddenWebView = officialWebView
-        bridge.evaluateJs = { script -> reactWebView.post { reactWebView.evaluateJavascript(script, null) } }
+        // The engine bundle runs INSIDE the official WebView, so every script
+        // the bridge posts (native pick results, MCP replies, theme events…)
+        // must be evaluated there. Pointing these at the hidden React WebView
+        // silently dropped them — the "file picker did not return a result"
+        // class of bugs.
+        bridge.scriptPoster = { script ->
+            officialWebView.post { officialWebView.evaluateJavascript(script, null) }
+        }
+        bridge.evaluateJs = { script ->
+            officialWebView.post { officialWebView.evaluateJavascript(script, null) }
+        }
         bridge.evaluateHiddenJs = { script -> officialWebView.post { officialWebView.evaluateJavascript(script, null) } }
+        bridge.onPickFiles = { mode, requestId ->
+            handler.post {
+                try {
+                    val intent: Intent = when {
+                        mode.startsWith("folder") -> Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        mode.contains("images") -> Intent(Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                        else -> buildFileChooserIntent(null, true)
+                    }
+                    nativePickRequest = requestId to mode
+                    nativePickLauncher.launch(intent)
+                    bridge.deliverPickStatus(requestId, "launched")
+                } catch (t: Throwable) {
+                    Log.e("SuperDeepSeek", "Native pick launch failed", t)
+                    nativePickRequest = null
+                    bridge.deliverPickError(requestId, "picker-launch-failed")
+                }
+            }
+        }
         bridge.onOfficialLogin = { token -> 
             handler.post {
                 onOfficialTokenFound(token)
@@ -467,7 +566,7 @@ class MainActivity : ComponentActivity() {
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.parseColor("#262624"))
+            setBackgroundColor(Color.parseColor("#1e1f23"))
             addView(officialWebView)
             addView(reactWebView)
         }
@@ -621,27 +720,61 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Branded dark splash that hides the white flash + unstyled official page. */
+    /**
+     * Branded boot screen that hides the white flash + unstyled official page.
+     *
+     * Plays like a phone power-on: the icon pops in first, then the app name
+     * builds up LETTER BY LETTER (each glyph with its own entrance — rise,
+     * pop, flip, glow — like the Android boot wordmark), then the subtitle.
+     */
     private fun injectBootOverlay(webView: WebView) {
+        val title = org.json.JSONObject.quote(getString(R.string.bds_boot_title))
+        val subtitle = org.json.JSONObject.quote(getString(R.string.bds_boot_subtitle))
         val js = """
             (function(){
               try{
-                var BG='#262624';
+                var BG='#1e1f23';
                 document.documentElement.style.background=BG;
                 if(document.body)document.body.style.background=BG;
                 if(document.getElementById('bds-boot'))return;
+                window.__bdsBootAt=Date.now();
                 var st=document.createElement('style');
-                st.textContent='@keyframes bdsboot{to{transform:rotate(360deg)}}'
-                  +'@keyframes bdsbootfade{from{opacity:0}to{opacity:1}}'
-                  +'.bds-boot-word{font-family:Georgia,serif;font-size:17px;font-weight:700;letter-spacing:.2px;color:#f5f4ef}'
-                  +'.bds-boot-sub{font-size:11.5px;color:#8f8d82;margin-top:6px;letter-spacing:.3px}';
+                st.textContent=[
+                  '@keyframes bdsIconIn{0%{transform:scale(.35);opacity:0}55%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}',
+                  '@keyframes bdsSpin{to{transform:rotate(360deg)}}',
+                  '@keyframes bdsLtrRise{0%{opacity:0;transform:translateY(.55em);filter:blur(7px)}60%{opacity:1;filter:blur(0)}100%{opacity:1;transform:translateY(0);filter:blur(0)}}',
+                  '@keyframes bdsLtrPop{0%{opacity:0;transform:scale(.2)}62%{opacity:1;transform:scale(1.22)}100%{opacity:1;transform:scale(1)}}',
+                  '@keyframes bdsLtrFlip{0%{opacity:0;transform:rotateX(95deg) translateY(.25em)}100%{opacity:1;transform:rotateX(0) translateY(0)}}',
+                  '@keyframes bdsLtrGlow{0%{opacity:0;text-shadow:none}45%{opacity:1;text-shadow:0 0 22px rgba(91,123,255,.95),0 0 48px rgba(77,107,254,.5)}100%{opacity:1;text-shadow:0 0 0 rgba(91,123,255,0)}}',
+                  '@keyframes bdsFadeUp{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}',
+                  '#bds-boot{position:fixed;inset:0;background:'+BG+';z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}',
+                  '#bds-boot .bds-boot-icon{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#4d6bfe,#5b7bff);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 44px rgba(77,107,254,.45);animation:bdsIconIn .55s cubic-bezier(.2,.9,.3,1.35) .1s both}',
+                  '#bds-boot .bds-boot-word{margin-top:28px;font-family:Georgia,Noto Serif,serif;font-size:clamp(30px,9.5vw,44px);font-weight:800;letter-spacing:.5px;color:#f2f3f7;display:flex;align-items:baseline;white-space:nowrap;perspective:600px}',
+                  '#bds-boot .bds-boot-word span{display:inline-block;animation-duration:.55s;animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.25,1);will-change:transform,opacity,filter}',
+                  '#bds-boot .bds-boot-word .sp{width:.34em}',
+                  '#bds-boot .bds-boot-sub{margin-top:13px;font-family:system-ui,Roboto,sans-serif;font-size:12.5px;letter-spacing:.4px;color:#8e8ea0;animation:bdsFadeUp .5s ease both}',
+                  '#bds-boot .bds-boot-spin{margin-top:30px;width:24px;height:24px;border:3px solid rgba(91,123,255,.18);border-top-color:#5b7bff;border-radius:50%;animation:bdsSpin .8s linear infinite, bdsFadeUp .4s ease .45s both}'
+                ].join('');
                 (document.head||document.documentElement).appendChild(st);
+                var TITLE=$title, SUB=$subtitle;
+                var word=document.createElement('div');word.className='bds-boot-word';
+                var anims=['bdsLtrRise','bdsLtrPop','bdsLtrFlip','bdsLtrGlow'];
+                var li=0,vi=0;
+                for(var i=0;i<TITLE.length;i++){
+                  var ch=TITLE.charAt(i);
+                  if(ch===' '){var sp=document.createElement('span');sp.className='sp';word.appendChild(sp);continue;}
+                  var s2=document.createElement('span');s2.textContent=ch;
+                  s2.style.animationName=anims[vi%anims.length];
+                  s2.style.animationDelay=(0.9+li*0.07)+'s';
+                  word.appendChild(s2);li++;vi++;
+                }
+                var sub=document.createElement('div');sub.className='bds-boot-sub';sub.textContent=SUB;
+                sub.style.animationDelay=(0.95+li*0.07)+'s';
+                var icon=document.createElement('div');icon.className='bds-boot-icon';
+                icon.innerHTML='<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+                var spin=document.createElement('div');spin.className='bds-boot-spin';
                 var o=document.createElement('div');o.id='bds-boot';
-                o.style.cssText='position:fixed;inset:0;background:'+BG+';z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;animation:bdsbootfade .3s ease';
-                o.innerHTML='<div style="width:52px;height:52px;border-radius:14px;background:#4d6bfe;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(77,107,254,.35)">'
-                  +'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>'
-                  +'<div style="text-align:center"><div class="bds-boot-word">${org.json.JSONObject.quote(getString(R.string.bds_boot_title))}</div><div class="bds-boot-sub">${org.json.JSONObject.quote(getString(R.string.bds_boot_subtitle))}</div></div>'
-                  +'<div style="width:26px;height:26px;border:3px solid rgba(109,139,255,.2);border-top-color:#6d8bff;border-radius:50%;animation:bdsboot .85s linear infinite"></div>';
+                o.appendChild(icon);o.appendChild(word);o.appendChild(sub);o.appendChild(spin);
                 (document.body||document.documentElement).appendChild(o);
               }catch(e){}
             })();
@@ -649,16 +782,24 @@ class MainActivity : ComponentActivity() {
         webView.evaluateJavascript(js, null)
     }
 
-    /** Polls for the mounted engine then removes the boot overlay (force after ~3s). */
+    /**
+     * Polls for the mounted engine, then removes the boot overlay — but never
+     * before the boot wordmark has finished playing (min 2.7s), and never
+     * later than a ~9s failsafe.
+     */
     private fun removeBootOverlay(webView: WebView) {
         val js = """
             (function(){
-              var tries=0;
+              var tries=0, MIN=2700;
               function rm(){
                 var o=document.getElementById('bds-boot');
+                if(!o)return;
                 var ready=document.querySelector('[id^="bds-"]:not(#bds-boot)')||document.querySelector('[class*="bds"]');
-                if(o&&(ready||tries>20)){o.style.opacity='0';o.style.transition='opacity .25s';setTimeout(function(){o.remove();},260);}
-                else{tries++;setTimeout(rm,150);}
+                var age=Date.now()-(window.__bdsBootAt||0);
+                if(ready&&(age>=MIN||tries>60)){
+                  o.style.opacity='0';o.style.transition='opacity .3s ease';
+                  setTimeout(function(){o.remove();},320);
+                }else{tries++;setTimeout(rm,150);}
               }
               rm();
             })();

@@ -6,59 +6,22 @@
    • The engine ALSO injects Svelte component styles into <head> at runtime
      (AFTER this stylesheet), so any rule that fights a runtime-scoped style
      carries !important deliberately.
-   • Design language: warm neutral surfaces (Claude-style oat / charcoal),
-     DeepSeek blue as the single accent, serif display headers, generous
-     touch targets (≥44px), soft depth, no gradients-on-controls.
+   • Design language: the engine's own palette (tuned to blend with the
+     official DeepSeek page), serif display headers, generous touch targets
+     (≥44px), soft depth, single blue accent.
    ========================================================================== */
 
-/* ── Design tokens (light) ────────────────────────────────────────────── */
+/* ── Palette policy ─────────────────────────────────────────────────────
+   We deliberately do NOT override the engine's --bds-* palette here. The
+   engine ships light/dark token sets tuned to blend with the official
+   DeepSeek page (dark panel #1e1f23, elevated #2a2b30, accent #5b7bff).
+   Overriding them caused a patchwork: our warm grays sat on the official
+   page's own blacks. Only non-palette additions live below. */
 :root {
-  --bds-accent: #4d6bfe;
-  --bds-accent-glow: rgba(77, 107, 254, 0.22);
-  --bds-accent-hover: #5f7bff;
-  --bds-ai-color: #4d6bfe;
-  --bds-radius: 16px;
-  --bds-transition: 0.18s ease;
-  --bds-shadow: 0 4px 18px rgba(28, 27, 24, 0.08), 0 12px 40px rgba(28, 27, 24, 0.1);
-  --bds-bg-panel: #ffffff;
-  --bds-bg-elevated: #f0eee5;
-  --bds-bg-card: #faf9f5;
-  --bds-bg-input: #f4f3ec;
-  --bds-bg-hover: rgba(31, 30, 29, 0.05);
-  --bds-border: #e7e4d8;
-  --bds-border-hover: #d3cfc0;
-  --bds-text-primary: #1f1e1d;
-  --bds-text-secondary: #565349;
-  --bds-text-tertiary: #8b887b;
-  --bds-text-muted: #aaa79a;
-  --bds-danger: #c94f3d;
-
-  /* local extensions (our frame only — the engine ignores unknown vars) */
+  /* local extensions used by our component polish */
   --sds-font-display: Georgia, "Noto Serif", "Source Serif 4", serif;
   --sds-control-radius: 12px;
   --sds-row-height: 52px;
-}
-
-/* ── Design tokens (dark) — warm charcoal, Claude-style ───────────────── */
-.dark {
-  --bds-accent: #6d8bff;
-  --bds-accent-glow: rgba(109, 139, 255, 0.24);
-  --bds-accent-hover: #869dff;
-  --bds-ai-color: #869dff;
-  --bds-bg-panel: #262624;
-  --bds-bg-elevated: #31302d;
-  --bds-bg-card: #2b2a28;
-  --bds-bg-input: #1e1e1c;
-  --bds-bg-hover: rgba(245, 244, 239, 0.06);
-  --bds-bg-chat-user: rgba(109, 139, 255, 0.14);
-  --bds-border: #393834;
-  --bds-border-hover: #4b4a44;
-  --bds-text-primary: #f5f4ef;
-  --bds-text-secondary: #c6c3b8;
-  --bds-text-tertiary: #8f8d82;
-  --bds-text-muted: #6f6e64;
-  --bds-danger: #e0685a;
-  --bds-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 16px 56px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
@@ -114,7 +77,6 @@
 #bds-drawer {
   background: var(--bds-bg-panel);
   border: 1px solid var(--bds-border);
-  border-radius: 22px;
   box-shadow: var(--bds-shadow);
   padding: 18px 16px 12px;
   max-height: 86vh;
@@ -285,7 +247,7 @@
 }
 /* Group rows into a card; divider between siblings (Claude list style) */
 .bds-settings-group {
-  background: var(--bds-bg-card);
+  background: var(--bds-bg-elevated);
   border: 1px solid var(--bds-border);
   border-radius: var(--sds-control-radius);
   overflow: hidden;
@@ -628,7 +590,7 @@
 
 /* ── Cards, menus, misc ───────────────────────────────────────────────── */
 .bds-card {
-  background: var(--bds-bg-card) !important;
+  background: var(--bds-bg-elevated) !important;
   border: 1px solid var(--bds-border) !important;
   border-radius: 16px !important;
 }
