@@ -66,6 +66,8 @@ export type Chat = {
   pinned: boolean;
   messages: Message[];
   dsSessionId?: string;
+  /** Server id of the last streamed assistant message; next completion's parent_message_id. */
+  dsLastMessageId?: string;
   projectId?: string;
   tags?: string[];
 };

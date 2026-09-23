@@ -140,6 +140,7 @@ type Actions = {
   deleteChat: (id: string) => void;
   pinChat: (id: string) => void;
   bindDsSession: (chatId: string, dsSessionId: string) => void;
+  bindDsLastMessage: (chatId: string, dsLastMessageId: string) => void;
   appendMessage: (chatId: string, msg: Message) => void;
   patchMessage: (chatId: string, msgId: string, patch: Partial<Message>) => void;
   setStreaming: (id: string | null) => void;
@@ -288,6 +289,10 @@ export const useAppStore = create<AppState & Actions>()(
       bindDsSession: (chatId, dsSessionId) =>
         set((s) => ({
           chats: s.chats.map((c) => (c.id === chatId ? { ...c, dsSessionId } : c)),
+        })),
+      bindDsLastMessage: (chatId, dsLastMessageId) =>
+        set((s) => ({
+          chats: s.chats.map((c) => (c.id === chatId ? { ...c, dsLastMessageId } : c)),
         })),
       appendMessage: (chatId, msg) =>
         set((s) => ({

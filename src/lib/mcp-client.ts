@@ -36,7 +36,72 @@ function parseSseReply(text: string): RpcReply | null {
   return null;
 }
 
+type NativeReply = { status?: number; contentType?: string; body?: string; error?: string };
+
+declare global {
+  interface Window {
+    // AndroidBridge (incl. mcpRequest) is declared in deepseek/client-direct.ts.
+    __mcpResult?: (name: string, json: string) => void;
+  }
+}
+
+const nativePending = new Map<string, (r: NativeReply) => void>();
+let nativeSeq = 0;
+
+function ensureNativeRegistry(): void {
+  if (typeof window === "undefined") return;
+  if (!window.__mcpResult) {
+    window.__mcpResult = (name, json) => {
+      const cb = nativePending.get(name);
+      nativePending.delete(name);
+      try {
+        cb?.(JSON.parse(json) as NativeReply);
+      } catch {
+        cb?.({ error: "bad native json" });
+      }
+    };
+  }
+}
+
+function nativeAvailable(): boolean {
+  return typeof window !== "undefined" && typeof window.AndroidBridge?.mcpRequest === "function";
+}
+
+/**
+ * Route the JSON-RPC call through the Kotlin OkHttp bridge when present. MCP
+ * endpoints refuse the WebView origin via CORS, so the native side is the only
+ * transport that works inside the APK; the browser dev build falls back to fetch.
+ */
+function rpcNative(server: McpServer, method: string, params: unknown, timeoutMs: number): Promise<RpcReply> {
+  ensureNativeRegistry();
+  const name = `mcp${++nativeSeq}`;
+  const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
+  return new Promise<RpcReply>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      nativePending.delete(name);
+      reject(new Error(`MCP server timed out (${timeoutMs}ms)`));
+    }, timeoutMs);
+    nativePending.set(name, (r) => {
+      clearTimeout(timer);
+      if (r.error) return reject(new Error(r.error));
+      const ct = r.contentType ?? "";
+      if (ct.includes("text/event-stream")) {
+        const reply = parseSseReply(r.body ?? "");
+        if (!reply) return reject(new Error("MCP server sent an SSE stream without a JSON-RPC reply"));
+        return resolve(reply);
+      }
+      try {
+        resolve(JSON.parse(r.body ?? "") as RpcReply);
+      } catch {
+        reject(new Error("MCP server returned unparseable JSON"));
+      }
+    });
+    window.AndroidBridge?.mcpRequest?.(server.endpoint, JSON.stringify(headers(server)), body, name);
+  });
+}
+
 async function rpc(server: McpServer, method: string, params: unknown, timeoutMs: number): Promise<RpcReply> {
+  if (nativeAvailable()) return rpcNative(server, method, params, timeoutMs);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {

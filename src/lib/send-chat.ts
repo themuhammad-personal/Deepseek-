@@ -1,5 +1,4 @@
 import { extractArtifacts } from "./artifacts";
-import { buildWireHistory } from "./deepseek/history";
 import { createSseAcc, parseSseChunk } from "./deepseek/parse-sse";
 import type { McpToolCatalog } from "./ai/system-prompt";
 import { callTool, listTools } from "./mcp-client";
@@ -217,14 +216,12 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       useAppStore.getState().bindDsSession(chatId, sessionId);
     }
 
-    // Full conversation history (official wire format) so the model remembers
-    // earlier turns of this chat — `prompt` alone is single-turn.
-    const history = buildWireHistory(
-      (useAppStore.getState().chats.find((c) => c.id === chatId)?.messages ?? []).filter(
-        (m) => m.id !== userMsg.id,
-      ),
-    );
-    history.push({ role: "user", content: prompt });
+    // Multi-turn memory: DeepSeek chains turns server-side by
+    // parent_message_id (the previous assistant message's server id, captured
+    // from the stream). Sending null every time — the old behaviour — made
+    // every turn a brand-new root, which is exactly "it forgets the chat".
+    const parentMessageId =
+      useAppStore.getState().chats.find((c) => c.id === chatId)?.dsLastMessageId ?? null;
 
     const completeOpts = {
       token: store.account.token,
@@ -232,8 +229,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       prompt,
       thinking: mode === "think" || mode === "research",
       search: webSearch || mode === "research",
-      parentMessageId: null,
-      messages: history,
+      parentMessageId,
       signal: abort?.signal,
     };
 
@@ -246,7 +242,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       targetId: string,
       seedSteps: ResearchStep[] | undefined,
       retryOpts: typeof completeOpts,
-    ): Promise<{ text: string; thinking: string; error: string | null }> => {
+    ): Promise<{ text: string; thinking: string; error: string | null; messageId: string | null }> => {
       const acc = createSseAcc();
       let streamError: string | null = null;
       let sawDone = false;
@@ -334,7 +330,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
         clearTimeout(uiTimer);
         uiTimer = null;
       }
-      return { text: acc.text, thinking: acc.thinking, error: streamError };
+      return { text: acc.text, thinking: acc.thinking, error: streamError, messageId: acc.messageId ?? null };
     };
 
     let res = await completeStream(completeOpts);
@@ -353,6 +349,8 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
     let reply = first.text;
     let lastThinking = first.thinking;
     let lastAsstId = asst.id;
+    let lastMsgId: string | null = first.messageId;
+    if (first.messageId) useAppStore.getState().bindDsLastMessage(chatId, first.messageId);
 
     if (first.error && !reply) {
       store.patchMessage(chatId, asst.id, { error: first.error, content: "" });
@@ -370,8 +368,8 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
 
     // ── Auto-tool loop: the model may answer with <SDS:AUTO:MCP …> invocations.
     // Execute them against the configured servers, feed the results back as a
-    // hidden follow-up turn, and stream the continuation — up to 3 hops.
-    let wire = history;
+    // follow-up turn chained by parent_message_id, and stream the continuation
+    // — up to 3 hops.
     for (let guard = 0; guard < 3; guard++) {
       const calls = extractMcpCalls(reply);
       if (calls.length === 0) break;
@@ -410,18 +408,21 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       store.appendMessage(chatId, cont);
       store.setStreaming(cont.id);
 
-      wire = [
-        ...wire,
-        { role: "assistant", content: clean },
-        { role: "user", content: `${results.join("\n\n")}\n\n(Continue using the tool result above.)` },
-      ];
-      const retryOpts = { ...completeOpts, messages: wire };
+      const retryOpts = {
+        ...completeOpts,
+        parentMessageId: lastMsgId,
+        prompt: `${results.join("\n\n")}\n\n(Continue using the tool result above.)`,
+      };
       const res2 = await completeStream(retryOpts);
       const next = await consumeStream(res2, cont.id, cont.researchSteps, retryOpts);
       if (next.error && !next.text) {
         store.patchMessage(chatId, cont.id, { error: next.error, content: "" });
         performHaptic("error", store.settings.haptics);
         return;
+      }
+      if (next.messageId) {
+        useAppStore.getState().bindDsLastMessage(chatId, next.messageId);
+        lastMsgId = next.messageId;
       }
       reply = next.text;
       lastThinking = next.thinking;

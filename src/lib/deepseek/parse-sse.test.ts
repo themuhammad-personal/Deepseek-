@@ -68,6 +68,14 @@ test("toast error inside v object", () => {
   assert.equal(err?.error, "rate limited");
 });
 
+test("captures the streamed assistant message id for the parent chain", () => {
+  const acc = createSseAcc();
+  parseSseChunk(JSON.stringify({ message_id: "msg_123", o: "APPEND", v: "hi" }), acc);
+  assert.equal(acc.messageId, "msg_123");
+  parseSseChunk(JSON.stringify({ response_message_id: "msg_456" }), acc);
+  assert.equal(acc.messageId, "msg_456");
+});
+
 test("OpenAI-like fallback deltas", () => {
   const acc = createSseAcc();
   parseSseChunk(

@@ -216,9 +216,8 @@ export type CompleteOptions = {
   prompt: string;
   thinking: boolean;
   search: boolean;
+  /** Server id of the previous assistant message — the multi-turn context chain. */
   parentMessageId?: string | null;
-  /** Full conversation history (official wire format) — gives the model multi-turn memory. */
-  messages?: { role: "user" | "assistant"; content: string }[];
   signal?: AbortSignal;
 };
 
@@ -230,20 +229,18 @@ export type CompleteOptions = {
  * challenge, which is what the official client does too.
  */
 export async function completeStream(opts: CompleteOptions): Promise<Response> {
-  // The official web client sends the whole conversation as a `messages`
-  // array; `prompt` alone is the single-turn/edit path and makes the model
-  // forget earlier turns. Send both: when `messages` is present the server
-  // takes the history path and ignores `prompt`, and ancient fallbacks that
-  // only understand `prompt` still work.
+  // Body mirrors deepseek-cli's proven production client verbatim: context is
+  // kept server-side via the chat_session_id + parent_message_id chain (the id
+  // of the last streamed assistant message), NOT a messages array — sending
+  // one made the server treat every turn as a fresh root.
   const body = JSON.stringify({
     chat_session_id: opts.sessionId,
     parent_message_id: opts.parentMessageId ?? null,
+    model_type: "default",
     prompt: opts.prompt,
-    ...(opts.messages?.length ? { messages: opts.messages } : {}),
     ref_file_ids: [],
     thinking_enabled: opts.thinking,
     search_enabled: opts.search,
-    preempt: false,
   });
 
   for (let attempt = 0; attempt < 2; attempt++) {

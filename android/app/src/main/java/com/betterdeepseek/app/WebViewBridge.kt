@@ -29,6 +29,7 @@ import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -291,6 +292,47 @@ class WebViewBridge(
      * Mode is "files" or "folder"; requestId is the JS correlation key.
      */
     @Volatile var onPickFiles: ((mode: String, requestId: String) -> Unit)? = null
+
+    /**
+     * CORS-free JSON-RPC transport for MCP servers. The WebView origin
+     * (chat.deepseek.com) is refused by third-party MCP endpoints, so the SPA
+     * hands the request to OkHttp here and receives the reply asynchronously via
+     * `window.__mcpResult(callbackName, json)`.
+     */
+    @JavascriptInterface
+    fun mcpRequest(endpoint: String, headersJson: String, body: String, callbackName: String) {
+        Thread {
+            val result = try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val hb = org.json.JSONObject(headersJson)
+                val builder = okhttp3.Request.Builder()
+                    .url(endpoint)
+                    .post(body.toRequestBody("application/json".toMediaTypeOrNull()))
+                val keys = hb.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    builder.header(k, hb.optString(k))
+                }
+                client.newCall(builder.build()).execute().use { res ->
+                    org.json.JSONObject()
+                        .put("status", res.code)
+                        .put("contentType", res.header("Content-Type") ?: "")
+                        .put("body", res.body?.string() ?: "")
+                        .toString()
+                }
+            } catch (e: Exception) {
+                Log.e("SuperDeepSeek", "MCP native request failed", e)
+                org.json.JSONObject().put("error", e.message ?: "network error").toString()
+            }
+            val js = "window.__mcpResult && window.__mcpResult(" +
+                org.json.JSONObject.quote(callbackName) + ", " +
+                org.json.JSONObject.quote(result) + ")"
+            evaluateJs?.invoke(js)
+        }.start()
+    }
 
     /**
      * Returns the last DeepSeek page theme written by the extension's theme.js via

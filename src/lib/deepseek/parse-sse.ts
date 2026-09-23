@@ -32,6 +32,12 @@ export type SseAcc = {
   phase?: "thinking" | "content" | null;
   /** Current fragment type (new format): THINK vs RESPONSE/other. */
   fragmentType?: string | null;
+  /**
+   * The server-side id of the assistant message being streamed. The next
+   * completion must send it as `parent_message_id` — that chain (not a
+   * messages array) is how DeepSeek keeps multi-turn context.
+   */
+  messageId?: string | null;
 };
 
 export type DsDelta = {
@@ -42,7 +48,7 @@ export type DsDelta = {
 };
 
 export function createSseAcc(): SseAcc {
-  return { thinking: "", text: "", phase: null, fragmentType: null };
+  return { thinking: "", text: "", phase: null, fragmentType: null, messageId: null };
 }
 
 function snap(acc: SseAcc): DsDelta {
@@ -91,6 +97,18 @@ export function parseSseChunk(raw: string, acc: SseAcc): DsDelta | null {
     return null;
   }
   if (!obj || typeof obj !== "object") return null;
+
+  // The stream tags every content event with the assistant message's server id;
+  // the NEXT completion must carry it as parent_message_id or the server treats
+  // the turn as a brand-new root and forgets the conversation (deepseek-cli, a
+  // working production client, does exactly this).
+  const mid =
+    typeof obj.message_id === "string"
+      ? obj.message_id
+      : typeof obj.response_message_id === "string"
+        ? obj.response_message_id
+        : null;
+  if (mid) acc.messageId = mid;
 
   // Bare envelope error inside the stream ({"code":40003,…}, account muted, …).
   if (typeof obj.code === "number" && obj.code >= 40000) {

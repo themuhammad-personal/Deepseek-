@@ -47,6 +47,7 @@ declare global {
       onOfficialToken?: (token: string) => void;
       getOfficialToken?: () => string | null;
       switchToOfficialLogin?: () => void;
+      mcpRequest?: (endpoint: string, headersJson: string, body: string, callbackName: string) => void;
     };
     _dsLoginCallbacks?: Record<string, { resolve: (v: any) => void; reject: (e: string) => void }>;
   }
