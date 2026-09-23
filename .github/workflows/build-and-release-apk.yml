@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - v3-real-exact-ui
+      - arena/01a0cebd-deepseek
     tags:
       - "v*"
   pull_request:
@@ -68,8 +69,33 @@ jobs:
         working-directory: android
         run: chmod +x ./gradlew
       - name: Run Android Unit Tests
+        id: unittests
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee /tmp/gradle-unit.log
+
+      - name: Commit unit-test failure diagnostics to the branch
+        # Branch-only debug loop: on a failed unit-test run, drop the full
+        # Gradle log + failing test XML reports into android/ci-debug and push
+        # them to the SAME branch so the failure is inspectable without
+        # Actions-log access. Never fires on main/tag builds.
+        if: failure() && steps.unittests.outcome == 'failure' && github.ref_name == 'arena/01a0cebd-deepseek'
+        working-directory: android
+        run: |
+          mkdir -p ci-debug
+          cp /tmp/gradle-unit.log ci-debug/gradle-unit.log || true
+          tar czf ci-debug/test-results.tgz app/build/test-results/testDebugUnitTest 2>/dev/null || true
+          if [ -f app/build/reports/tests/testDebugUnitTest/index.html ]; then
+            cp -r app/build/reports/tests/testDebugUnitTest ci-debug/html-report
+          fi
+          du -sh ci-debug || true
+          cd ..
+          git config user.name "superdeepseek-ci"
+          git config user.email "actions@users.noreply.github.com"
+          git add -f android/ci-debug
+          git commit -m "chore(ci): unit-test failure diagnostics (run ${{ github.run_number }}) [skip ci]"
+          git push origin "HEAD:${{ github.ref_name }}"
       - name: Setup Signing Keystore
         working-directory: android
         env:
