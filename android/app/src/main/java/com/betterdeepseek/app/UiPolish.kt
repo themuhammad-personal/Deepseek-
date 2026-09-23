@@ -50,16 +50,41 @@ internal object UiPolish {
         HIDDEN_TEXT_PATTERNS.any { it.containsMatchIn(text) }
 
     /**
+     * Minimal JSON string escaping for embedding the patterns into the injected
+     * script. Deliberately local instead of `org.json.JSONObject.quote` so
+     * [UiPolishTest] can run as a plain JVM test without Robolectric and without
+     * depending on stubbed android.jar behavior.
+     */
+    internal fun jsonEscape(value: String): String {
+        val sb = StringBuilder(value.length + 2)
+        sb.append('"')
+        for (ch in value) {
+            when (ch) {
+                '"' -> sb.append("\\\"")
+                '\\' -> sb.append("\\\\")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                '\b' -> sb.append("\\b")
+                '\u000C' -> sb.append("\\f")
+                else -> if (ch < ' ') sb.append("\\u%04x".format(ch.code)) else sb.append(ch)
+            }
+        }
+        sb.append('"')
+        return sb.toString()
+    }
+
+    /**
      * The JS injected once per page load. Idempotent, MutationObserver-driven:
      * the engine renders settings lazily, so hidden rows are re-hidden as they
      * appear (rows hidden by [HIDDEN_TEXT_PATTERNS], nodes matching
      * [HIDDEN_SELECTORS] removed).
      */
     fun buildScript(): String {
-        val patterns = HIDDEN_TEXT_PATTERNS.map { it.pattern }
-            .joinToString(",") { org.json.JSONObject.quote(it) }
+        val patterns = HIDDEN_TEXT_PATTERNS.map { jsonEscape(it.pattern) }
+            .joinToString(",")
         val flags = if (HIDDEN_TEXT_PATTERNS.any { it.options.contains(RegexOption.IGNORE_CASE) }) "i" else ""
-        val selectors = HIDDEN_SELECTORS.joinToString(",") { org.json.JSONObject.quote(it) }
+        val selectors = HIDDEN_SELECTORS.joinToString(",") { jsonEscape(it) }
         return """
             (function(){
               if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;

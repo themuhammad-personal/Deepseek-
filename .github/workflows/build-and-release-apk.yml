@@ -11,6 +11,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to GitHub Releases (leave OFF for branch test builds)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -135,7 +140,7 @@ jobs:
   release:
     name: Publish Release
     needs: build-apk
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v3-real-exact-ui' || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v3-real-exact-ui' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
