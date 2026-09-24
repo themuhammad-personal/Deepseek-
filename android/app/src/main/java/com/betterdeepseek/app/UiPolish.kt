@@ -264,8 +264,8 @@ internal object UiPolish {
                 }
                 return false;
               }
-              /* Manual ancestor walk instead of closest(): the regression guard
-                 forbids closest( anywhere in this script. */
+              /* Manual ancestor walk (climbing parentElement) — the regression
+                 guard forbids that DOM API by name anywhere in this script. */
               function bdsUp(el,cls){
                 while(el&&el!==document){
                   if(el.classList&&el.classList.contains(cls))return el;
