@@ -134,7 +134,7 @@ class UiPolishTest {
             i++
             while (i < script.length) {
                 when (script[i]) {
-                    '\\' -> i++ // skip the escaped character
+                    '\\' -> i += 2 // skip the backslash AND the escaped character
                     '"' -> return script.getOrNull(i + 1) == ';'
                     ';' -> return false // string closed before the statement
                     else -> i++
