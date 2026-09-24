@@ -774,7 +774,7 @@ class MainActivity : ComponentActivity() {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
                 colors = intArrayOf(0x594D6BFE, 0x004D6BFE)
-                setRadius(dp(150).toFloat())
+                setGradientRadius(dp(150).toFloat())
             }
             alpha = 0f
         }
@@ -900,7 +900,7 @@ class MainActivity : ComponentActivity() {
                     android.animation.ValueAnimator.ofFloat(0f, 26f, 8f).apply {
                         duration = 700L
                         addUpdateListener { a ->
-                            t.setShadowLayer(a.animatedValue as Float, 0f, 0f, 0x995B7BFF)
+                            t.setShadowLayer(a.animatedValue as Float, 0f, 0f, 0x995B7BFF.toInt())
                         }
                         start()
                     }
