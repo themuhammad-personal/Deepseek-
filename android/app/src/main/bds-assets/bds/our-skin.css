@@ -339,6 +339,18 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
   margin-bottom: 12px !important;
   flex-shrink: 0 !important;
+  position: relative !important;
+}
+
+#bds-drawer::before {
+  content: "" !important;
+  display: block !important;
+  width: 40px !important;
+  height: 4px !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 99px !important;
+  margin: 0 auto 14px auto !important;
+  flex-shrink: 0 !important;
 }
 
 .bds-drawer-header h2,
@@ -431,13 +443,50 @@
 }
 
 /* Modern iOS / Claude Switch */
-.bds-ios-switch {
+.bds-ios-switch,
+.bds-switch {
   width: 44px !important;
   height: 26px !important;
+  min-width: 44px !important;
   border-radius: 99px !important;
   position: relative !important;
   cursor: pointer !important;
-  transition: background-color 0.2s ease !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+}
+
+.bds-ios-slider,
+.bds-switch-track {
+  position: absolute !important;
+  inset: 0 !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-radius: 999px !important;
+  transition: background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease !important;
+}
+
+.bds-ios-slider:before,
+.bds-switch .bds-switch-track:after {
+  content: "" !important;
+  position: absolute !important;
+  height: 20px !important;
+  width: 20px !important;
+  left: 3px !important;
+  bottom: 3px !important;
+  background: #ffffff !important;
+  border-radius: 50% !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.bds-ios-switch input:checked + .bds-ios-slider,
+.bds-switch input:checked + .bds-switch-track {
+  background: #4d6bfe !important;
+  box-shadow: 0 0 10px rgba(77, 107, 254, 0.35) !important;
+}
+
+.bds-ios-switch input:checked + .bds-ios-slider:before,
+.bds-switch input:checked + .bds-switch-track:after {
+  transform: translate(18px) !important;
 }
 
 /* Clean Select & Inputs */

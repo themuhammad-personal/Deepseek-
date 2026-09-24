@@ -703,8 +703,44 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    if (officialWebView.canGoBack()) officialWebView.goBack()
-                    else moveTaskToBack(true)
+                    // Check if drawer, attach menu or modals are open in the official WebView
+                    val closeOverlaysJs = """
+                        (function(){
+                            // 1. Close attachment backdrop/sheet
+                            var attachDrop = document.querySelector('.bds-attach-dropdown');
+                            var attachBackdrop = document.querySelector('.bds-attach-backdrop');
+                            if (attachDrop || attachBackdrop) {
+                                var closeBtn = document.querySelector('.bds-sheet-close');
+                                if (closeBtn) { closeBtn.click(); return true; }
+                                if (attachBackdrop) { attachBackdrop.click(); return true; }
+                            }
+                            // 2. Close settings drawer
+                            var drawer = document.getElementById('bds-drawer');
+                            if (drawer && drawer.classList.contains('bds-open')) {
+                                window.dispatchEvent(new CustomEvent('bds:close-drawer'));
+                                return true;
+                            }
+                            // 3. Close open modals
+                            var modal = document.querySelector('.bds-api-modal-overlay, .bds-edit-modal');
+                            if (modal) {
+                                var modalClose = modal.querySelector('button[aria-label="Close"], .bds-btn-outlined');
+                                if (modalClose) { modalClose.click(); return true; }
+                                modal.remove();
+                                return true;
+                            }
+                            return false;
+                        })();
+                    """.trimIndent()
+
+                    officialWebView.evaluateJavascript(closeOverlaysJs) { handled ->
+                        if (handled != "true" && handled != "\"true\"") {
+                            if (officialWebView.canGoBack()) {
+                                officialWebView.goBack()
+                            } else {
+                                moveTaskToBack(true)
+                            }
+                        }
+                    }
                 }
             }
         })
@@ -816,6 +852,7 @@ class MainActivity : ComponentActivity() {
 
             // Once the engine is in, drop the boot overlay so the real UI shows.
             removeBootOverlay(webView)
+            dismissBootOverlay()
 
             // Hide out-of-scope features (voice) and apply small UI polish.
             injectUiPolish(webView)
