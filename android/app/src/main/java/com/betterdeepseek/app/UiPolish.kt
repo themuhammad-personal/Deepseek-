@@ -185,14 +185,19 @@ internal object UiPolish {
                 for(var a=0;a<items.length;a++){
                   var tx=items[a].textContent||"";
                   for(var b=0;b<ARE.length;b++){
-                    if(ARE[b].test(tx)){items[a].style.display="none";break;}
+                    /* Node removal, not display:none: the two cards
+                       (Web Search Mode / DeepThink) must be GONE from the
+                       sheet DOM, per product decision. If Svelte re-creates
+                       them on the next open, the observer sweep removes
+                       them again. */
+                    if(ARE[b].test(tx)){items[a].remove();break;}
                   }
                 }
               }
               function sweepDead(root){
                 try{
                   var dead=root.querySelectorAll(SEL);
-                  for(var k=0;k<dead.length;k++){dead[k].style.display="none";}
+                  for(var k=0;k<dead.length;k++){dead[k].remove();}
                 }catch(e){}
               }
               function fixLabels(root){
@@ -224,6 +229,60 @@ internal object UiPolish {
               });
               mo.observe(document.documentElement,{childList:true,subtree:true});
               document.addEventListener("pointerdown",function(){scheduleSweep(0);scheduleSweep(300);},true);
+              /* ── Commands & Prompts fix ─────────────────────────────────
+                 The engine's command manager renders builtin/custom command
+                 rows but never wires a select handler (its onselect prop is
+                 dead), so tapping a command did nothing. We replicate the
+                 engine's own insert routine (native value setter + input
+                 events) and close the drawer on success. */
+              function bdsSetComposer(text){
+                var f=document.querySelector('textarea#chat-input')||document.querySelector('.ds-textarea textarea')||document.querySelector('textarea');
+                if(!f)return false;
+                f.focus();
+                var tag=(f.tagName||'').toLowerCase();
+                if(tag==='textarea'||tag==='input'){
+                  var proto=tag==='textarea'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
+                  var dsc=Object.getOwnPropertyDescriptor(proto,'value');
+                  if(dsc&&dsc.set)dsc.set.call(f,text);else f.value=text;
+                  var ev=(typeof InputEvent==='function')?new InputEvent('input',{bubbles:true,cancelable:true,inputType:'insertText',data:text}):new Event('input',{bubbles:true});
+                  f.dispatchEvent(ev);
+                  f.dispatchEvent(new Event('change',{bubbles:true}));
+                  return true;
+                }
+                if(f.isContentEditable||f.getAttribute('contenteditable')){
+                  var sel=window.getSelection();
+                  if(sel&&document.createRange){
+                    var r=document.createRange();r.selectNodeContents(f);r.collapse(false);
+                    sel.removeAllRanges();sel.addRange(r);
+                  }
+                  var ok=false;
+                  if(typeof document.execCommand==='function'){try{ok=document.execCommand('insertText',false,text);}catch(e){}}
+                  if(!ok)f.textContent=text;
+                  var ev2=(typeof InputEvent==='function')?new InputEvent('input',{bubbles:true,cancelable:true,inputType:'insertText',data:text}):new Event('input',{bubbles:true});
+                  f.dispatchEvent(ev2);
+                  return true;
+                }
+                return false;
+              }
+              document.addEventListener('click',function(ev){
+                var t=ev.target&&ev.target.closest?ev.target.closest('.bds-cmd-manager-builtin,.bds-cmd-manager-item'):null;
+                if(!t)return;
+                if(ev.target.closest&&ev.target.closest('.bds-cmd-manager-remove'))return;
+                var el=t.querySelector('.bds-cmd-name')||t.querySelector('.bds-cmd-manager-cmd');
+                var cmd=el?(el.textContent||'').trim():'';
+                if(cmd.indexOf('/')!==0)return;
+                if(bdsSetComposer(cmd+' ')){
+                  var bd=document.querySelector('.bds-drawer-backdrop');
+                  if(bd)bd.click();
+                }
+              },true);
+              /* Engine UI is ready: polish ran after the engine mounted. The
+                 Android host holds the boot screen until this fires (with
+                 fallbacks of its own). Only the first successful run reaches
+                 here — the idempotency guard above returns early on re-runs. */
+              try{
+                if(window.AndroidBridge&&typeof AndroidBridge.onUiPolished==='function'){AndroidBridge.onUiPolished();}
+              }catch(e){}
             })();
         """.trimIndent()
     }

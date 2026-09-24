@@ -380,12 +380,10 @@ class MainActivity : ComponentActivity() {
                 }
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    // Cover the raw official page while it loads so the user sees our
-                    // branded dark boot screen instead of a white flash / unstyled site.
+                    // First paint releases the system splash; from here the NATIVE
+                    // boot overlay (Activity view, see showNativeBootOverlay) owns
+                    // the screen until the engine UI is ready.
                     if (url?.contains("chat.deepseek.com") == true) {
-                        injectBootOverlay(view)
-                        // The very first paint releases the system splash — from here
-                        // on the user is inside our branded shell, never a white frame.
                         firstPaintReady = true
                     }
                 }
@@ -396,6 +394,8 @@ class MainActivity : ComponentActivity() {
                         // Inject token polling (legacy) + the proven engine bundle.
                         injectTokenPolling(view)
                         injectBdsScripts(view)
+                        // Fallback boot-release if the polish signal never arrives.
+                        handler.postDelayed({ markEngineUiReady() }, BOOT_PAGE_FALLBACK_MS)
                     }
                 }
             }
@@ -581,6 +581,12 @@ class MainActivity : ComponentActivity() {
 
         setContentView(rootLayout)
 
+        // Native boot overlay: shows immediately after the system splash hands
+        // off, plays the phone-power-on animation, and releases only when the
+        // engine UI signals readiness (AndroidBridge.onUiPolished → bridge hook).
+        bridge.onUiPolishedCallback = { runOnUiThread { markEngineUiReady() } }
+        showNativeBootOverlay()
+
         // New architecture: the official DeepSeek site IS the chat surface. The
         // better-deepseek engine (assets/bds) is injected on page load to provide
         // multi-turn memory, MCP, tools, memory/skills and the skinned frame —
@@ -712,100 +718,250 @@ class MainActivity : ComponentActivity() {
                 webView.evaluateJavascript(code) { Log.d("BDS", "content.js done") }
             }
 
-            // Once the engine is in, drop the boot overlay so the real UI shows.
-            removeBootOverlay(webView)
-
             // Hide out-of-scope features (voice) and apply small UI polish.
+            // The polish pass also signals AndroidBridge.onUiPolished() — that
+            // signal releases the NATIVE boot overlay (see showNativeBootOverlay).
             injectUiPolish(webView)
         }
     }
 
-    /**
-     * Branded boot screen that hides the white flash + unstyled official page.
-     *
-     * Plays like a phone power-on: the icon pops in first, then the app name
-     * builds up LETTER BY LETTER (each glyph with its own entrance — rise,
-     * pop, flip, glow — like the Android boot wordmark), then the subtitle.
-     */
-    private fun injectBootOverlay(webView: WebView) {
-        val title = org.json.JSONObject.quote(getString(R.string.bds_boot_title))
-        val subtitle = org.json.JSONObject.quote(getString(R.string.bds_boot_subtitle))
-        val js = """
-            (function(){
-              try{
-                var BG='#1e1f23';
-                /* The page keeps its OFFICIAL colors — we never paint html/body.
-                   The overlay div below is the only dark surface, and it is
-                   removed once the engine mounts. */
-                if(document.getElementById('bds-boot'))return;
-                window.__bdsBootAt=Date.now();
-                var st=document.createElement('style');
-                st.textContent=[
-                  '@keyframes bdsIconIn{0%{transform:scale(.35);opacity:0}55%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}',
-                  '@keyframes bdsSpin{to{transform:rotate(360deg)}}',
-                  '@keyframes bdsLtrRise{0%{opacity:0;transform:translateY(.55em);filter:blur(7px)}60%{opacity:1;filter:blur(0)}100%{opacity:1;transform:translateY(0);filter:blur(0)}}',
-                  '@keyframes bdsLtrPop{0%{opacity:0;transform:scale(.2)}62%{opacity:1;transform:scale(1.22)}100%{opacity:1;transform:scale(1)}}',
-                  '@keyframes bdsLtrFlip{0%{opacity:0;transform:rotateX(95deg) translateY(.25em)}100%{opacity:1;transform:rotateX(0) translateY(0)}}',
-                  '@keyframes bdsLtrGlow{0%{opacity:0;text-shadow:none}45%{opacity:1;text-shadow:0 0 22px rgba(91,123,255,.95),0 0 48px rgba(77,107,254,.5)}100%{opacity:1;text-shadow:0 0 0 rgba(91,123,255,0)}}',
-                  '@keyframes bdsFadeUp{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}',
-                  '#bds-boot{position:fixed;inset:0;background:'+BG+';z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}',
-                  '#bds-boot .bds-boot-icon{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#4d6bfe,#5b7bff);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 44px rgba(77,107,254,.45);animation:bdsIconIn .55s cubic-bezier(.2,.9,.3,1.35) .1s both}',
-                  '#bds-boot .bds-boot-word{margin-top:28px;font-family:Georgia,Noto Serif,serif;font-size:clamp(30px,9.5vw,44px);font-weight:800;letter-spacing:.5px;color:#f2f3f7;display:flex;align-items:baseline;white-space:nowrap;perspective:600px}',
-                  '#bds-boot .bds-boot-word span{display:inline-block;animation-duration:.55s;animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.8,.25,1);will-change:transform,opacity,filter}',
-                  '#bds-boot .bds-boot-word .sp{width:.34em}',
-                  '#bds-boot .bds-boot-sub{margin-top:13px;font-family:system-ui,Roboto,sans-serif;font-size:12.5px;letter-spacing:.4px;color:#8e8ea0;animation:bdsFadeUp .5s ease both}',
-                  '#bds-boot .bds-boot-spin{margin-top:30px;width:24px;height:24px;border:3px solid rgba(91,123,255,.18);border-top-color:#5b7bff;border-radius:50%;animation:bdsSpin .8s linear infinite, bdsFadeUp .4s ease .45s both}'
-                ].join('');
-                (document.head||document.documentElement).appendChild(st);
-                var TITLE=$title, SUB=$subtitle;
-                var word=document.createElement('div');word.className='bds-boot-word';
-                var anims=['bdsLtrRise','bdsLtrPop','bdsLtrFlip','bdsLtrGlow'];
-                var li=0,vi=0;
-                for(var i=0;i<TITLE.length;i++){
-                  var ch=TITLE.charAt(i);
-                  if(ch===' '){var sp=document.createElement('span');sp.className='sp';word.appendChild(sp);continue;}
-                  var s2=document.createElement('span');s2.textContent=ch;
-                  s2.style.animationName=anims[vi%anims.length];
-                  s2.style.animationDelay=(0.9+li*0.07)+'s';
-                  word.appendChild(s2);li++;vi++;
-                }
-                var sub=document.createElement('div');sub.className='bds-boot-sub';sub.textContent=SUB;
-                sub.style.animationDelay=(0.95+li*0.07)+'s';
-                var icon=document.createElement('div');icon.className='bds-boot-icon';
-                icon.innerHTML='<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
-                var spin=document.createElement('div');spin.className='bds-boot-spin';
-                var o=document.createElement('div');o.id='bds-boot';
-                o.appendChild(icon);o.appendChild(word);o.appendChild(sub);o.appendChild(spin);
-                (document.body||document.documentElement).appendChild(o);
-              }catch(e){}
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(js, null)
+    // ─────────────────────────────────────────────────────────────────────────
+    // NATIVE boot sequence (phone power-on style). A real View overlay owned by
+    // the Activity — it does not depend on WebView timing, so it ALWAYS plays:
+    //
+    //   [system splash: same launcher icon]  (process start → first paint)
+    //   ① icon holds, then pops              (~0.9s in)
+    //   ② wordmark builds letter-by-letter   (rise / pop / flip / glow variants)
+    //   ③ subtitle fades up
+    //   ④ overlay releases ONLY when the engine UI is actually ready
+    //     (AndroidBridge.onUiPolished, with onPageFinished + failsafe fallbacks)
+    //     — the reveal therefore never flashes the raw official interface.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private var bootOverlay: android.view.ViewGroup? = null
+    private var bootMinElapsed = false
+    private var bootDismissed = false
+    private val engineUiReady = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private companion object {
+        /** Icon phase: how long the icon owns the screen before the wordmark starts. */
+        const val BOOT_ICON_HOLD_MS = 900L
+        /** First letter begins right as the icon starts morphing away. */
+        const val BOOT_LETTER_START_MS = 950L
+        const val BOOT_LETTER_STAGGER_MS = 55L
+        const val BOOT_LETTER_DUR_MS = 390L
+        /** Absolute failsafe — the user is never trapped on the boot screen. */
+        const val BOOT_FORCE_DISMISS_MS = 9000L
+        /** Fallback ready signal after the page reports it finished loading. */
+        const val BOOT_PAGE_FALLBACK_MS = 1600L
     }
 
-    /**
-     * Polls for the mounted engine, then removes the boot overlay — but never
-     * before the boot wordmark has finished playing (min 2.7s), and never
-     * later than a ~9s failsafe.
-     */
-    private fun removeBootOverlay(webView: WebView) {
-        val js = """
-            (function(){
-              var tries=0, MIN=2700;
-              function rm(){
-                var o=document.getElementById('bds-boot');
-                if(!o)return;
-                var ready=document.querySelector('[id^="bds-"]:not(#bds-boot)')||document.querySelector('[class*="bds"]');
-                var age=Date.now()-(window.__bdsBootAt||0);
-                if(ready&&(age>=MIN||tries>60)){
-                  o.style.opacity='0';o.style.transition='opacity .3s ease';
-                  setTimeout(function(){o.remove();},320);
-                }else{tries++;setTimeout(rm,150);}
-              }
-              rm();
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(js, null)
+    /** Builds and shows the boot overlay, then plays the phased animation. */
+    private fun showNativeBootOverlay() {
+        if (bootOverlay != null) return
+        val d = resources.displayMetrics.density
+        fun dp(v: Int) = (v * d).toInt()
+
+        val overlay = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF1E1F23.toInt()) // engine panel dark — seamless with the system splash
+            isClickable = true
+            isFocusable = true
+        }
+
+        // Soft radial accent glow behind the wordmark
+        val glow = android.view.View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
+                colors = intArrayOf(0x594D6BFE, 0x004D6BFE)
+                setRadius(dp(150).toFloat())
+            }
+            alpha = 0f
+        }
+        overlay.addView(
+            glow,
+            android.widget.FrameLayout.LayoutParams(dp(300), dp(300), android.view.Gravity.CENTER),
+        )
+
+        val column = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+        }
+        overlay.addView(
+            column,
+            android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+
+        // ① Icon — the SAME launcher icon the system splash shows, so the
+        //    splash → overlay hand-off is one continuous icon.
+        val icon = android.widget.ImageView(this).apply {
+            setImageResource(R.mipmap.ic_launcher)
+            alpha = 0f
+            scaleX = 1.18f
+            scaleY = 1.18f
+        }
+        column.addView(
+            icon,
+            android.widget.LinearLayout.LayoutParams(dp(96), dp(96)).apply {
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            },
+        )
+
+        // ② Wordmark — one glyph per TextView, one row per word. Four entrance
+        //    variants cycle across the letters, like an Android boot wordmark.
+        val words = getString(R.string.bds_boot_title).split(" ")
+        val serif = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
+        val letters = mutableListOf<android.widget.TextView>()
+        words.forEachIndexed { wi, word ->
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            word.forEach { ch ->
+                val t = android.widget.TextView(this).apply {
+                    text = ch.toString()
+                    textSize = 40f
+                    setTypeface(serif, android.graphics.Typeface.BOLD)
+                    setTextColor(0xFFECECEC.toInt())
+                    letterSpacing = 0.02f
+                    includeFontPadding = false
+                    alpha = 0f
+                    when (letters.size % 4) {
+                        0 -> translationY = dp(46).toFloat() // rise
+                        1 -> { scaleX = 0.2f; scaleY = 0.2f } // pop
+                        2 -> rotationY = 90f // flip
+                        // 3: glow — starts in place, shadow animates in
+                    }
+                }
+                row.addView(t)
+                letters.add(t)
+            }
+            column.addView(
+                row,
+                android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; topMargin = if (wi == 0) dp(30) else dp(4) },
+            )
+        }
+
+        // ③ Subtitle
+        val subtitle = android.widget.TextView(this).apply {
+            text = getString(R.string.bds_boot_subtitle)
+            textSize = 14f
+            setTextColor(0xFF8E8EA0.toInt())
+            alpha = 0f
+            translationY = dp(12).toFloat()
+        }
+        column.addView(
+            subtitle,
+            android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; topMargin = dp(18) },
+        )
+
+        bootOverlay = overlay
+        (findViewById<ViewGroup>(android.R.id.content)).addView(
+            overlay,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+
+        // ── Timeline ──
+        handler.postDelayed({
+            icon.animate().scaleX(1f).scaleY(1f).alpha(1f)
+                .setDuration(380L)
+                .setInterpolator(android.view.animation.OvershootInterpolator(1.4f))
+                .start()
+        }, 60L)
+
+        handler.postDelayed({
+            glow.animate().alpha(1f).setDuration(500L).start()
+            icon.animate().scaleX(0.5f).scaleY(0.5f).alpha(0f).translationY(-dp(90).toFloat())
+                .setDuration(430L)
+                .setInterpolator(android.view.animation.AccelerateInterpolator())
+                .start()
+        }, BOOT_ICON_HOLD_MS)
+
+        letters.forEachIndexed { i, t ->
+            val variant = i % 4
+            handler.postDelayed({
+                t.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f).rotationY(0f)
+                    .setDuration(BOOT_LETTER_DUR_MS)
+                    .setInterpolator(
+                        android.view.animation.OvershootInterpolator(if (variant == 1) 2.2f else 1.1f),
+                    )
+                    .start()
+                if (variant == 3) {
+                    android.animation.ValueAnimator.ofFloat(0f, 26f, 8f).apply {
+                        duration = 700L
+                        addUpdateListener { a ->
+                            t.setShadowLayer(a.animatedValue as Float, 0f, 0f, 0x995B7BFF)
+                        }
+                        start()
+                    }
+                }
+            }, BOOT_LETTER_START_MS + i * BOOT_LETTER_STAGGER_MS)
+        }
+
+        val subtitleAt = BOOT_LETTER_START_MS + letters.size * BOOT_LETTER_STAGGER_MS + 160L
+        handler.postDelayed({
+            subtitle.animate().alpha(1f).translationY(0f).setDuration(360L)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
+        }, subtitleAt)
+
+        // Gentle glow breathing while we may still be waiting for the engine.
+        android.animation.ValueAnimator.ofFloat(0.55f, 1f).apply {
+            duration = 1500L
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            repeatMode = android.animation.ValueAnimator.REVERSE
+            addUpdateListener { glow.alpha = it.animatedValue as Float }
+            start()
+        }
+
+        val minTotal = subtitleAt + 700L
+        handler.postDelayed({
+            bootMinElapsed = true
+            tryDismissBoot()
+        }, minTotal)
+        handler.postDelayed({ forceDismissBoot() }, BOOT_FORCE_DISMISS_MS)
+        Log.d("SuperDeepSeek", "Native boot overlay shown (${letters.size} letters)")
+    }
+
+    /** Engine UI is confirmed ready (polish pass ran). */
+    private fun markEngineUiReady() {
+        if (engineUiReady.compareAndSet(false, true)) {
+            Log.d("SuperDeepSeek", "Engine UI ready — releasing boot overlay shortly")
+            handler.postDelayed({ tryDismissBoot() }, 650L) // let hydration settle
+        }
+    }
+
+    private fun tryDismissBoot() {
+        if (bootMinElapsed && engineUiReady.get() && !bootDismissed) dismissBoot()
+    }
+
+    private fun forceDismissBoot() {
+        if (!bootDismissed) {
+            Log.w("SuperDeepSeek", "Boot failsafe fired — forcing overlay dismiss")
+            dismissBoot()
+        }
+    }
+
+    private fun dismissBoot() {
+        bootDismissed = true
+        val o = bootOverlay ?: return
+        o.animate().alpha(0f).setDuration(340L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .withEndAction {
+                (o.parent as? android.view.ViewGroup)?.removeView(o)
+                bootOverlay = null
+            }
+            .start()
     }
 
     /**

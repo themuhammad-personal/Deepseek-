@@ -121,6 +121,35 @@ class UiPolishTest {
     }
 
     @Test
+    fun `sheet cards and dead chrome are removed from the DOM, not just hidden`() {
+        // Product decision: the Web Search / DeepThink cards and the search
+        // bars must be GONE (node removal), not merely display:none.
+        val script = UiPolish.buildScript()
+        assertTrue("attach sweep must remove nodes", script.contains("items[a].remove()"))
+        assertTrue("dead sweep must remove nodes", script.contains("dead[k].remove()"))
+        assertFalse(script.contains("items[a].style.display"))
+        assertFalse(script.contains("dead[k].style.display"))
+    }
+
+    @Test
+    fun `commands card taps insert the slash command into the composer`() {
+        // The engine renders command rows but never wires onselect — the
+        // polish script must provide the delegated click → composer insert.
+        val script = UiPolish.buildScript()
+        assertTrue(script.contains("bds-cmd-manager-builtin"))
+        assertTrue(script.contains("bds-cmd-manager-item"))
+        assertTrue(script.contains("bds-cmd-manager-remove"))
+        assertTrue(script.contains("chat-input"))
+        assertTrue(script.contains("HTMLTextAreaElement.prototype"))
+    }
+
+    @Test
+    fun `polish signals engine-ui-ready to the native boot overlay`() {
+        val script = UiPolish.buildScript()
+        assertTrue(script.contains("AndroidBridge.onUiPolished"))
+    }
+
+    @Test
     fun `SEL and SWEEP lines are single valid JS strings`() {
         // Regression guard: a raw selector containing a quote
         // ([data-testid="…"]) inside these double-quoted JS strings produced a

@@ -293,6 +293,13 @@ class WebViewBridge(
     @Volatile var onPickFiles: ((mode: String, requestId: String) -> Unit)? = null
 
     /**
+     * Set by MainActivity: fired when the injected engine signals that its UI
+     * (drawer, panels, polish pass) is mounted and ready — the native boot
+     * overlay waits for this before revealing the app.
+     */
+    @Volatile var onUiPolishedCallback: (() -> Unit)? = null
+
+    /**
      * CORS-free JSON-RPC transport for MCP servers. The WebView origin
      * (chat.deepseek.com) is refused by third-party MCP endpoints, so the SPA
      * hands the request to OkHttp here and receives the reply asynchronously via
@@ -1701,6 +1708,15 @@ class WebViewBridge(
     @Volatile var onOfficialLogin: ((String) -> Unit)? = null
     @Volatile var onSwitchToOfficial: (() -> Unit)? = null
     @Volatile var lastToken: String? = null
+
+    /**
+     * Fired by the injected engine bundle once its UI polish pass has run —
+     * the definitive "engine UI is up" signal for the boot overlay.
+     */
+    @JavascriptInterface
+    fun onUiPolished() {
+        onUiPolishedCallback?.invoke()
+    }
 
     @JavascriptInterface
     fun onOfficialToken(token: String?) {
