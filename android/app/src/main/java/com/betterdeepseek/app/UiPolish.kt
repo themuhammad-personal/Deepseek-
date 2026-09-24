@@ -264,10 +264,19 @@ internal object UiPolish {
                 }
                 return false;
               }
+              /* Manual ancestor walk instead of closest(): the regression guard
+                 forbids closest( anywhere in this script. */
+              function bdsUp(el,cls){
+                while(el&&el!==document){
+                  if(el.classList&&el.classList.contains(cls))return el;
+                  el=el.parentElement;
+                }
+                return null;
+              }
               document.addEventListener('click',function(ev){
-                var t=ev.target&&ev.target.closest?ev.target.closest('.bds-cmd-manager-builtin,.bds-cmd-manager-item'):null;
+                var t=ev.target?(bdsUp(ev.target,'bds-cmd-manager-builtin')||bdsUp(ev.target,'bds-cmd-manager-item')):null;
                 if(!t)return;
-                if(ev.target.closest&&ev.target.closest('.bds-cmd-manager-remove'))return;
+                if(bdsUp(ev.target,'bds-cmd-manager-remove'))return;
                 var el=t.querySelector('.bds-cmd-name')||t.querySelector('.bds-cmd-manager-cmd');
                 var cmd=el?(el.textContent||'').trim():'';
                 if(cmd.indexOf('/')!==0)return;
