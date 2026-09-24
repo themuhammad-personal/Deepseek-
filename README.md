@@ -57,26 +57,18 @@ tap icon → system splash (warm charcoal, app icon)
 "white screen → raw page → UI" three-stage load is gone. All launch colors live in
 `res/values/colors.xml` (`#262624` warm charcoal) and every boot surface shares them.
 
-## Design system (our-skin.css)
+## Design policy (learned from live testing)
 
-`our-skin.css` is the entire design frame, expressed as `--bds-*` token overrides plus
-component polish:
+The engine fork's own design — branded drawer, sheets, settings, controls — IS the
+app's design. A custom CSS skin layered on top of it caused patchwork (dark body in
+light mode, mis-tinted official bars, a drawer that no longer fit phone screens), so
+`our-skin.css` is retired (empty). Functional shaping only:
 
-- **Palette** — Claude-style warm neutrals: oat (`#faf9f5`/`#f0eee5`) in light,
-  warm charcoal (`#262624`/`#31302d`) in dark; DeepSeek blue as the single accent.
-- **Type** — serif display (Georgia/Noto Serif) for brand + section + sheet titles,
-  system sans everywhere else.
-- **Drawer** — brand roundel + version chip, pill search bar, hairline-divided rows.
-- **Settings** — rows grouped into bordered cards, tinted icon tiles, 52 px touch rows,
-  iOS-grade switches forced to the accent color (the engine defaults to green).
-- **"+" attach sheet** — on phones it is re-anchored into a full-width bottom sheet
-  (drag handle, serif header, 56 px rows, icon tiles, safe-area padding); on desktop it
-  stays a compact popover.
-- **Dead entries removed** — voice, Deep Code, the upstream GitHub footer and the tip
-  bar are hidden by `UiPolish` (unit-tested: `UiPolishTest`) and by CSS fallbacks.
-
-The engine injects its Svelte styles at runtime (after this stylesheet), so rules that
-fight those styles carry `!important` deliberately — it is a skin layer.
+- `UiPolish.kt` hides out-of-scope entries (voice, Deep Code), trims the redundant
+  DeepThink / Web Search rows from the "+" sheet, removes both settings search bars,
+  the upstream GitHub footer, the tip strip, and repairs raw i18n keys — all
+  unit-tested (`UiPolishTest`).
+- Colors are never overridden: the official page keeps its own light/dark palette.
 
 ## Engine bundle provenance
 

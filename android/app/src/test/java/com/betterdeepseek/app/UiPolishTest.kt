@@ -45,11 +45,14 @@ class UiPolishTest {
 
     @Test
     fun `attach sheet rows for deepthink and web search are hidden`() {
+        // Exact titles as the engine's Tools & Actions sheet renders them.
+        assertTrue(UiPolish.shouldHideAttachItem("DeepThink (R1)"))
+        assertTrue(UiPolish.shouldHideAttachItem("Web Search Mode"))
         assertTrue(UiPolish.shouldHideAttachItem("DeepThink"))
         assertTrue(UiPolish.shouldHideAttachItem("Deep Think"))
         assertTrue(UiPolish.shouldHideAttachItem("Web Search"))
         assertTrue(UiPolish.shouldHideAttachItem("ডিপথিঙ্ক"))
-        assertTrue(UiPolish.shouldHideAttachItem("ওয়েব সার্চ"))
+        assertTrue(UiPolish.shouldHideAttachItem("ওয়েব সার্চ মোড"))
     }
 
     @Test
@@ -157,6 +160,8 @@ class UiPolishTest {
                 ".bds-deep-code-mount",
                 "[data-testid=\"attach-menu-deep-code\"]",
                 ".bds-category-nav",
+                ".bds-drawer-search-bar",
+                ".bds-advanced-search-wrapper",
             ),
             UiPolish.HIDDEN_SELECTORS,
         )

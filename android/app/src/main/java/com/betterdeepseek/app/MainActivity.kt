@@ -734,8 +734,9 @@ class MainActivity : ComponentActivity() {
             (function(){
               try{
                 var BG='#1e1f23';
-                document.documentElement.style.background=BG;
-                if(document.body)document.body.style.background=BG;
+                /* The page keeps its OFFICIAL colors — we never paint html/body.
+                   The overlay div below is the only dark surface, and it is
+                   removed once the engine mounts. */
                 if(document.getElementById('bds-boot'))return;
                 window.__bdsBootAt=Date.now();
                 var st=document.createElement('style');

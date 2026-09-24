@@ -62,6 +62,11 @@ internal object UiPolish {
         ".bds-deep-code-mount", // composer toggle of an excluded feature
         "[data-testid=\"attach-menu-deep-code\"]", // its row inside the "+" sheet
         ".bds-category-nav", // desktop-only settings nav strip
+        // Both settings search bars (user request): the drawer-top
+        // "Search settings…" bar and the advanced-settings
+        // "সার্চ সেটিংস, প্লাগইন, প্রম্পটস…" bar. Nothing on a phone needs them.
+        ".bds-drawer-search-bar",
+        ".bds-advanced-search-wrapper",
     )
 
     // ── 3. "+" attach sheet rows hidden (redundant with composer chips) ──
