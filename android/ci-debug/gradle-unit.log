@@ -21,59 +21,40 @@ Daemon will be stopped at the end of the build
 > Task :app:mapDebugSourceSetPaths
 > Task :app:generateDebugResources
 > Task :app:packageDebugResources
+> Task :app:mergeDebugResources
 > Task :app:createDebugCompatibleScreenManifests
 > Task :app:extractDeepLinksDebug
-> Task :app:mergeDebugResources
 > Task :app:parseDebugLocalResources
 > Task :app:processDebugMainManifest
 > Task :app:processDebugManifest
-> Task :app:processDebugManifestForPackage
-> Task :app:javaPreCompileDebug
 > Task :app:preDebugUnitTestBuild UP-TO-DATE
-> Task :app:javaPreCompileDebugUnitTest FROM-CACHE
+> Task :app:javaPreCompileDebug
+> Task :app:javaPreCompileDebugUnitTest
 > Task :app:mergeDebugShaders
 > Task :app:compileDebugShaders NO-SOURCE
 > Task :app:generateDebugAssets UP-TO-DATE
 > Task :app:mergeDebugAssets
+> Task :app:processDebugManifestForPackage
 > Task :app:processDebugResources
 > Task :app:packageDebugUnitTestForUnitTest
 > Task :app:generateDebugUnitTestConfig
 
-> Task :app:compileDebugKotlin
-w: file:///home/runner/work/Deepseek-/Deepseek-/android/app/src/main/java/com/betterdeepseek/app/MainActivity.kt:442:17 'setter for allowFileAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
-w: file:///home/runner/work/Deepseek-/Deepseek-/android/app/src/main/java/com/betterdeepseek/app/MainActivity.kt:443:17 'setter for allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
-w: file:///home/runner/work/Deepseek-/Deepseek-/android/app/src/main/java/com/betterdeepseek/app/WebViewBridge.kt:1942:29 Variable 'dummyPayload' is never used
-
-> Task :app:compileDebugJavaWithJavac
-> Task :app:bundleDebugClassesToCompileJar
-> Task :app:bundleDebugClassesToRuntimeJar
-> Task :app:processDebugJavaRes
-> Task :app:compileDebugUnitTestKotlin
-> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
-> Task :app:processDebugUnitTestJavaRes
-
-> Task :app:testDebugUnitTest
-
-com.betterdeepseek.app.UiPolishTest > SEL and SWEEP lines are single valid JS strings FAILED
-    java.lang.AssertionError at UiPolishTest.kt:145
-
-OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-
-> Task :app:testDebugUnitTest
-
-154 tests completed, 1 failed
-
-> Task :app:testDebugUnitTest FAILED
+> Task :app:compileDebugKotlin FAILED
+e: file:///home/runner/work/Deepseek-/Deepseek-/android/app/src/main/java/com/betterdeepseek/app/MainActivity.kt:777:17 Unresolved reference: setRadius
+e: file:///home/runner/work/Deepseek-/Deepseek-/android/app/src/main/java/com/betterdeepseek/app/MainActivity.kt:903:80 The integer literal does not conform to the expected type Int
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':app:testDebugUnitTest'.
-> There were failing tests. See the report at: file:///home/runner/work/Deepseek-/Deepseek-/android/app/build/reports/tests/testDebugUnitTest/index.html
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
 
 * Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
 > Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
 
-BUILD FAILED in 2m 8s
-29 actionable tasks: 28 executed, 1 from cache
+BUILD FAILED in 1m 22s
+22 actionable tasks: 22 executed
