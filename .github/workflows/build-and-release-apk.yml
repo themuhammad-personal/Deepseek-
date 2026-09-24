@@ -64,12 +64,6 @@ jobs:
           ls -lh android/app/src/main/assets/
           ls -lh android/app/src/main/assets/assets/ | head -n 20
           ls -lh android/app/src/main/assets/ds/
-      - name: Stage better-deepseek engine assets (after vite emptyOutDir wipe)
-        run: |
-          rm -rf android/app/src/main/assets/bds
-          cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds
-          echo "=== Engine assets staged ==="
-          ls -lh android/app/src/main/assets/bds/
       - name: Make Gradle Wrapper Executable
         working-directory: android
         run: chmod +x ./gradlew
