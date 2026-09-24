@@ -292,6 +292,9 @@ class WebViewBridge(
      */
     @Volatile var onPickFiles: ((mode: String, requestId: String) -> Unit)? = null
 
+    /** Set by MainActivity to dismiss the native boot overlay once injected UI is ready. */
+    @Volatile var onAppReady: (() -> Unit)? = null
+
     /**
      * CORS-free JSON-RPC transport for MCP servers. The WebView origin
      * (chat.deepseek.com) is refused by third-party MCP endpoints, so the SPA
@@ -815,6 +818,18 @@ class WebViewBridge(
         } catch (_: Throwable) {
             // Silently ignore if device does not support vibration
         }
+    }
+
+    /** Called from JS to trigger haptic feedback. */
+    @JavascriptInterface
+    fun vibrate(durationMs: Long = 12) {
+        performHaptic(if (durationMs > 25) "heavy" else if (durationMs > 15) "medium" else "tick")
+    }
+
+    /** Called from JS once the better-deepseek engine UI has fully mounted. */
+    @JavascriptInterface
+    fun reportAppReady() {
+        onAppReady?.invoke()
     }
 
     private fun writeBytesToDownloads(

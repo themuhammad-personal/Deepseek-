@@ -26,6 +26,11 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ImageView
+import android.widget.ProgressBar
+import android.view.Gravity
+import android.content.res.ColorStateList
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.File
@@ -209,6 +214,128 @@ class MainActivity : ComponentActivity() {
     private var spaRetries = 0
     private val handler = Handler(Looper.getMainLooper())
     private var tokenPollingRunnable: Runnable? = null
+
+    private var nativeBootOverlay: FrameLayout? = null
+    private var isBootOverlayDismissed = false
+    private var pendingPickRequestId: String? = null
+    private var pendingPickMode: String? = null
+
+    private fun isImageUri(uri: Uri): Boolean {
+        val mime = contentResolver.getType(uri)?.lowercase() ?: ""
+        if (mime.startsWith("image/")) return true
+        val name = bridge.resolvePickedDisplayName(uri).lowercase()
+        return name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
+               name.endsWith(".webp") || name.endsWith(".gif") || name.endsWith(".bmp") || name.endsWith(".svg")
+    }
+
+    private fun dismissBootOverlay() {
+        if (isBootOverlayDismissed) return
+        isBootOverlayDismissed = true
+        runOnUiThread {
+            nativeBootOverlay?.let { overlay ->
+                overlay.animate()
+                    .alpha(0f)
+                    .setDuration(280)
+                    .withEndAction {
+                        overlay.visibility = View.GONE
+                        try {
+                            rootLayout.removeView(overlay)
+                        } catch (_: Throwable) {}
+                        nativeBootOverlay = null
+                    }
+            }
+        }
+    }
+
+    private val nativePickLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val reqId = pendingPickRequestId
+            val mode = pendingPickMode ?: "files"
+            pendingPickRequestId = null
+            pendingPickMode = null
+
+            if (reqId == null) return@registerForActivityResult
+
+            if (result.resultCode != Activity.RESULT_OK) {
+                bridge.deliverPickedFiles(reqId, emptyList(), emptyList(), null)
+                return@registerForActivityResult
+            }
+
+            Thread {
+                try {
+                    val intent = result.data
+                    val uris = mutableListOf<Uri>()
+
+                    if (mode == "camera") {
+                        val capUri = cameraPhotoUri
+                        cameraPhotoUri = null
+                        if (capUri != null) uris.add(capUri)
+                    } else if (intent != null) {
+                        val clip = intent.clipData
+                        if (clip != null) {
+                            for (i in 0 until clip.itemCount) {
+                                uris.add(clip.getItemAt(i).uri)
+                            }
+                        } else if (intent.data != null) {
+                            uris.add(intent.data!!)
+                        }
+                    }
+
+                    if (uris.isEmpty()) {
+                        bridge.deliverPickedFiles(reqId, emptyList(), emptyList(), null)
+                        return@Thread
+                    }
+
+                    val files = mutableListOf<PickedFile>()
+                    val skipped = mutableListOf<SkippedFile>()
+                    val acceptImages = mode == "images" || mode == "camera" || mode == "files+images"
+
+                    for (uri in uris) {
+                        val item = if (mode == "camera" || (acceptImages && isImageUri(uri))) {
+                            val name = bridge.resolvePickedDisplayName(uri).takeIf { it.isNotBlank() } ?: "image_${System.currentTimeMillis()}.jpg"
+                            bridge.readPickedImageUri(uri, name)
+                        } else {
+                            bridge.readPickedContentUri(uri, acceptImages)
+                        }
+                        when (item) {
+                            is PickedItemResult.Ok -> files.add(item.file)
+                            is PickedItemResult.Skipped -> skipped.add(SkippedFile(item.name, item.reason))
+                        }
+                    }
+                    bridge.deliverPickedFiles(reqId, files, skipped, null)
+                } catch (t: Throwable) {
+                    Log.e("SuperDeepSeek", "Failed reading picked files", t)
+                    bridge.deliverPickError(reqId, "read-failed: ${t.message}")
+                }
+            }.start()
+        }
+
+    private val nativePickFolderLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val reqId = pendingPickRequestId
+            val mode = pendingPickMode ?: "folder"
+            pendingPickRequestId = null
+            pendingPickMode = null
+
+            if (reqId == null) return@registerForActivityResult
+
+            val treeUri = result.data?.data
+            if (result.resultCode != Activity.RESULT_OK || treeUri == null) {
+                bridge.deliverPickedFiles(reqId, emptyList(), emptyList(), null)
+                return@registerForActivityResult
+            }
+
+            Thread {
+                try {
+                    val acceptImages = mode == "folder+images"
+                    val readResult = bridge.readPickedFolderTree(treeUri, acceptImages)
+                    bridge.deliverPickedFiles(reqId, readResult.files, readResult.skipped, readResult.folderName)
+                } catch (t: Throwable) {
+                    Log.e("SuperDeepSeek", "Failed reading folder tree", t)
+                    bridge.deliverPickError(reqId, "read-folder-failed: ${t.message}")
+                }
+            }.start()
+        }
 
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -434,9 +561,9 @@ class MainActivity : ComponentActivity() {
 
         bridge.officialWebView = officialWebView
         bridge.reactWebView = reactWebView
-        bridge.mainWebView = reactWebView
+        bridge.mainWebView = officialWebView
         bridge.hiddenWebView = officialWebView
-        bridge.evaluateJs = { script -> reactWebView.post { reactWebView.evaluateJavascript(script, null) } }
+        bridge.evaluateJs = { script -> officialWebView.post { officialWebView.evaluateJavascript(script, null) } }
         bridge.evaluateHiddenJs = { script -> officialWebView.post { officialWebView.evaluateJavascript(script, null) } }
         bridge.onOfficialLogin = { token -> 
             handler.post {
@@ -448,12 +575,102 @@ class MainActivity : ComponentActivity() {
                 showOfficialUI()
             }
         }
+        bridge.onAppReady = {
+            dismissBootOverlay()
+        }
+        bridge.onPickFiles = { mode, requestId ->
+            runOnUiThread {
+                pendingPickRequestId = requestId
+                pendingPickMode = mode
+                try {
+                    when (mode) {
+                        "camera" -> {
+                            val intent = buildCameraCaptureIntent()
+                            if (intent != null) {
+                                nativePickLauncher.launch(intent)
+                            } else {
+                                bridge.deliverPickError(requestId, "camera-unavailable")
+                            }
+                        }
+                        "images" -> {
+                            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                type = "image/*"
+                                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                            }
+                            nativePickLauncher.launch(Intent.createChooser(intent, "Select Photos"))
+                        }
+                        "folder", "folder+images" -> {
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                            }
+                            nativePickFolderLauncher.launch(intent)
+                        }
+                        else -> { // "files", "files+images"
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                type = "*/*"
+                                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                            }
+                            nativePickLauncher.launch(Intent.createChooser(intent, "Select Files"))
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e("SuperDeepSeek", "Failed launching native picker for mode=$mode", t)
+                    bridge.deliverPickError(requestId, "picker-launch-failed")
+                }
+            }
+        }
+
+        nativeBootOverlay = FrameLayout(this).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            setBackgroundColor(Color.parseColor("#13151b"))
+            isClickable = true
+            isFocusable = true
+
+            val container = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            }
+
+            val logoView = ImageView(this@MainActivity).apply {
+                setImageResource(R.mipmap.ic_launcher)
+                layoutParams = LinearLayout.LayoutParams(
+                    (76 * resources.displayMetrics.density).toInt(),
+                    (76 * resources.displayMetrics.density).toInt()
+                )
+            }
+            container.addView(logoView)
+
+            val spacer = View(this@MainActivity).apply {
+                layoutParams = LinearLayout.LayoutParams(1, (24 * resources.displayMetrics.density).toInt())
+            }
+            container.addView(spacer)
+
+            val progressBar = ProgressBar(this@MainActivity).apply {
+                isIndeterminate = true
+                indeterminateTintList = ColorStateList.valueOf(Color.parseColor("#4D6BFE"))
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * resources.displayMetrics.density).toInt(),
+                    (36 * resources.displayMetrics.density).toInt()
+                )
+            }
+            container.addView(progressBar)
+
+            addView(container)
+        }
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#13151b"))
             addView(officialWebView)
             addView(reactWebView)
+            nativeBootOverlay?.let { addView(it) }
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, insets ->

@@ -148,7 +148,7 @@ function authPopupPlugin(): Plugin {
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",
-    port: 8080,
+    port: 3000,
     strictPort: true,
     // The DeepSeek client (src/lib/deepseek/api.ts) calls the relative
     // "/api/v0/*". Inside the APK that is same-origin because the asset loader

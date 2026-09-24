@@ -90,6 +90,12 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDirs("src/main/assets", "src/main/bds-assets")
+        }
+    }
 }
 
 dependencies {

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.BetterDeepSeek" parent="Theme.Material3.DayNight" />
-    <style name="Theme.BetterDeepSeek.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.BetterDeepSeek.NoActionBar" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bds_splash_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>
