@@ -121,6 +121,32 @@ class UiPolishTest {
     }
 
     @Test
+    fun `SEL and SWEEP lines are single valid JS strings`() {
+        // Regression guard: a raw selector containing a quote
+        // ([data-testid="…"]) inside these double-quoted JS strings produced a
+        // SyntaxError that silently killed the ENTIRE injected script.
+        val script = UiPolish.buildScript()
+        fun isSingleValidString(marker: String): Boolean {
+            val start = script.indexOf(marker)
+            if (start < 0) return false
+            var i = start + marker.length
+            if (script.getOrNull(i) != '"') return false
+            i++
+            while (i < script.length) {
+                when (script[i]) {
+                    '\\' -> i++ // skip the escaped character
+                    '"' -> return script.getOrNull(i + 1) == ';'
+                    ';' -> return false // string closed before the statement
+                    else -> i++
+                }
+            }
+            return false
+        }
+        assertTrue("SEL is not one valid JS string", isSingleValidString("var SEL="))
+        assertTrue("SWEEP is not one valid JS string", isSingleValidString("var SWEEP="))
+    }
+
+    @Test
     fun `script escapes regex patterns as json strings`() {
         val script = UiPolish.buildScript()
         assertTrue(script.contains("ভয়েস মোড"))

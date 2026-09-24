@@ -25,7 +25,7 @@ android {
         // Monotonically increasing versionCode ensures updates install smoothly over older versions
         versionCode = (1000L + bdsBuildId).toInt()
         // Keep in sync with package.json "version" and static/manifest.json "version".
-        versionName = "1.8.1"
+        versionName = "1.8.2"
         buildConfigField("long", "BUILD_ID", "${bdsBuildId}L")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

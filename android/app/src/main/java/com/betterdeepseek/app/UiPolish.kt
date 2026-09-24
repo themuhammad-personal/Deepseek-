@@ -145,8 +145,12 @@ internal object UiPolish {
     fun buildScript(): String {
         val sweepRe = regexArray(HIDDEN_TEXT_PATTERNS)
         val attachRe = regexArray(ATTACH_HIDDEN_TEXT_PATTERNS)
-        val sweepSel = TEXT_SWEEP_SELECTORS.joinToString(",")
-        val deadSel = HIDDEN_SELECTORS.joinToString(",")
+        /* jsonEscape supplies the surrounding quotes AND escapes inner ones —
+           the template must NOT wrap $deadSel in quotes again (double-wrap
+           produced var SEL=""…" → SyntaxError → the whole injected script
+           silently died on device). */
+        val sweepSel = jsonEscape(TEXT_SWEEP_SELECTORS.joinToString(","))
+        val deadSel = jsonEscape(HIDDEN_SELECTORS.joinToString(","))
         val labelFixes = LABEL_FIXES.entries.joinToString(",") {
             "${jsonEscape(it.key)}:[${jsonEscape(it.value.first)},${jsonEscape(it.value.second)}]"
         }
@@ -155,8 +159,8 @@ internal object UiPolish {
               if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;
               var RE=$sweepRe;
               var ARE=$attachRe;
-              var SEL="$deadSel";
-              var SWEEP="$sweepSel";
+              var SEL=$deadSel;
+              var SWEEP=$sweepSel;
               var ATTACH="$ATTACH_ITEM_SELECTOR";
               var BN=(navigator.language||"").toLowerCase().indexOf("bn")===0;
               var FIX={$labelFixes};
@@ -206,12 +210,20 @@ internal object UiPolish {
                 sweepDead(root);sweepText(root);sweepAttach(root);fixLabels(root);
               }
               sweep(document);
+              /* Svelte intro transitions can clear inline styles right after
+                 mount, so every mutation gets a second, later sweep too. A
+                 capture-phase pointerdown sweep covers sheets whose items are
+                 inserted within the same frame as the tap. */
               var pend=false;
+              function scheduleSweep(delay){
+                setTimeout(function(){sweep(document);},delay);
+              }
               var mo=new MutationObserver(function(){
                 if(pend)return;pend=true;
-                setTimeout(function(){pend=false;sweep(document);},120);
+                setTimeout(function(){pend=false;scheduleSweep(120);scheduleSweep(500);},0);
               });
               mo.observe(document.documentElement,{childList:true,subtree:true});
+              document.addEventListener("pointerdown",function(){scheduleSweep(0);scheduleSweep(300);},true);
             })();
         """.trimIndent()
     }
