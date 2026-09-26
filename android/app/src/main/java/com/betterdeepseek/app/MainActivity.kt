@@ -49,6 +49,26 @@ internal fun applyRootWindowInsets(view: View, windowInsets: WindowInsetsCompat)
     return WindowInsetsCompat.CONSUMED
 }
 
+/**
+ * Parses the page-colour probe result: the raw evaluateJavascript value of an
+ * "r,g,b" string (JSON-quoted, e.g. "\"255,255,255\""). Null when unusable.
+ */
+internal fun parseRgb(raw: String?): Int? {
+    val parts = raw?.trim()?.trim('"')?.split(',') ?: return null
+    if (parts.size != 3) return null
+    val rgb = parts.map { it.trim().toIntOrNull() ?: return null }
+    if (rgb.any { it !in 0..255 }) return null
+    return (0xFF shl 24) or (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
+}
+
+/** True when dark system-bar icons are the readable choice on [color]. */
+internal fun isLightColor(color: Int): Boolean {
+    val r = (color shr 16) and 0xFF
+    val g = (color shr 8) and 0xFF
+    val b = color and 0xFF
+    return 0.299 * r + 0.587 * g + 0.114 * b > 150.0
+}
+
 internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
     val scheme = url.scheme?.lowercase() ?: return false
     if (scheme != "http" && scheme != "https") return false
@@ -260,12 +280,6 @@ class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var tokenPollingRunnable: Runnable? = null
 
-    /** Flipped once the engine page paints; releases the system splash. */
-    @Volatile private var firstPaintReady = false
-
-    /** Cap on splash hold so a stalled network can never trap the launch. */
-    private val SPLASH_FAILSAFE_MS = 4000L
-
     /** Engine native-pick request waiting for [nativePickLauncher]: id to mode. */
     private var nativePickRequest: Pair<String, String>? = null
 
@@ -389,13 +403,11 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
-        // The system splash stays up until the WebView has actually painted
-        // something (first page start = branded boot overlay injected). This is
-        // what removes the "white screen → official page → our UI" three-stage
-        // launch: splash (branded) → boot overlay (branded) → app. The failsafe
-        // timer keeps a cold network from pinning the user on the splash.
-        splashScreen.setKeepOnScreenCondition { !firstPaintReady }
-        handler.postDelayed({ firstPaintReady = true }, SPLASH_FAILSAFE_MS)
+        // The system splash hands over on our first frame: that frame is already
+        // the native launch screen (same background colour, icon at the same
+        // centre), which then covers the page until it is really ready. Holding
+        // the splash longer would only hide the launch animation's intro.
+        splashScreen.setKeepOnScreenCondition { false }
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
@@ -464,15 +476,6 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                     return true
                 }
-                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
-                    // First paint releases the system splash; from here the NATIVE
-                    // boot overlay (Activity view, see showNativeBootOverlay) owns
-                    // the screen until the engine UI is ready.
-                    if (url?.contains("chat.deepseek.com") == true) {
-                        firstPaintReady = true
-                    }
-                }
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     Log.d("SuperDeepSeek", "Official WebView loaded: $url")
@@ -480,8 +483,12 @@ class MainActivity : ComponentActivity() {
                         // Inject token polling (legacy) + the proven engine bundle.
                         injectTokenPolling(view)
                         injectBdsScripts(view)
-                        // Fallback boot-release if the polish signal never arrives.
-                        handler.postDelayed({ markEngineUiReady() }, BOOT_PAGE_FALLBACK_MS)
+                        // The launch screen stays until the enhanced page is really
+                        // on screen (see READY_PROBE_JS); then the bars pick up the
+                        // page colour.
+                        pageFinishedAt = android.os.SystemClock.uptimeMillis()
+                        startReadyPoll()
+                        syncSystemBarsWithPage()
                     }
                 }
             }
@@ -643,7 +650,7 @@ class MainActivity : ComponentActivity() {
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.parseColor("#1e1f23"))
+            setBackgroundColor(pageBarColor) // recoloured to the page's own background
             addView(officialWebView)
             addView(reactWebView)
         }
@@ -658,10 +665,23 @@ class MainActivity : ComponentActivity() {
 
         setContentView(rootLayout)
 
-        // Native boot overlay: shows immediately after the system splash hands
-        // off, plays the phone-power-on animation, and releases only when the
-        // engine UI signals readiness (AndroidBridge.onUiPolished → bridge hook).
-        bridge.onUiPolishedCallback = { runOnUiThread { markEngineUiReady() } }
+        // Launch screen: takes over from the system splash and stays until the
+        // enhanced page is really on screen (polish signal + readiness probe).
+        bridge.onUiPolishedCallback = {
+            runOnUiThread {
+                uiPolished = true
+                startReadyPoll()
+            }
+        }
+        // The engine reports every light/dark switch of the page; recolour the
+        // bars at once, then sample the exact page colour after the switch paints.
+        bridge.onThemeChanged = { isDark ->
+            runOnUiThread {
+                applyPageBarColor(if (isDark) PAGE_DARK_FALLBACK else Color.WHITE)
+                handler.postDelayed({ syncSystemBarsWithPage() }, 150L)
+                handler.postDelayed({ syncSystemBarsWithPage() }, 700L)
+            }
+        }
         showNativeBootOverlay()
 
         // New architecture: the official DeepSeek site IS the chat surface. The
@@ -809,242 +829,197 @@ class MainActivity : ComponentActivity() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // NATIVE boot sequence (phone power-on style). A real View overlay owned by
-    // the Activity — it does not depend on WebView timing, so it ALWAYS plays:
+    // Launch sequence
     //
-    //   [system splash: same launcher icon]  (process start → first paint)
-    //   ① icon holds, then pops              (~0.9s in)
-    //   ② wordmark builds letter-by-letter   (rise / pop / flip / glow variants)
-    //   ③ subtitle fades up
-    //   ④ overlay releases ONLY when the engine UI is actually ready
-    //     (AndroidBridge.onUiPolished, with onPageFinished + failsafe fallbacks)
-    //     — the reveal therefore never flashes the raw official interface.
+    //   system splash (launcher icon)  →  BootScreenView (full-screen, native)
+    //   → released only when the page is REALLY ready (READY_PROBE_JS: engine
+    //     CSS in place, content.js fully run, composer or sign-in form visible),
+    //     so the raw official interface is never shown. BOOT_FORCE_DISMISS_MS
+    //     is the hard cap for a stalled network.
     // ─────────────────────────────────────────────────────────────────────────
 
-    private var bootOverlay: android.view.ViewGroup? = null
-    private var bootMinElapsed = false
+    private var bootView: BootScreenView? = null
     private var bootDismissed = false
     private val engineUiReady = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** AndroidBridge.onUiPolished() arrived (the polish pass ran after the engine). */
+    private var uiPolished = false
+    private var pageFinishedAt = 0L
+    private var readyPollRunning = false
 
     private companion object {
-        /** Icon phase: how long the icon owns the screen before the wordmark starts. */
-        const val BOOT_ICON_HOLD_MS = 900L
-        /** First letter begins right as the icon starts morphing away. */
-        const val BOOT_LETTER_START_MS = 950L
-        const val BOOT_LETTER_STAGGER_MS = 55L
-        const val BOOT_LETTER_DUR_MS = 390L
-        /** Absolute failsafe — the user is never trapped on the boot screen. */
-        const val BOOT_FORCE_DISMISS_MS = 9000L
-        /** Fallback ready signal after the page reports it finished loading. */
-        const val BOOT_PAGE_FALLBACK_MS = 1600L
+        /** Hard cap on the launch screen, however slow the network is. */
+        const val BOOT_FORCE_DISMISS_MS = 18_000L
+        /** How often the page is probed for readiness while the launch screen is up. */
+        const val BOOT_READY_POLL_MS = 300L
+        /** If the polish signal never arrives, a ready page is accepted after this. */
+        const val BOOT_NO_POLISH_GRACE_MS = 3_000L
+        /** Let the engine's first layout settle before revealing the page. */
+        const val BOOT_SETTLE_MS = 450L
+        /** Dark fallback for the bars until the page colour has been sampled. */
+        const val PAGE_DARK_FALLBACK = 0xFF292A2D.toInt()
+
+        /** "1" once the enhanced chat (or the sign-in form) is actually on screen. */
+        val READY_PROBE_JS = """
+            (function(){try{
+              if(document.readyState!=='complete')return '0';
+              if(!document.getElementById('bds-css'))return '0';
+              if(typeof window.__sdHandleBack!=='function')return '0';
+              var els=document.querySelectorAll('textarea, input:not([type]), input[type=text], input[type=email], input[type=tel], input[type=password]');
+              for(var i=0;i<els.length;i++){
+                if((els[i].id||'').indexOf('bds-')===0)continue;
+                var r=els[i].getBoundingClientRect();
+                if(r.width>0&&r.height>0)return '1';
+              }
+              return '0';
+            }catch(e){return '0';}})()
+        """.trimIndent()
+
+        /**
+         * Background colour ("r,g,b") of the page right under the status bar,
+         * ignoring the engine's own overlays; falls back to body / html.
+         */
+        val PAGE_BG_PROBE_JS = """
+            (function(){try{
+              function solid(el){
+                while(el&&el.nodeType===1){
+                  var id=el.id||'', cl=(typeof el.className==='string')?el.className:'';
+                  if(id.indexOf('bds-')!==0&&cl.indexOf('bds-')<0){
+                    var m=(getComputedStyle(el).backgroundColor||'').match(/rgba?\(([^)]+)\)/);
+                    if(m){
+                      var p=m[1].split(',');
+                      var a=p.length>3?parseFloat(p[3]):1;
+                      if(a>0.85)return Math.round(parseFloat(p[0]))+','+Math.round(parseFloat(p[1]))+','+Math.round(parseFloat(p[2]));
+                    }
+                  }
+                  el=el.parentElement;
+                }
+                return '';
+              }
+              return solid(document.elementFromPoint(window.innerWidth/2,4))||solid(document.body)||solid(document.documentElement)||'';
+            }catch(e){return '';}})()
+        """.trimIndent()
     }
 
-    /** Builds and shows the boot overlay, then plays the phased animation. */
+    /** Shows the full-screen launch animation above everything else. */
     private fun showNativeBootOverlay() {
-        if (bootOverlay != null) return
-        val d = resources.displayMetrics.density
-        fun dp(v: Int) = (v * d).toInt()
-
-        val overlay = android.widget.FrameLayout(this).apply {
-            setBackgroundColor(0xFF1E1F23.toInt()) // engine panel dark — seamless with the system splash
+        if (bootView != null || bootDismissed) return
+        val brandFont = runCatching { resources.getFont(R.font.sd_brand) }.getOrNull()
+        val icon = runCatching {
+            android.graphics.BitmapFactory.decodeResource(
+                resources,
+                R.drawable.app_icon,
+                android.graphics.BitmapFactory.Options().apply { inScaled = false },
+            )
+        }.getOrNull()
+        val view = BootScreenView(this, getString(R.string.bds_boot_title), brandFont, icon).apply {
+            // Swallow touches so nothing reaches the page underneath.
             isClickable = true
             isFocusable = true
         }
-
-        // Soft radial accent glow behind the wordmark
-        val glow = android.view.View(this).apply {
-            background = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                gradientType = android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT
-                colors = intArrayOf(0x594D6BFE, 0x004D6BFE)
-                setGradientRadius(dp(150).toFloat())
-            }
-            alpha = 0f
+        view.onExitFinished = {
+            (view.parent as? ViewGroup)?.removeView(view)
+            bootView = null
+            applySystemBarIcons(pageBarColor)
         }
-        overlay.addView(
-            glow,
-            android.widget.FrameLayout.LayoutParams(dp(300), dp(300), android.view.Gravity.CENTER),
+        bootView = view
+        findViewById<ViewGroup>(android.R.id.content).addView(
+            view,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
         )
-
-        val column = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            gravity = android.view.Gravity.CENTER
-        }
-        overlay.addView(
-            column,
-            android.widget.FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-
-        // ① Icon — the SAME launcher icon the system splash shows, so the
-        //    splash → overlay hand-off is one continuous icon.
-        val icon = android.widget.ImageView(this).apply {
-            setImageResource(R.mipmap.ic_launcher)
-            alpha = 0f
-            scaleX = 1.18f
-            scaleY = 1.18f
-        }
-        column.addView(
-            icon,
-            android.widget.LinearLayout.LayoutParams(dp(96), dp(96)).apply {
-                gravity = android.view.Gravity.CENTER_HORIZONTAL
-            },
-        )
-
-        // ② Wordmark — one glyph per TextView, one row per word. Four entrance
-        //    variants cycle across the letters, like an Android boot wordmark.
-        val words = getString(R.string.bds_boot_title).split(" ")
-        val serif = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
-        val letters = mutableListOf<android.widget.TextView>()
-        words.forEachIndexed { wi, word ->
-            val row = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-            }
-            word.forEach { ch ->
-                val t = android.widget.TextView(this).apply {
-                    text = ch.toString()
-                    textSize = 40f
-                    setTypeface(serif, android.graphics.Typeface.BOLD)
-                    setTextColor(0xFFECECEC.toInt())
-                    letterSpacing = 0.02f
-                    includeFontPadding = false
-                    alpha = 0f
-                    when (letters.size % 4) {
-                        0 -> translationY = dp(46).toFloat() // rise
-                        1 -> { scaleX = 0.2f; scaleY = 0.2f } // pop
-                        2 -> rotationY = 90f // flip
-                        // 3: glow — starts in place, shadow animates in
-                    }
-                }
-                row.addView(t)
-                letters.add(t)
-            }
-            column.addView(
-                row,
-                android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; topMargin = if (wi == 0) dp(30) else dp(4) },
-            )
-        }
-
-        // ③ Subtitle
-        val subtitle = android.widget.TextView(this).apply {
-            text = getString(R.string.bds_boot_subtitle)
-            textSize = 14f
-            setTextColor(0xFF8E8EA0.toInt())
-            alpha = 0f
-            translationY = dp(12).toFloat()
-        }
-        column.addView(
-            subtitle,
-            android.widget.LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-            ).apply { gravity = android.view.Gravity.CENTER_HORIZONTAL; topMargin = dp(18) },
-        )
-
-        bootOverlay = overlay
-        (findViewById<ViewGroup>(android.R.id.content)).addView(
-            overlay,
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-        )
-
-        // ── Timeline ──
-        handler.postDelayed({
-            icon.animate().scaleX(1f).scaleY(1f).alpha(1f)
-                .setDuration(380L)
-                .setInterpolator(android.view.animation.OvershootInterpolator(1.4f))
-                .start()
-        }, 60L)
-
-        handler.postDelayed({
-            glow.animate().alpha(1f).setDuration(500L).start()
-            icon.animate().scaleX(0.5f).scaleY(0.5f).alpha(0f).translationY(-dp(90).toFloat())
-                .setDuration(430L)
-                .setInterpolator(android.view.animation.AccelerateInterpolator())
-                .start()
-        }, BOOT_ICON_HOLD_MS)
-
-        letters.forEachIndexed { i, t ->
-            val variant = i % 4
-            handler.postDelayed({
-                t.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f).rotationY(0f)
-                    .setDuration(BOOT_LETTER_DUR_MS)
-                    .setInterpolator(
-                        android.view.animation.OvershootInterpolator(if (variant == 1) 2.2f else 1.1f),
-                    )
-                    .start()
-                if (variant == 3) {
-                    android.animation.ValueAnimator.ofFloat(0f, 26f, 8f).apply {
-                        duration = 700L
-                        addUpdateListener { a ->
-                            t.setShadowLayer(a.animatedValue as Float, 0f, 0f, 0x995B7BFF.toInt())
-                        }
-                        start()
-                    }
-                }
-            }, BOOT_LETTER_START_MS + i * BOOT_LETTER_STAGGER_MS)
-        }
-
-        val subtitleAt = BOOT_LETTER_START_MS + letters.size * BOOT_LETTER_STAGGER_MS + 160L
-        handler.postDelayed({
-            subtitle.animate().alpha(1f).translationY(0f).setDuration(360L)
-                .setInterpolator(android.view.animation.DecelerateInterpolator())
-                .start()
-        }, subtitleAt)
-
-        // Gentle glow breathing while we may still be waiting for the engine.
-        android.animation.ValueAnimator.ofFloat(0.55f, 1f).apply {
-            duration = 1500L
-            repeatCount = android.animation.ValueAnimator.INFINITE
-            repeatMode = android.animation.ValueAnimator.REVERSE
-            addUpdateListener { glow.alpha = it.animatedValue as Float }
-            start()
-        }
-
-        val minTotal = subtitleAt + 700L
-        handler.postDelayed({
-            bootMinElapsed = true
-            tryDismissBoot()
-        }, minTotal)
+        applySystemBarIcons(0xFF070A1C.toInt()) // light icons over the dark launch scene
         handler.postDelayed({ forceDismissBoot() }, BOOT_FORCE_DISMISS_MS)
-        Log.d("SuperDeepSeek", "Native boot overlay shown (${letters.size} letters)")
+        Log.d("SuperDeepSeek", "Launch screen shown")
     }
 
-    /** Engine UI is confirmed ready (polish pass ran). */
+    /** Starts (once) the readiness probe loop; it stops when the boot screen is released. */
+    private fun startReadyPoll() {
+        if (readyPollRunning || bootDismissed || engineUiReady.get()) return
+        readyPollRunning = true
+        handler.post(readyPoll)
+    }
+
+    private val readyPoll: Runnable = object : Runnable {
+        override fun run() {
+            if (bootDismissed || engineUiReady.get()) {
+                readyPollRunning = false
+                return
+            }
+            officialWebView.evaluateJavascript(READY_PROBE_JS) { result ->
+                val pageReady = result == "\"1\"" || result == "1"
+                val waited = if (pageFinishedAt == 0L) 0L else android.os.SystemClock.uptimeMillis() - pageFinishedAt
+                if (pageReady && (uiPolished || waited >= BOOT_NO_POLISH_GRACE_MS)) {
+                    readyPollRunning = false
+                    markEngineUiReady()
+                } else {
+                    handler.postDelayed(this, BOOT_READY_POLL_MS)
+                }
+            }
+        }
+    }
+
+    /** The enhanced page is on screen: sync the bars, let layout settle, reveal. */
     private fun markEngineUiReady() {
         if (engineUiReady.compareAndSet(false, true)) {
-            Log.d("SuperDeepSeek", "Engine UI ready — releasing boot overlay shortly")
-            handler.postDelayed({ tryDismissBoot() }, 650L) // let hydration settle
+            Log.d("SuperDeepSeek", "Engine UI ready — releasing launch screen")
+            syncSystemBarsWithPage()
+            handler.postDelayed({ tryDismissBoot() }, BOOT_SETTLE_MS)
         }
     }
 
     private fun tryDismissBoot() {
-        if (bootMinElapsed && engineUiReady.get() && !bootDismissed) dismissBoot()
+        if (engineUiReady.get() && !bootDismissed) dismissBoot()
     }
 
     private fun forceDismissBoot() {
         if (!bootDismissed) {
-            Log.w("SuperDeepSeek", "Boot failsafe fired — forcing overlay dismiss")
+            Log.w("SuperDeepSeek", "Launch screen cap reached — revealing the page")
+            syncSystemBarsWithPage()
             dismissBoot()
         }
     }
 
+    /** Plays the launch screen's exit (bar completes, zoom + fade); it removes itself. */
     private fun dismissBoot() {
         bootDismissed = true
-        val o = bootOverlay ?: return
-        o.animate().alpha(0f).setDuration(340L)
-            .setInterpolator(android.view.animation.DecelerateInterpolator())
-            .withEndAction {
-                (o.parent as? android.view.ViewGroup)?.removeView(o)
-                bootOverlay = null
-            }
-            .start()
+        val view = bootView
+        if (view == null) {
+            applySystemBarIcons(pageBarColor)
+            return
+        }
+        view.finish()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // System bars follow the page, like a native app: the strips behind the
+    // status and navigation bars take the page's own background colour, and
+    // the bar icons turn dark on light pages. The WebView itself stays inside
+    // the safe area, so the page header never slides under the status bar.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private var pageBarColor = PAGE_DARK_FALLBACK
+
+    private fun applyPageBarColor(color: Int) {
+        pageBarColor = color
+        if (::rootLayout.isInitialized) rootLayout.setBackgroundColor(color)
+        if (::officialWebView.isInitialized) officialWebView.setBackgroundColor(color)
+        if (bootView == null) applySystemBarIcons(color)
+    }
+
+    /** Dark bar icons on light backgrounds, light icons on dark ones. */
+    private fun applySystemBarIcons(background: Int) {
+        val light = isLightColor(background)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = light
+        controller.isAppearanceLightNavigationBars = light
+    }
+
+    /** Samples the page's real background colour and applies it to the bars. */
+    private fun syncSystemBarsWithPage() {
+        if (!::officialWebView.isInitialized) return
+        officialWebView.evaluateJavascript(PAGE_BG_PROBE_JS) { result ->
+            parseRgb(result)?.let { applyPageBarColor(it) }
+        }
     }
 
     /**
@@ -1132,6 +1107,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         cookieManager.flush()
+        // The page may have switched theme while we were in the background.
+        if (bootView == null && ::officialWebView.isInitialized) syncSystemBarsWithPage()
     }
 
     override fun onPause() {

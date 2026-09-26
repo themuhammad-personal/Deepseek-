@@ -26,5 +26,4 @@
 
     <!-- Branded boot overlay (shown while the engine page loads) -->
     <string name="bds_boot_title">Super DeepSeek</string>
-    <string name="bds_boot_subtitle">Loading your workspace…</string>
 </resources>

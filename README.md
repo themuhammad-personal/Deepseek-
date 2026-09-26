@@ -75,7 +75,8 @@ DeepSeek ships them, and everything else is extra.
 <details>
 <summary><b>📱 Native Android shell</b></summary>
 
-- Branded boot animation that hides page loading, with no white flash
+- Animated launch screen that stays until the page is fully ready, with no white flash
+- Status and navigation bars follow the page's light or dark colour
 - System file, gallery and camera pickers; downloads land in *Downloads*
 - Haptic feedback and a keyboard-aware layout
 - The **Back** button closes the open sheet, dialog or command popup first, then navigates
@@ -151,6 +152,9 @@ screenshots, and new commands or tools.
 
 [MIT](LICENSE). Super DeepSeek is an independent project and is not affiliated with
 DeepSeek.
+
+The launch screen uses the [Sora](https://github.com/sora-xor/sora-font) typeface under the
+[SIL Open Font License 1.1](docs/licenses/Sora-OFL.txt).
 
 ---
 

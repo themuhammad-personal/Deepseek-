@@ -8,7 +8,7 @@ what DeepSeek ships.
 
 ```
 ┌──────────────────────────── MainActivity ───────────────────────────┐
-│ system splash ─▶ native boot overlay (icon + wordmark animation)    │
+│ system splash ─▶ BootScreenView (native launch screen, see below)   │
 │                                                                     │
 │ officialWebView ──▶ https://chat.deepseek.com/                      │
 │   onPageFinished ─▶ injectBdsScripts():                             │
@@ -69,8 +69,39 @@ Typing `/` in the composer opens the command popup.
 
 The engine is injected on every `onPageFinished` of `chat.deepseek.com`. In-app
 navigation (DeepSeek is a single-page app) keeps the engine alive; a full reload
-re-injects it. The native boot overlay stays up until `AndroidBridge.onUiPolished()`
-fires, with a page-finished fallback and a 9 s failsafe.
+re-injects it.
+
+## Launch screen
+
+`BootScreenView` is a single native view drawn on the Canvas: an aurora background,
+the app icon with a spinning gradient ring, the Sora wordmark (per-letter reveal with a
+flowing colour gradient) and a slim progress bar. It is timed from its own frame clock,
+so it plays even when the user has turned system animations off. The system splash
+hands over on the first frame (same background colour, icon in the same place).
+
+The screen is released only when the enhanced page is really on screen, never on a
+timer alone:
+
+1. `onPageFinished` injects the engine and starts polling `READY_PROBE_JS` every 300 ms.
+   The probe needs the engine CSS (`style#bds-css`), a fully-run `content.js`
+   (`window.__sdHandleBack`) and a visible composer or sign-in field.
+2. The probe must pass **and** `AndroidBridge.onUiPolished()` must have fired, or 3 s must
+   have passed since `onPageFinished` if the polish signal never comes.
+3. The progress bar completes and the screen fades out. A minimum intro of 2.2 s keeps a
+   fast (cached) launch from cutting the animation short.
+
+The hard cap is 18 s (`BOOT_FORCE_DISMISS_MS`), so a stalled network can never trap the
+user on the launch screen.
+
+## System bars
+
+The WebView stays inside the safe area (the root layout is padded by the status and
+navigation bar insets), so DeepSeek's header buttons keep their position. The area
+behind the bars is painted with the page's own background colour, sampled from the
+top of the page (`PAGE_BG_PROBE_JS`), and the bar icons switch between light and dark
+for contrast. The engine reports every light/dark switch through
+`AndroidBridge.reportTheme()`; the bars recolour at once and are re-sampled after the
+switch has painted. While the launch screen is up, the bars stay dark with light icons.
 
 ## Back button
 
