@@ -75,7 +75,14 @@ jobs:
         working-directory: android
         run: |
           set -o pipefail
-          ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee /tmp/gradle-unit.log
+          if ! ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee /tmp/gradle-unit.log; then
+            # Surface compile errors and failed tests as annotations (readable
+            # from the run page and the checks API without downloading logs).
+            grep -E '^e: |FAILED$|Error|Exception|expected' /tmp/gradle-unit.log | head -60 | while IFS= read -r line; do
+              line="${line//'%'/'%25'}"; echo "::error::${line}"
+            done
+            exit 1
+          fi
 
       - name: Upload unit-test reports on failure
         # Inspect failures from the run page (Artifacts) instead of committing
@@ -116,7 +123,14 @@ jobs:
           ls -la ci-release.jks
       - name: Build Android Release APK
         working-directory: android
-        run: ./gradlew --no-daemon assembleRelease -PbdsBuildId=${{ github.run_number }}
+        run: |
+          set -o pipefail
+          if ! ./gradlew --no-daemon assembleRelease -PbdsBuildId=${{ github.run_number }} 2>&1 | tee /tmp/gradle-release.log; then
+            grep -E '^e: |^w: .*(error)|FAILED|Error' /tmp/gradle-release.log | head -40 | while IFS= read -r line; do
+              line="${line//'%'/'%25'}"; echo "::error::${line}"
+            done
+            exit 1
+          fi
         env:
           BDS_KEYSTORE_PASSWORD: ${{ secrets.BDS_KEYSTORE_PASSWORD || 'superdeepseek' }}
           BDS_KEY_ALIAS: ${{ secrets.BDS_KEY_ALIAS || 'superdeepseek' }}

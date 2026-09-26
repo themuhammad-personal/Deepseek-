@@ -1213,7 +1213,10 @@ class WebViewBridge(
                     return
                 }
                 response.put("ok", true)
-                val bytes = resp.body?.bytes()
+                // Bounded: a link to a huge file must not take the app down (OOM).
+                val bounded = resp.body?.byteStream()?.use { readBoundedBytes(it, MAX_FETCH_BODY_BYTES) }
+                if (bounded?.overflowed == true) response.put("truncated", true)
+                val bytes = bounded?.bytes
                 if (bytes != null) {
                     val charset = detectCharsetFromHeaders(resp) ?: detectCharsetFromHtml(bytes)
                     val html = try {
@@ -1443,7 +1446,14 @@ class WebViewBridge(
     }
 
     private fun encodeZipToResponse(resp: okhttp3.Response, url: String, response: JSONObject) {
-        val bytes = resp.body?.bytes() ?: ByteArray(0)
+        val bounded = resp.body?.byteStream()?.use { readBoundedBytes(it, MAX_ZIP_BYTES) }
+        if (bounded?.overflowed == true) {
+            response.put("ok", false)
+            response.put("status", resp.code)
+            response.put("error", "Repository archive is larger than ${MAX_ZIP_BYTES / (1024 * 1024)} MB: $url")
+            return
+        }
+        val bytes = bounded?.bytes ?: ByteArray(0)
         if (bytes.size < 100) {
             response.put("ok", false)
             response.put("error", "Received empty or invalid ZIP from $url")
@@ -1468,7 +1478,8 @@ class WebViewBridge(
                     is String -> rawCount.toIntOrNull()
                     else -> null
                 } ?: DEFAULT_GITHUB_COMMIT_COUNT
-        return maxOf(1, parsed)
+        // Each 100 commits is one API request; an absurd count must not loop for minutes.
+        return parsed.coerceIn(1, MAX_GITHUB_COMMIT_COUNT)
     }
 
     private fun buildGithubCommitsUrl(
@@ -1479,7 +1490,7 @@ class WebViewBridge(
             page: Int,
     ): String {
         val encodedBranch = Uri.encode(branch)
-        return "$githubApiBaseUrl/repos/$owner/$repo/commits?sha=$encodedBranch&per_page=$perPage&page=$page"
+        return "$githubApiBaseUrl/repos/${Uri.encode(owner)}/${Uri.encode(repo)}/commits?sha=$encodedBranch&per_page=$perPage&page=$page"
     }
 
     private fun isGithubRateLimitResponse(
@@ -1620,6 +1631,8 @@ class WebViewBridge(
 
     private class McpSessionExpiredException(message: String) : Exception(message)
 
+    private class McpServerError(message: String) : Exception(message)
+
     private fun mcpEnsureInitialized(serverUrl: String, apiKey: String): McpSession {
         val cacheKey = "$serverUrl|$apiKey"
         mcpSessionCache[cacheKey]?.let { return it }
@@ -1735,14 +1748,16 @@ class WebViewBridge(
                             if (parsed.has("error")) {
                                 val errObj = parsed.optJSONObject("error")
                                 val errMsg = errObj?.optString("message") ?: parsed.optString("error")
-                                throw Exception("MCP error: $errMsg")
+                                throw McpServerError("MCP error: $errMsg")
                             }
                             if (parsed.has("result")) {
                                 val resVal = parsed.get("result")
                                 lastResult = if (resVal is JSONObject) resVal else JSONObject().put("value", resVal)
                             }
                         } catch (e: Exception) {
-                            if (e is McpSessionExpiredException) throw e
+                            // A server error must reach the caller; it used to be
+                            // swallowed here and reported as an empty result.
+                            if (e is McpSessionExpiredException || e is McpServerError) throw e
                             // Continue parsing other SSE lines
                         }
                     }
@@ -2261,6 +2276,14 @@ class WebViewBridge(
          * DeepSeek's own per-file upload limit. Streamed, so never held in memory.
          */
         internal const val MAX_PICKED_BLOB_SIZE = 100L * 1024 * 1024
+
+        /** Page/API bodies returned by bds-fetch-url are cut here (flagged truncated). */
+        internal const val MAX_FETCH_BODY_BYTES = 16L * 1024 * 1024
+
+        /** GitHub repository archives (bds-fetch-github-zip). */
+        internal const val MAX_ZIP_BYTES = 64L * 1024 * 1024
+
+        internal const val MAX_GITHUB_COMMIT_COUNT = 1000
 
         /** How much of a file is sampled to tell text from binary. */
         internal const val TEXT_SNIFF_BYTES = 64 * 1024
