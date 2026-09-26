@@ -48,11 +48,29 @@ upstream in dry-run mode.
 
 Things inside the bundle that deliberately keep their original names:
 
-- the hidden `<BetterDeepSeek>…</BetterDeepSeek>` tag the engine wraps around injected
-  context — it is stored in every existing conversation, so renaming it would break
-  how old chats render;
+- the parser still accepts the old `<BetterDeepSeek>` context wrapper and `BDS:` tool tags
+  found in older conversations (new messages use `<SuperDeepSeek>` and `SDS:`); stored
+  skills, memories and custom prompts are renamed once on first start
+  (`sdsRebrandStored`);
 - storage keys (`bds_*`) and CSS classes (`bds-*`), so user data survives updates;
 - the third-party DeepSeek Harness *Better DeepSeek Bridge* plugin and its endpoints.
+
+## Linux sandbox and the agent
+
+| Piece | Where | Role |
+|---|---|---|
+| `Sandbox.kt` | native | Alpine minirootfs under `noBackupFilesDir/sandbox`, run through `libproot.so` from `nativeLibraryDir` (Termux proot + its libraries, fetched and SHA-checked by `scripts/fetch_sandbox_deps.py` in CI) |
+| `SandboxTools.kt` | native | The MCP-shaped tools: `run`, `job`, `read_file`, `write_file`, `edit_file`, `list_dir`, `install_packages`, `preview`, `export_file`, `status` |
+| `SandboxService.kt` | native | Foreground service (`specialUse`) with a Stop action, kept while a command runs **or** the agent loop is active (`AndroidBridge.sandboxAgentActive`) |
+| `StudioActivity.kt` | native | Linux Studio: terminal, files, settings |
+| `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip and the "ask" mode |
+
+The engine does the agent loop itself: the model writes
+`<SDS:AUTO:MCP url="sandbox" tool="run">{…}</SDS:AUTO:MCP>`, the engine calls the tool and
+sends the result back as the next message. For long tasks the app keeps the renderer at
+foreground priority, reloads a page that stops answering after the app returns
+(`probePageLiveness`), and after a renderer crash or process restore reopens the same
+conversation (`ChatUrls`).
 
 ## Slash commands
 

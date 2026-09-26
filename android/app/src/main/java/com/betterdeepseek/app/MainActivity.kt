@@ -230,8 +230,8 @@ internal fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>?
 }
 
 /**
- * The picker is only filtered when the page asks for MIME types (e.g.
- * `image/*`). File-extension lists (DeepSeek's upload button lists dozens of
+ * The picker is only filtered when the page asks for MIME types (e.g. images
+ * only). File-extension lists (DeepSeek's upload button lists dozens of
  * code/document extensions) are NOT turned into a filter: document providers
  * label most code and text files `application/octet-stream`, so a MIME filter
  * greyed them out and those files could not be picked at all. The page still

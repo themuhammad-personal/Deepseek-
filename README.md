@@ -6,7 +6,7 @@
 
 **The official DeepSeek chat, supercharged, as a native Android app.**
 
-Slash commands · memory · personas · MCP tools · Deep Research · code runners · one-tap exports
+AI agent · Linux Studio · slash commands · memory · MCP tools · Deep Research · one-tap exports
 
 [![Download APK](https://img.shields.io/badge/Download-APK-4d6bfe?style=for-the-badge&logo=android&logoColor=white)](https://github.com/themuhammad-personal/Deepseek-/releases/latest/download/super-deepseek-latest.apk)
 &nbsp;
@@ -32,6 +32,7 @@ DeepSeek ships them, and everything else is extra.
 
 | | |
 |---|---|
+| 🤖 **It gets work done** | An AI agent with its own Linux computer: it writes, runs, tests and fixes code on its own until the task is finished. Stop is always one tap away. |
 | 🧠 **It remembers you** | A memory library, personas and multiple system prompts, applied to every chat automatically. |
 | ⚡ **Type less** | Type `/` for commands and your own snippets. Pick one, add details, send. |
 | 🔌 **Plug in tools** | Connect remote MCP servers, and the AI discovers and calls their tools by itself. |
@@ -61,13 +62,25 @@ DeepSeek ships them, and everything else is extra.
 - **Language**: answer language and app language (English, বাংলা, فارسی, Русский, Türkçe, 中文)
 </details>
 
+<details open>
+<summary><b>🐧 Linux Studio and the AI agent</b></summary>
+
+- A real **Alpine Linux** inside the app (proot, no root needed): root shell, internet, `apk`,
+  `pip`, `npm`, `git`; files in `/root/workspace` persist
+- The AI uses it as a tool by itself: runs commands and long jobs, reads/writes/edits files,
+  installs packages, previews web apps and exports results to *Downloads*
+- **Linux Studio**: a terminal, a file browser (import, export, share) and a web preview (open it from the **+** menu)
+- Long tasks keep running in the background with a "Stop" notification; optional
+  "ask before each command" mode
+</details>
+
 <details>
 <summary><b>🛠️ Tools the AI can use</b></summary>
 
 - **MCP servers** over HTTP / Streamable HTTP, with optional API keys and ready-to-use tool discovery
 - **Deep Research** with DuckDuckGo and Bing, configurable deep fetch and a token budget
 - **Web, GitHub, X/Twitter and YouTube fetching** straight into the conversation
-- **Code runners** for Python (Pyodide), JavaScript, TypeScript, Lua and Ruby, sandboxed
+- **Quick code runners** for Python (Pyodide), JavaScript, TypeScript, Lua and Ruby, in the page
 - **Documents and charts**: generate PowerPoint, Excel and Word files, and interactive charts
 - **API playground** for the DeepSeek developer API, with history and presets
 </details>
