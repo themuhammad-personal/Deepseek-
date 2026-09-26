@@ -454,16 +454,21 @@ class MainActivity : ComponentActivity() {
         bridge = WebViewBridge(applicationContext)
         // Service-worker fetches bypass WebViewClient.shouldInterceptRequest; a
         // page worker must not turn the blob paths into network 404s.
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
-            val blobs = bridge.blobs
-            androidx.webkit.ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(
-                object : androidx.webkit.ServiceWorkerClientCompat() {
-                    override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
-                        val path = request.url?.path ?: return null
-                        return if (path.startsWith(NativeBlobStore.PATH_PREFIX)) blobs.serve(path) else null
-                    }
-                })
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
+                WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
+                val blobs = bridge.blobs
+                androidx.webkit.ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(
+                    object : androidx.webkit.ServiceWorkerClientCompat() {
+                        override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                            val path = request.url?.path ?: return null
+                            return if (path.startsWith(NativeBlobStore.PATH_PREFIX)) blobs.serve(path) else null
+                        }
+                    })
+            }
+        } catch (t: Throwable) {
+            // Optional: without it only worker-originated blob fetches miss.
+            Log.w("SuperDeepSeek", "Service-worker client unavailable", t)
         }
         // Serve the bundled SPA from chat.deepseek.com itself.
         //

@@ -1361,6 +1361,13 @@ class WebViewBridge(
             response.put("error", "Missing GitHub repository.")
             return
         }
+        // Names go into the API path verbatim: GitHub allows only these characters.
+        val validName = Regex("^[A-Za-z0-9._-]{1,100}$")
+        if (!validName.matches(owner) || !validName.matches(repo)) {
+            response.put("ok", false)
+            response.put("error", "Invalid GitHub repository name: $owner/$repo")
+            return
+        }
 
         val commits = JSONArray()
         var page = 1
@@ -1490,7 +1497,7 @@ class WebViewBridge(
             page: Int,
     ): String {
         val encodedBranch = Uri.encode(branch)
-        return "$githubApiBaseUrl/repos/${Uri.encode(owner)}/${Uri.encode(repo)}/commits?sha=$encodedBranch&per_page=$perPage&page=$page"
+        return "$githubApiBaseUrl/repos/$owner/$repo/commits?sha=$encodedBranch&per_page=$perPage&page=$page"
     }
 
     private fun isGithubRateLimitResponse(
