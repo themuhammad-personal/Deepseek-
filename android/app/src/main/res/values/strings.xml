@@ -18,6 +18,7 @@
     <string name="bds_update_downloading">Downloading the update...</string>
     <string name="bds_update_download_failed">Download failed (%1$s).</string>
     <string name="bds_update_need_permission">Grant the install unknown apps permission for Super DeepSeek, then try again.</string>
+    <string name="bds_download_started">Downloading %1$s…</string>
     <string name="bds_update_install_failed">Could not open the package installer.</string>
 
     <!-- App Shortcuts -->

@@ -41,6 +41,15 @@ internal data class PickedFile(
         val content: String,
         val encoding: String? = null,
         val mime: String? = null,
+        /**
+         * Same-origin path (`/__sd/blob/<token>`) the page fetches the bytes from.
+         * When set, [content] is empty: nothing is Base64-encoded or copied through
+         * evaluateJavascript (see [NativeBlobStore]).
+         */
+        val blobPath: String? = null,
+        val size: Long = -1L,
+        /** The bytes are UTF-8 text (the page reads them as a string). */
+        val text: Boolean = false,
 )
 
 /** Native-picked file that could not be delivered to JavaScript. */
@@ -83,6 +92,34 @@ internal fun readBoundedBytes(stream: InputStream, capBytes: Long): BoundedReadR
         output.write(buffer, 0, read)
         total += read
     }
+}
+
+internal const val ASYNC_REPLY_INLINE_CHARS = 256 * 1024
+
+internal fun sanitizeCallbackId(raw: String?): String =
+        raw?.filter { it.isLetterOrDigit() || it == '-' || it == '_' }?.take(64).orEmpty()
+
+/** Script delivering an async bridge reply: inline when small, as a blob path when large. */
+internal fun buildBridgeReplyScript(id: String, result: String, blobs: NativeBlobStore): String {
+    val safeId = sanitizeCallbackId(id)
+    return if (result.length > ASYNC_REPLY_INLINE_CHARS) {
+        val token = blobs.registerBytes("reply.json", "application/json", result.toByteArray(Charsets.UTF_8), oneShot = true)
+        "window.__sdBridgeReply&&window.__sdBridgeReply('$safeId',null,'${NativeBlobStore.PATH_PREFIX}$token');"
+    } else {
+        "window.__sdBridgeReply&&window.__sdBridgeReply('$safeId',${JSONObject.quote(result)},null);"
+    }
+}
+
+/** Bytes in [stream], stopping at cap + 1 (so a result > cap means "too large"). */
+internal fun countStreamBytes(stream: InputStream, cap: Long): Long {
+    val buffer = ByteArray(64 * 1024)
+    var total = 0L
+    while (total <= cap) {
+        val read = stream.read(buffer)
+        if (read == -1) break
+        total += read
+    }
+    return total
 }
 
 internal fun classifyPickedFile(
@@ -286,6 +323,9 @@ class WebViewBridge(
     private val prefs: SharedPreferences =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /** Picked/shared files and large replies, streamed to the page by URL. */
+    internal val blobs = NativeBlobStore()
+
     private val httpClient: OkHttpClient =
             httpClient
                     ?: OkHttpClient.Builder()
@@ -429,6 +469,11 @@ class WebViewBridge(
                         put("content", file.content)
                         if (file.encoding != null) put("encoding", file.encoding)
                         if (file.mime != null) put("mime", file.mime)
+                        if (file.blobPath != null) {
+                            put("blob", file.blobPath)
+                            put("size", file.size)
+                            put("text", file.text)
+                        }
                     }
             )
         }
@@ -493,9 +538,9 @@ class WebViewBridge(
             return readPickedImageUri(uri, name)
         }
 
+        val providerMime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
         if (acceptImages && !hasDocumentFileExtension(name) && !hasTextFileExtension(name)) {
-            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
-            imagePickNameForMime(name, mime)?.let { (imageName, forceJpeg) ->
+            imagePickNameForMime(name, providerMime)?.let { (imageName, forceJpeg) ->
                 return readPickedImageUri(uri, imageName, forceJpeg)
             }
         }
@@ -503,49 +548,97 @@ class WebViewBridge(
         if (hasDocumentFileExtension(name)) {
             return readPickedDocumentUri(uri, name, mimeForDocumentName(name))
         }
-
-        val length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
-        if (length > MAX_PICKED_FILE_SIZE) {
-            return PickedItemResult.Skipped(name, "too-large")
-        }
-
-        val content =
-                try {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        val read = readBoundedBytes(stream, MAX_PICKED_FILE_SIZE)
-                        if (read.overflowed) {
-                            return PickedItemResult.Skipped(name, "too-large")
-                        }
-                        String(read.bytes, Charsets.UTF_8)
-                    }
-                } catch (t: Throwable) {
-                    Log.w(TAG, "readPickedContentUri failed for $uri", t)
-                    null
-                }
-        return classifyPickedFile(name, length, content, requireKnownExtension = false)
+        return streamPickedUri(uri, name, providerMime)
     }
 
-    internal fun readPickedDocumentUri(uri: Uri, name: String, mime: String): PickedItemResult {
-        val length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
-        if (length > MAX_PICKED_FILE_SIZE) {
-            return PickedItemResult.Skipped(name, "too-large")
-        }
-        val bytes =
+    internal fun readPickedDocumentUri(uri: Uri, name: String, mime: String): PickedItemResult =
+            registerStreamedFile(uri, name, mime, text = false, cap = MAX_PICKED_BLOB_SIZE)
+
+    /**
+     * Any other file: text (by content, not only by extension) is delivered as
+     * text, everything else as a binary file — the page decides what to do with
+     * it. Neither is read into memory here; the page streams the bytes.
+     */
+    private fun streamPickedUri(uri: Uri, name: String, providerMime: String?): PickedItemResult {
+        val sample =
                 try {
                     context.contentResolver.openInputStream(uri)?.use { stream ->
-                        val read = readBoundedBytes(stream, MAX_PICKED_FILE_SIZE)
-                        if (read.overflowed) {
-                            return PickedItemResult.Skipped(name, "too-large")
-                        }
-                        read.bytes
+                        readBoundedBytes(stream, TEXT_SNIFF_BYTES.toLong()).bytes
                     }
                 } catch (t: Throwable) {
-                    Log.w(TAG, "readPickedDocumentUri failed for $uri", t)
+                    Log.w(TAG, "streamPickedUri: cannot open $uri", t)
                     null
                 } ?: return PickedItemResult.Skipped(name, "unreadable")
-
-        return encodePickedDocument(name, bytes, mime)
+        val isText = looksLikeText(sample)
+        val mime =
+                if (isText) "text/plain"
+                else providerMime?.takeIf { it.isNotBlank() && it != "*/*" } ?: guessMimeForName(name)
+        return registerStreamedFile(
+                uri,
+                name,
+                mime,
+                text = isText,
+                cap = if (isText) MAX_PICKED_FILE_SIZE else MAX_PICKED_BLOB_SIZE,
+        )
     }
+
+    /** Checks the size (counting the stream when the provider does not say) and registers a blob. */
+    private fun registerStreamedFile(
+            uri: Uri,
+            name: String,
+            mime: String,
+            text: Boolean,
+            cap: Long,
+    ): PickedItemResult {
+        var length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
+        if (length > cap) return PickedItemResult.Skipped(name, "too-large")
+        if (length < 0) {
+            length =
+                    try {
+                        context.contentResolver.openInputStream(uri)?.use { countStreamBytes(it, cap) }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "registerStreamedFile: cannot measure $uri", t)
+                        null
+                    } ?: return PickedItemResult.Skipped(name, "unreadable")
+            if (length > cap) return PickedItemResult.Skipped(name, "too-large")
+        }
+        val resolver = context.contentResolver
+        val token = blobs.register(name, mime, length) { resolver.openInputStream(uri) }
+        return PickedItemResult.Ok(
+                PickedFile(
+                        name = name,
+                        content = "",
+                        encoding = if (text) null else "base64",
+                        mime = mime,
+                        blobPath = NativeBlobStore.PATH_PREFIX + token,
+                        size = length,
+                        text = text,
+                )
+        )
+    }
+
+    /** Image bytes (already size-checked and compressed) as a streamed blob. */
+    private fun blobPickedImage(name: String, bytes: ByteArray, forceJpeg: Boolean = false): PickedItemResult {
+        val processed = compressImageIfNeeded(bytes, forceJpeg = forceJpeg)
+        if (processed.size.toLong() > MAX_PICKED_IMAGE_SIZE) return PickedItemResult.Skipped(name, "too-large")
+        val mime = mimeForImageName(name)
+        val token = blobs.registerBytes(name, mime, processed)
+        return PickedItemResult.Ok(
+                PickedFile(
+                        name = name,
+                        content = "",
+                        encoding = "base64",
+                        mime = mime,
+                        blobPath = NativeBlobStore.PATH_PREFIX + token,
+                        size = processed.size.toLong(),
+                )
+        )
+    }
+
+    private fun guessMimeForName(name: String): String =
+            android.webkit.MimeTypeMap.getSingleton()
+                    .getMimeTypeFromExtension(fileExtension(name))
+                    ?: "application/octet-stream"
 
     internal fun readPickedFolderTree(treeUri: Uri, acceptImages: Boolean = false): PickReadResult {
         val docTree = DocumentFile.fromTreeUri(context, treeUri)
@@ -626,27 +719,41 @@ class WebViewBridge(
                 if (result is PickedItemResult.Ok) imageCounter.accepted += 1
             }
         }
-        if (!isTextFileExtension(name)) {
+        val knownText = isTextFileExtension(name)
+        val length = file.length()
+        // Unknown extensions (Makefile, LICENSE, .conf …) are accepted when they
+        // are small and their content is text; big unknown files are skipped.
+        if (!knownText && length > MAX_UNKNOWN_FOLDER_FILE_SIZE) {
             return PickedItemResult.Skipped(relPath, "unsupported-type")
         }
-        val length = file.length()
         if (length > MAX_PICKED_FILE_SIZE) {
             return PickedItemResult.Skipped(relPath, "too-large")
         }
-        val content =
+        val sample =
                 try {
                     context.contentResolver.openInputStream(file.uri)?.use { stream ->
-                        val read = readBoundedBytes(stream, MAX_PICKED_FILE_SIZE)
-                        if (read.overflowed) {
-                            return PickedItemResult.Skipped(relPath, "too-large")
-                        }
-                        String(read.bytes, Charsets.UTF_8)
+                        readBoundedBytes(stream, TEXT_SNIFF_BYTES.toLong()).bytes
                     }
                 } catch (t: Throwable) {
                     Log.w(TAG, "readDocumentFile failed for $relPath", t)
                     null
-                }
-        return classifyPickedFile(relPath, length, content, requireKnownExtension = true)
+                } ?: return PickedItemResult.Skipped(relPath, "unreadable")
+        if (!looksLikeText(sample)) {
+            return PickedItemResult.Skipped(relPath, if (knownText) "binary" else "unsupported-type")
+        }
+        val resolver = context.contentResolver
+        val uri = file.uri
+        val token = blobs.register(relPath, "text/plain", length) { resolver.openInputStream(uri) }
+        return PickedItemResult.Ok(
+                PickedFile(
+                        name = relPath,
+                        content = "",
+                        mime = "text/plain",
+                        blobPath = NativeBlobStore.PATH_PREFIX + token,
+                        size = length,
+                        text = true,
+                )
+        )
     }
 
     private fun readPickedImageUri(uri: Uri, name: String, forceJpeg: Boolean = false): PickedItemResult {
@@ -670,7 +777,7 @@ class WebViewBridge(
         return if (bytes == null) {
             PickedItemResult.Skipped(name, "unreadable")
         } else {
-            encodePickedImage(name, bytes, forceJpeg = forceJpeg)
+            blobPickedImage(name, bytes, forceJpeg = forceJpeg)
         }
     }
 
@@ -695,7 +802,7 @@ class WebViewBridge(
         return if (bytes == null) {
             PickedItemResult.Skipped(relPath, "unreadable")
         } else {
-            encodePickedImage(relPath, bytes)
+            blobPickedImage(relPath, bytes)
         }
     }
 
@@ -768,7 +875,12 @@ class WebViewBridge(
 
         val safeName = sanitizeDownloadName(fileName)
         val resolvedMime = mimeType?.takeIf { it.isNotBlank() } ?: "application/octet-stream"
+        // Decode and write off the JS thread: a large ZIP used to freeze the page
+        // until the file was on disk.
+        ioExecutor.execute { saveDownload(payload, safeName, resolvedMime) }
+    }
 
+    private fun saveDownload(payload: String, safeName: String, resolvedMime: String) {
         try {
             val bytes = Base64.decode(payload, Base64.DEFAULT)
             val uri = writeBytesToDownloads(bytes, safeName, resolvedMime)
@@ -964,6 +1076,33 @@ class WebViewBridge(
         mainHandler.post {
             runCatching { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
         }
+    }
+
+    /** Background pool for bridge work that must not block the page's JS thread. */
+    private val ioExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+
+    /**
+     * Non-blocking [fetch]. `fetch()` is a synchronous @JavascriptInterface call,
+     * so a slow site, a GitHub zip or an MCP call froze the whole chat (JS thread
+     * blocked) for its full duration. The reply arrives through
+     * `window.__sdBridgeReply(id, json, blobPath)`; replies larger than
+     * [ASYNC_REPLY_INLINE_CHARS] are streamed via [blobs] instead of being
+     * pushed through evaluateJavascript.
+     */
+    @JavascriptInterface
+    fun fetchAsync(payloadJson: String?, callbackId: String?) {
+        val id = sanitizeCallbackId(callbackId)
+        if (id.isEmpty()) return
+        ioExecutor.execute {
+            val result = fetch(payloadJson)
+            postScript(buildBridgeReplyScript(id, result, blobs))
+        }
+    }
+
+    /** The page has read a `/__sd/blob/<token>` path; drop it (frees image bytes early). */
+    @JavascriptInterface
+    fun releaseBlob(path: String?) {
+        parseBlobToken(path)?.let { blobs.remove(it) }
     }
 
     /**
@@ -1753,17 +1892,15 @@ class WebViewBridge(
             return
         }
         Log.d(TAG, "onOfficialToken: received token length ${t.length}")
+        // Memory only: a session token in plain prefs is a liability, and any
+        // copy an older build persisted is removed at startup.
         lastToken = t
-        // Persist
-        try {
-            prefs.edit().putString("ds_official_token", t).apply()
-        } catch (_: Exception) {}
         onOfficialLogin?.invoke(t)
     }
 
     @JavascriptInterface
     fun getOfficialToken(): String? {
-        return lastToken ?: prefs.getString("ds_official_token", null)
+        return lastToken
     }
 
     @JavascriptInterface
@@ -2119,7 +2256,19 @@ class WebViewBridge(
         /** Max bytes per native-picked image file. */
         internal const val MAX_PICKED_IMAGE_SIZE = 25L * 1024 * 1024
 
-        internal const val MAX_FOLDER_IMAGES = 10
+        /**
+         * Max bytes per streamed binary file (documents, archives, media…):
+         * DeepSeek's own per-file upload limit. Streamed, so never held in memory.
+         */
+        internal const val MAX_PICKED_BLOB_SIZE = 100L * 1024 * 1024
+
+        /** How much of a file is sampled to tell text from binary. */
+        internal const val TEXT_SNIFF_BYTES = 64 * 1024
+
+        /** Folder files with an unknown extension are only sniffed up to this size. */
+        internal const val MAX_UNKNOWN_FOLDER_FILE_SIZE = 2L * 1024 * 1024
+
+        internal const val MAX_FOLDER_IMAGES = 30
 
         internal const val MAX_PICK_CHUNK_CHARS = 200_000
 
@@ -2131,7 +2280,15 @@ class WebViewBridge(
                         "json", "md", "txt", "py", "c", "cpp", "h", "hpp", "java", "go",
                         "rs", "rb", "php", "sh", "yml", "yaml", "toml", "ini", "csv", "sql",
                         "xml", "env", "cs", "csproj", "sln", "fs", "fsproj", "razor",
-                        "swift", "kt", "dart", "nix"
+                        "swift", "kt", "dart", "nix", "kts", "gradle", "properties", "lua", "r",
+                        "m", "mm", "pl", "pm", "bat", "cmd", "ps1", "psm1", "tex", "bib", "srt",
+                        "vtt", "rst", "adoc", "org", "mdx", "log", "conf", "cfg", "cnf", "lock",
+                        "proto", "graphql", "gql", "prisma", "tf", "hcl", "zig", "ex", "exs",
+                        "erl", "hrl", "hs", "clj", "cljs", "scala", "sc", "groovy", "sass", "less",
+                        "styl", "mjs", "cjs", "mts", "cts", "astro", "ipynb", "jsonc", "json5",
+                        "htm", "xhtml", "svg", "plist", "asm", "s", "v", "sv", "vhd", "cmake",
+                        "mk", "dockerfile", "gitignore", "editorconfig", "tsv", "jl", "nim",
+                        "cr", "d", "f90", "pas", "vb", "sol", "move", "cairo", "http", "rest"
                 )
 
         internal val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
@@ -2164,7 +2321,7 @@ class WebViewBridge(
 
         private val SKIP_DIRS =
                 setOf(
-                        "node_modules", ".git", ".github", ".svn", "dist", "build",
+                        "node_modules", ".git", ".svn", "dist", "build",
                         "__pycache__", ".gradle", ".idea", ".vscode", ".vs", "vendor",
                         ".next", ".cache", "bin", "obj", "out", "target", "dist-chrome",
                         "dist-firefox"

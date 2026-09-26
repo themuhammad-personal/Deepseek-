@@ -276,6 +276,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var rootLayout: FrameLayout
     private lateinit var assetLoader: WebViewAssetLoader
 
+    private val bdsAssetHost by lazy { getString(R.string.bds_asset_authority) }
+
     /** Serves the engine bundle (assets/bds) at the bds-asset.local authority. */
     private lateinit var bdsAssetLoader: WebViewAssetLoader
     private lateinit var bridge: WebViewBridge
@@ -450,6 +452,19 @@ class MainActivity : ComponentActivity() {
         cookieManager.setAcceptCookie(true)
 
         bridge = WebViewBridge(applicationContext)
+        // Service-worker fetches bypass WebViewClient.shouldInterceptRequest; a
+        // page worker must not turn the blob paths into network 404s.
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE) &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
+            val blobs = bridge.blobs
+            androidx.webkit.ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(
+                object : androidx.webkit.ServiceWorkerClientCompat() {
+                    override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                        val path = request.url?.path ?: return null
+                        return if (path.startsWith(NativeBlobStore.PATH_PREFIX)) blobs.serve(path) else null
+                    }
+                })
+        }
         // Serve the bundled SPA from chat.deepseek.com itself.
         //
         // That makes every /api/v0/... fetch from the SPA same-origin, which is
@@ -496,10 +511,23 @@ class MainActivity : ComponentActivity() {
                     // from assets/bds via the bds-asset.local authority. Real site traffic
                     // (login/WAF) passes through untouched.
                     val url = request.url
-                    if (url.host == getString(R.string.bds_asset_authority)) {
+                    // Picked/shared files and large bridge replies, streamed (NativeBlobStore).
+                    if (url.path?.startsWith(NativeBlobStore.PATH_PREFIX) == true &&
+                        (url.host == DS_HOST || url.host == bdsAssetHost)) {
+                        return bridge.blobs.serve(url.path)
+                    }
+                    if (url.host == bdsAssetHost) {
                         return bdsAssetLoader.shouldInterceptRequest(url)
                     }
                     return null
+                }
+                override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                    // Without this the whole app died with the renderer (often an
+                    // out-of-memory kill in the background). Rebuild the Activity with
+                    // a fresh WebView instead; the session cookies survive.
+                    Log.e("SuperDeepSeek", "Renderer gone (crash=${detail.didCrash()}); recreating")
+                    recoverFromRendererLoss(view)
+                    return true
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     if (!shouldOpenRequestExternally(request, "appassets.androidplatform.net")) return false
@@ -513,8 +541,7 @@ class MainActivity : ComponentActivity() {
                     super.onPageFinished(view, url)
                     Log.d("SuperDeepSeek", "Official WebView loaded: $url")
                     if (url?.contains("chat.deepseek.com") == true) {
-                        // Inject token polling (legacy) + the proven engine bundle.
-                        injectTokenPolling(view)
+                        // The engine bundle (once per document, see injectBdsScripts).
                         injectBdsScripts(view)
                         // The launch screen stays until the enhanced page is really
                         // on screen (see READY_PROBE_JS); then the bars pick up the
@@ -551,6 +578,15 @@ class MainActivity : ComponentActivity() {
                         true
                     }
                 }
+
+                // setSupportMultipleWindows(true) without this handler silently
+                // dropped every window.open / target=_blank: "Sign in with Google"
+                // popups and new-tab links did nothing.
+                override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean =
+                    openPopupWindow(resultMsg)
+            }
+            setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                handleWebDownload(url, userAgent, contentDisposition, mimeType)
             }
             // Dark background so there is no white flash while the page/engine loads.
             setBackgroundColor(Color.parseColor("#1e1f23")) // engine panel dark — matches the official page
@@ -724,11 +760,20 @@ class MainActivity : ComponentActivity() {
         // it is proven against the live protocol, unlike a hand-rolled API client.
         // The React SPA is no longer the chat surface, so we never flip to it.
         officialWebView.loadUrl("https://chat.deepseek.com/")
+        handleIncomingIntent(intent)
+        // The session token is not ours to keep (legacy polling stored it in plain prefs).
+        bridge.removeStorage("ds_official_token")
+        Thread { cleanupOldCaptures(cacheDir) }.start()
+        maybeCheckForUpdate()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 // Back may close a sheet or drawer without any touch: re-measure the bars.
                 if (bootView == null) scheduleBarRefresh(BAR_REFRESH_TOUCH_MS)
+                popupWebView?.let { popup ->
+                    if (popup.canGoBack()) popup.goBack() else closePopupWindow()
+                    return
+                }
                 if (isReactVisible) {
                     reactWebView.evaluateJavascript("(function(){ var btn=document.querySelector('#bds-close, .bds-sheet-close'); if(btn&&btn.offsetParent!==null){btn.click(); return true;} return false;})()") { result ->
                         if (result != "true" && result != "\"true\"") {
@@ -753,69 +798,11 @@ class MainActivity : ComponentActivity() {
         })
     }
 
-    private fun injectTokenPolling(webView: WebView) {
-        // Cancel previous polling
-        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
-        
-        val pollScript = """
-            (function(){
-              if (window._dsTokenPolling) return;
-              window._dsTokenPolling = true;
-              console.log('[Official] Starting token polling...');
-              let attempts = 0;
-              const maxAttempts = 60;
-              const poll = () => {
-                attempts++;
-                try {
-                  const raw = localStorage.getItem('userToken');
-                  if (raw) {
-                    const parsed = JSON.parse(raw);
-                    const token = parsed.value || parsed.token || '';
-                    if (token && token.length > 20) {
-                      console.log('[Official] Token found! Length:', token.length);
-                      if (window.AndroidBridge && window.AndroidBridge.onOfficialToken) {
-                        window.AndroidBridge.onOfficialToken(token);
-                        window._dsTokenPolling = false;
-                        return;
-                      }
-                    }
-                  }
-                  // Also check for user info
-                  const userInfo = localStorage.getItem('user_info') || sessionStorage.getItem('userToken');
-                  if (userInfo && attempts % 5 === 0) {
-                    console.log('[Official] Checking alternative storage...');
-                  }
-                } catch(e) {
-                  console.log('[Official] Poll error', e);
-                }
-                if (attempts < maxAttempts) {
-                  setTimeout(poll, 1500);
-                } else {
-                  console.log('[Official] Token polling stopped after max attempts');
-                  window._dsTokenPolling = false;
-                }
-              };
-              setTimeout(poll, 2000);
-            })();
-        """.trimIndent()
-        
-        webView.evaluateJavascript(pollScript, null)
-        
-        // Also schedule periodic re-injection in case of navigation
-        tokenPollingRunnable = Runnable {
-            if (!isReactVisible) {
-                webView.evaluateJavascript(pollScript, null)
-                handler.postDelayed(tokenPollingRunnable!!, 5000)
-            }
-        }
-        handler.postDelayed(tokenPollingRunnable!!, 5000)
-    }
-
     private fun onOfficialTokenFound(token: String) {
         // The engine (official site) is now the chat surface; we just persist the
         // token for session restore instead of flipping to the removed React SPA.
-        Log.d("SuperDeepSeek", "Official token found! Length: ${token.length}")
-        bridge.setStorage("ds_official_token", token)
+        // Kept in memory only: persisting the session token in plain prefs
+        // gained nothing (the WebView keeps its own session).
         bridge.lastToken = token
     }
 
@@ -823,45 +810,67 @@ class MainActivity : ComponentActivity() {
         assets.open("bds/$name").bufferedReader().use { it.readText() }
     } catch (e: Exception) { null }
 
-    /**
-     * Inject the better-deepseek engine into the live official chat page.
-     * Order matters: injected.js must be in the page context before content.js runs.
-     * content.css is inserted as a <style> (not a link) so it applies immediately.
-     */
-    private fun injectBdsScripts(webView: WebView) {
-        runOnUiThread {
-            readAsset("injected.js")?.let { code ->
-                webView.evaluateJavascript(code) { Log.d("BDS", "injected.js done") }
-            }
+    /** The engine scripts, read once and off the main thread (content.js is ~3 MB). */
+    private class EngineAssets(val injected: String?, val cssJs: String?, val content: String?, val native: String?)
 
+    @Volatile private var engineAssets: EngineAssets? = null
+    private val engineAssetsLock = Any()
+
+    private fun loadEngineAssets(): EngineAssets {
+        engineAssets?.let { return it }
+        synchronized(engineAssetsLock) {
+            engineAssets?.let { return it }
             val css = buildString {
                 readAsset("content.css")?.let { append(it).append("\n") }
                 // Our design frame on top of the engine's UI.
                 readAsset("our-skin.css")?.let { append(it) }
             }
-            if (css.isNotBlank()) {
-                val cssJs = """
-                    (function(){
-                      var old = document.getElementById('bds-css');
-                      if (old) old.remove();
-                      var s = document.createElement('style');
-                      s.id = 'bds-css';
-                      s.textContent = ${org.json.JSONObject.quote(css)};
-                      document.head.appendChild(s);
-                    })();
-                """.trimIndent()
-                webView.evaluateJavascript(cssJs) { Log.d("BDS", "content.css done") }
-            }
-
-            readAsset("content.js")?.let { code ->
-                webView.evaluateJavascript(code) { Log.d("BDS", "content.js done") }
-            }
-
-            // Hide out-of-scope features (voice) and apply small UI polish.
-            // The polish pass also signals AndroidBridge.onUiPolished() — that
-            // signal releases the NATIVE boot overlay (see showNativeBootOverlay).
-            injectUiPolish(webView)
+            val cssJs = if (css.isBlank()) null else """
+                (function(){
+                  var old = document.getElementById('bds-css');
+                  if (old) old.remove();
+                  var s = document.createElement('style');
+                  s.id = 'bds-css';
+                  s.textContent = ${org.json.JSONObject.quote(css)};
+                  document.head.appendChild(s);
+                })();
+            """.trimIndent()
+            return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), readAsset("sd-native.js"))
+                .also { engineAssets = it }
         }
+    }
+
+    /**
+     * Inject the engine into the live official chat page, once per document.
+     * onPageFinished can fire more than once for one document (redirects,
+     * history hops) and content.js has no load guard of its own: a second run
+     * duplicated the engine's UI and listeners. Order matters: injected.js
+     * (network hooks) first, then the CSS, content.js, the native glue
+     * (sd-native.js) and the polish pass.
+     */
+    private fun injectBdsScripts(webView: WebView) {
+        Thread {
+            val a = loadEngineAssets()
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                webView.evaluateJavascript("(function(){return window.__sdEngineInjected?1:0})()") { r ->
+                    if (r?.trim('"') == "1") {
+                        Log.d("BDS", "engine already present in this document")
+                        flushPendingPageActions()
+                        return@evaluateJavascript
+                    }
+                    webView.evaluateJavascript("window.__sdEngineInjected=true;", null)
+                    a.injected?.let { webView.evaluateJavascript(it) { Log.d("BDS", "injected.js done") } }
+                    a.cssJs?.let { webView.evaluateJavascript(it) { Log.d("BDS", "content.css done") } }
+                    a.content?.let { webView.evaluateJavascript(it) { Log.d("BDS", "content.js done") } }
+                    a.native?.let { webView.evaluateJavascript(it) { Log.d("BDS", "sd-native.js done") } }
+                    // Hides out-of-scope features and polishes; it signals
+                    // AndroidBridge.onUiPolished(), which releases the launch screen.
+                    injectUiPolish(webView)
+                    flushPendingPageActions()
+                }
+            }
+        }.start()
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1252,7 +1261,6 @@ class MainActivity : ComponentActivity() {
         isReactVisible = false
         reactWebView.visibility = View.GONE
         officialWebView.visibility = View.VISIBLE
-        injectTokenPolling(officialWebView)
     }
 
     private fun injectTokenToReact(token: String) {
@@ -1301,8 +1309,15 @@ class MainActivity : ComponentActivity() {
         cookieManager.flush()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
     override fun onDestroy() {
         tokenPollingRunnable?.let { handler.removeCallbacks(it) }
+        closePopupWindow()
         try {
             officialWebView.removeJavascriptInterface("AndroidBridge")
             officialWebView.destroy()
@@ -1312,5 +1327,278 @@ class MainActivity : ComponentActivity() {
             reactWebView.destroy()
         } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Popups (window.open / target=_blank)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private var popupWebView: WebView? = null
+
+    /**
+     * Hosts a page-opened window. Sign-in providers (Google) run inside it and
+     * close it themselves; anything that is not an in-app host goes to the
+     * browser instead and the empty popup is discarded.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openPopupWindow(resultMsg: android.os.Message): Boolean {
+        val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
+        closePopupWindow()
+        val popup = WebView(this)
+        popup.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        popup.setBackgroundColor(pageBarColor)
+        popup.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            javaScriptCanOpenWindowsAutomatically = false
+            setSupportMultipleWindows(false)
+            userAgentString = officialWebView.settings.userAgentString
+        }
+        cookieManager.setAcceptThirdPartyCookies(popup, true)
+        popup.webViewClient = object : WebViewClient() {
+            private fun routeOut(view: WebView, url: Uri): Boolean {
+                if (!shouldOpenExternally(url, bdsAssetHost)) return false
+                openInBrowser(url)
+                // Nothing of ours was loaded in it: it was only a new-tab link.
+                if (!view.canGoBack()) handler.post { closePopupWindow() }
+                return true
+            }
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                request.url?.let { routeOut(view, it) } ?: false
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                // The first navigation of a new window does not always pass
+                // through shouldOverrideUrlLoading.
+                val u = url?.let(Uri::parse) ?: return
+                if (!view.canGoBack() && shouldOpenExternally(u, bdsAssetHost)) {
+                    view.stopLoading()
+                    routeOut(view, u)
+                }
+            }
+            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                handler.post { closePopupWindow() }
+                return true
+            }
+        }
+        popup.webChromeClient = object : WebChromeClient() {
+            override fun onCloseWindow(window: WebView) {
+                handler.post { closePopupWindow() }
+            }
+        }
+        rootLayout.addView(popup)
+        popupWebView = popup
+        transport.webView = popup
+        resultMsg.sendToTarget()
+        return true
+    }
+
+    private fun closePopupWindow() {
+        val popup = popupWebView ?: return
+        popupWebView = null
+        try {
+            (popup.parent as? ViewGroup)?.removeView(popup)
+            popup.stopLoading()
+            popup.destroy()
+        } catch (_: Exception) {}
+        // A finished sign-in changed the cookies; the opener re-reads them.
+        cookieManager.flush()
+    }
+
+    private fun openInBrowser(url: Uri) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE))
+        } catch (e: Exception) {
+            Log.w("SuperDeepSeek", "No app to open $url", e)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Downloads started by the page (links with download, attachment responses)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun handleWebDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
+        val name = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType)
+        when {
+            url.startsWith("blob:") || url.startsWith("data:") -> {
+                // Only the page can read its own blob: URLs; it hands the bytes to
+                // the bridge's (background) download writer.
+                val js = "(function(){fetch(${org.json.JSONObject.quote(url)}).then(function(r){return r.blob()})" +
+                    ".then(function(b){return new Promise(function(ok,no){var f=new FileReader();f.onload=function(){ok([f.result,b.type])};f.onerror=no;f.readAsDataURL(b)})})" +
+                    ".then(function(v){var d=String(v[0]);AndroidBridge.downloadBlob(d.slice(d.indexOf(',')+1),v[1]||${org.json.JSONObject.quote(mimeType ?: "application/octet-stream")},${org.json.JSONObject.quote(name)})})" +
+                    ".catch(function(e){console.error('[SD] download failed',e)})})();"
+                officialWebView.evaluateJavascript(js, null)
+            }
+            url.startsWith("http://") || url.startsWith("https://") -> {
+                try {
+                    val request = android.app.DownloadManager.Request(Uri.parse(url)).apply {
+                        setMimeType(mimeType)
+                        cookieManager.getCookie(url)?.let { addRequestHeader("Cookie", it) }
+                        userAgent?.let { addRequestHeader("User-Agent", it) }
+                        setTitle(name)
+                        setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                    }
+                    (getSystemService(DOWNLOAD_SERVICE) as android.app.DownloadManager).enqueue(request)
+                    android.widget.Toast.makeText(this, getString(R.string.bds_download_started, name), android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.w("SuperDeepSeek", "DownloadManager refused $url", e)
+                    openInBrowser(Uri.parse(url))
+                }
+            }
+            else -> Log.w("SuperDeepSeek", "Unsupported download URL scheme: ${url.take(16)}")
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderer loss
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private fun recoverFromRendererLoss(view: WebView) {
+        if (view !== officialWebView) {
+            (view.parent as? ViewGroup)?.removeView(view)
+            view.destroy()
+            return
+        }
+        try {
+            (view.parent as? ViewGroup)?.removeView(view)
+            view.destroy()
+        } catch (_: Exception) {}
+        if (!RendererCrashGuard.shouldRecover(android.os.SystemClock.elapsedRealtime())) {
+            // Crash-looping: do not spin forever.
+            finish()
+            return
+        }
+        recreate()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Shares, shortcuts and deep links → the page
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private val pendingPageActions = ArrayList<String>()
+    private var engineInjected = false
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        val request = parseIncomingIntent(intent) ?: return
+        // A recreated Activity must not replay the same share.
+        intent?.action = null
+        intent?.removeExtra(EXTRA_BDS_ACTION)
+        when (request) {
+            is IncomingRequest.Shortcut -> deliverPageAction(buildShortcutActionJson(request.action))
+            is IncomingRequest.DeepLink -> deliverPageAction(buildDeepLinkActionJson(request.url))
+            is IncomingRequest.Share -> {
+                if (request.streams.isEmpty()) {
+                    deliverPageAction(buildShareActionJson(request.text, emptyList(), emptyList()))
+                    return
+                }
+                // Reading (and sniffing) shared files is I/O: off the main thread.
+                val streams = request.streams.take(MAX_SHARED_FILES)
+                val overflow = request.streams.drop(MAX_SHARED_FILES)
+                Thread {
+                    val files = ArrayList<PickedFile>()
+                    val skipped = ArrayList<SkippedFile>()
+                    for (uri in streams) {
+                        when (val r = try {
+                            bridge.readPickedContentUri(uri, acceptImages = true)
+                        } catch (t: Throwable) {
+                            Log.w("SuperDeepSeek", "Shared file unreadable", t)
+                            PickedItemResult.Skipped(uri.lastPathSegment ?: "file", "unreadable")
+                        }) {
+                            is PickedItemResult.Ok -> files.add(r.file)
+                            is PickedItemResult.Skipped -> skipped.add(SkippedFile(r.name, r.reason))
+                        }
+                    }
+                    overflow.forEach { skipped.add(SkippedFile(it.lastPathSegment ?: "file", "file-cap-exceeded")) }
+                    val json = buildShareActionJson(request.text, files, skipped)
+                    runOnUiThread { deliverPageAction(json) }
+                }.start()
+            }
+        }
+    }
+
+    private fun deliverPageAction(actionJson: String) {
+        if (!engineInjected || !::officialWebView.isInitialized) {
+            pendingPageActions.add(actionJson)
+            return
+        }
+        officialWebView.evaluateJavascript(buildPageActionScript(actionJson), null)
+    }
+
+    private fun flushPendingPageActions() {
+        engineInjected = true
+        if (pendingPageActions.isEmpty()) return
+        val queued = ArrayList(pendingPageActions)
+        pendingPageActions.clear()
+        queued.forEach { officialWebView.evaluateJavascript(buildPageActionScript(it), null) }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // In-app updates (UpdateChecker was written but never called)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private val updateChecker by lazy { UpdateChecker(applicationContext) }
+
+    private fun maybeCheckForUpdate() {
+        val checker = updateChecker
+        if (!checker.isAutoCheckDue()) return
+        Thread {
+            val installed = try {
+                @Suppress("DEPRECATION")
+                val info = packageManager.getPackageInfo(packageName, 0)
+                InstalledApp(info.versionName, info.lastUpdateTime, BuildConfig.BUILD_ID)
+            } catch (_: Exception) { return@Thread }
+            val result = checker.check(installed)
+            checker.markChecked()
+            if (result is UpdateCheckResult.Available) {
+                runOnUiThread { if (!isFinishing && !isDestroyed) showUpdateDialog(result.info, installed) }
+            }
+        }.start()
+    }
+
+    private fun showUpdateDialog(info: UpdateInfo, installed: InstalledApp) {
+        val message = if (info.channel == UpdateChannel.BETA && info.versionName == installed.versionName) {
+            getString(R.string.bds_update_message_beta, installed.versionName ?: "?")
+        } else {
+            getString(R.string.bds_update_message, info.versionName, installed.versionName ?: "?")
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.bds_update_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.bds_update_download) { _, _ -> downloadAndInstallUpdate(info) }
+            .setNegativeButton(R.string.bds_update_later) { _, _ -> updateChecker.rememberDeclined(info.digest) }
+            .show()
+    }
+
+    private fun downloadAndInstallUpdate(info: UpdateInfo) {
+        if (android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            android.widget.Toast.makeText(this, R.string.bds_update_need_permission, android.widget.Toast.LENGTH_LONG).show()
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")))
+            } catch (_: Exception) {}
+            return
+        }
+        android.widget.Toast.makeText(this, R.string.bds_update_downloading, android.widget.Toast.LENGTH_SHORT).show()
+        val target = File(File(cacheDir, "updates").apply { mkdirs() }, "update.apk")
+        Thread {
+            val failure = updateChecker.downloadApk(info, target)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (failure != null) {
+                    android.widget.Toast.makeText(this, getString(R.string.bds_update_download_failed, failure), android.widget.Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", target)
+                    startActivity(Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, "application/vnd.android.package-archive")
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Exception) {
+                    Log.w("SuperDeepSeek", "Installer launch failed", e)
+                    android.widget.Toast.makeText(this, R.string.bds_update_install_failed, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 }

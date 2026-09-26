@@ -13,4 +13,5 @@
     <string name="bds_update_download_failed">İndirme başarısız (%1$s).</string>
     <string name="bds_update_need_permission">Super DeepSeek için bilinmeyen uygulama kurma iznini verin, sonra tekrar deneyin.</string>
     <string name="bds_update_install_failed">Paket yükleyici açılamadı.</string>
+    <string name="bds_download_started">%1$s indiriliyor…</string>
 </resources>

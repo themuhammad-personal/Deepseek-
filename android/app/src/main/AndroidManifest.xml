@@ -70,25 +70,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Android System Share Target: Direct Share for Text and Links -->
+            <!-- Share target: text, links and files of any type (one or many).
+                 Handled by MainActivity.handleIncomingIntent → sd-native.js. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
+                <data android:mimeType="*/*" />
             </intent-filter>
-
-            <!-- Android System Share Target: Direct Share for Single Image -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
-            </intent-filter>
-
-            <!-- Android System Share Target: Direct Share for Multiple Images -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="image/*" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- "Ask Super DeepSeek" in the text-selection menu of other apps. -->
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
 
             <!-- Deep-link handler: opens chat.deepseek.com URLs in the

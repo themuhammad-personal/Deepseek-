@@ -13,4 +13,5 @@
     <string name="bds_update_download_failed">Не удалось скачать (%1$s).</string>
     <string name="bds_update_need_permission">Разрешите установку из неизвестных источников для Super DeepSeek и повторите попытку.</string>
     <string name="bds_update_install_failed">Не удалось открыть установщик пакетов.</string>
+    <string name="bds_download_started">Загрузка %1$s…</string>
 </resources>

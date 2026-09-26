@@ -51,6 +51,7 @@ jobs:
         run: |
           npm run typecheck
           npm run test:app
+          npm run test:engine
         env:
           NODE_OPTIONS: --max-old-space-size=4096
       - name: Build React App for Android (SPA with hidden WebView + native bridge)
