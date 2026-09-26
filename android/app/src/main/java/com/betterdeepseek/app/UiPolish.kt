@@ -5,20 +5,21 @@ package com.betterdeepseek.app
  *
  * The engine (bundled better-deepseek fork) is shipped, not rebuilt, so its UI
  * is shaped here — the same way the original extension build is themed via
- * CSS. Four jobs:
+ * CSS. Three jobs:
  *
  *  1. **Hide out-of-scope feature entries** (voice, Deep Code) — the exact row
  *     or collapsible section only. NEVER an ancestor container: the settings
  *     drawer groups many unrelated rows into one card, so hiding a group would
  *     wipe unrelated settings along with the hidden feature.
  *  2. **Remove dead chrome** (upstream GitHub footer, tip strip, desktop-only
- *     category nav, the Deep Code row inside the "+" sheet).
- *  3. **Trim the "+" attach sheet**: DeepThink and Web Search already have
- *     their own composer chips, so their sheet rows are redundant — hide them
- *     by title text, scoped to the sheet only (settings entries with the same
- *     words must survive).
- *  4. **Repair raw i18n keys** the bundled locale data misses (e.g.
+ *     category nav, settings search bars).
+ *  3. **Repair raw i18n keys** the bundled locale data misses (e.g.
  *     "SETTINGS.ABOUT" shown verbatim) with locale-aware labels.
+ *
+ * The "+" attach sheet is NOT shaped here: its card set (no Commands /
+ * DeepThink / Web Search / Deep Code) is defined directly in the engine
+ * bundle (`bds-assets/bds/content.js`, component `Lut`), so no DOM sweep is
+ * needed and there is no flash of removed cards on open.
  *
  * Everything here is a pure function of strings so the rules are unit-testable
  * without a WebView (matches the repo's test convention).
@@ -60,7 +61,6 @@ internal object UiPolish {
         ".bds-tip-bar", // rotating tip strip — clutter
         ".bds-github-link", // footer link to the upstream repo
         ".bds-deep-code-mount", // composer toggle of an excluded feature
-        "[data-testid=\"attach-menu-deep-code\"]", // its row inside the "+" sheet
         ".bds-category-nav", // desktop-only settings nav strip
         // Both settings search bars (user request): the drawer-top
         // "Search settings…" bar and the advanced-settings
@@ -69,24 +69,7 @@ internal object UiPolish {
         ".bds-advanced-search-wrapper",
     )
 
-    // ── 3. "+" attach sheet rows hidden (redundant with composer chips) ──
-
-    /**
-     * Attach-sheet items whose title matches any of these are hidden. DeepThink
-     * and Web Search already live as chips in the composer, so the sheet rows
-     * only add noise. Scoped to [ATTACH_ITEM_SELECTOR] — the settings sections
-     * that share these words are NOT touched by this list.
-     */
-    val ATTACH_HIDDEN_TEXT_PATTERNS: List<Regex> = listOf(
-        Regex("Deep\\s*Think", RegexOption.IGNORE_CASE),
-        Regex("Web\\s*Search", RegexOption.IGNORE_CASE),
-        Regex("ডিপথিঙ্ক"),
-        Regex("ডিপ\\s*থিঙ্ক"),
-        Regex("ওয়েব\\s*সার্চ"),
-    )
-    internal const val ATTACH_ITEM_SELECTOR = ".bds-attach-dropdown .bds-attach-item"
-
-    // ── 4. Raw i18n keys repaired with real labels ───────────────────────
+    // ── 3. Raw i18n keys repaired with real labels ───────────────────────
 
     /** Raw key → (english label, bangla label). Exact textContent match only. */
     val LABEL_FIXES: Map<String, Pair<String, String>> = mapOf(
@@ -96,9 +79,6 @@ internal object UiPolish {
 
     internal fun shouldHideText(text: String): Boolean =
         HIDDEN_TEXT_PATTERNS.any { it.containsMatchIn(text) }
-
-    internal fun shouldHideAttachItem(text: String): Boolean =
-        ATTACH_HIDDEN_TEXT_PATTERNS.any { it.containsMatchIn(text) }
 
     /**
      * Minimal JSON string escaping for embedding the patterns into the injected
@@ -139,12 +119,10 @@ internal object UiPolish {
      * Contract (pinned by [UiPolishTest]):
      *  - a matched settings row hides ITSELF (plus a collapsible's content
      *    wrapper) — never an ancestor group;
-     *  - attach-sheet rows are matched only inside `.bds-attach-dropdown`;
      *  - label repairs replace exact raw keys only.
      */
     fun buildScript(): String {
         val sweepRe = regexArray(HIDDEN_TEXT_PATTERNS)
-        val attachRe = regexArray(ATTACH_HIDDEN_TEXT_PATTERNS)
         /* jsonEscape supplies the surrounding quotes AND escapes inner ones —
            the template must NOT wrap $deadSel in quotes again (double-wrap
            produced var SEL=""…" → SyntaxError → the whole injected script
@@ -158,10 +136,8 @@ internal object UiPolish {
             (function(){
               if(window.__bdsUiPolished)return;window.__bdsUiPolished=true;
               var RE=$sweepRe;
-              var ARE=$attachRe;
               var SEL=$deadSel;
               var SWEEP=$sweepSel;
-              var ATTACH="$ATTACH_ITEM_SELECTOR";
               var BN=(navigator.language||"").toLowerCase().indexOf("bn")===0;
               var FIX={$labelFixes};
               function sweepText(root){
@@ -177,20 +153,6 @@ internal object UiPolish {
                       }
                       break;
                     }
-                  }
-                }
-              }
-              function sweepAttach(root){
-                var items=root.querySelectorAll(ATTACH);
-                for(var a=0;a<items.length;a++){
-                  var tx=items[a].textContent||"";
-                  for(var b=0;b<ARE.length;b++){
-                    /* Node removal, not display:none: the two cards
-                       (Web Search Mode / DeepThink) must be GONE from the
-                       sheet DOM, per product decision. If Svelte re-creates
-                       them on the next open, the observer sweep removes
-                       them again. */
-                    if(ARE[b].test(tx)){items[a].remove();break;}
                   }
                 }
               }
@@ -212,12 +174,12 @@ internal object UiPolish {
                 }
               }
               function sweep(root){
-                sweepDead(root);sweepText(root);sweepAttach(root);fixLabels(root);
+                sweepDead(root);sweepText(root);fixLabels(root);
               }
               sweep(document);
               /* Svelte intro transitions can clear inline styles right after
                  mount, so every mutation gets a second, later sweep too. A
-                 capture-phase pointerdown sweep covers sheets whose items are
+                 capture-phase pointerdown sweep covers drawers whose rows are
                  inserted within the same frame as the tap. */
               var pend=false;
               function scheduleSweep(delay){

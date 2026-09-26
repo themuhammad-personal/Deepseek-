@@ -37,40 +37,9 @@ class UiPolishTest {
         assertFalse(UiPolish.shouldHideText("মেমোরি লাইব্রেরি"))
         assertFalse(UiPolish.shouldHideText("Deep Research"))
         assertFalse(UiPolish.shouldHideText("Show timestamps"))
-        // Web Search keeps its SETTINGS section — the sheet row is what goes.
+        // Web Search and DeepThink keep their SETTINGS sections.
         assertFalse(UiPolish.shouldHideText("Web Search"))
-    }
-
-    // ── Attach sheet rules (scoped!) ─────────────────────────────────────
-
-    @Test
-    fun `attach sheet rows for deepthink and web search are hidden`() {
-        // Exact titles as the engine's Tools & Actions sheet renders them.
-        assertTrue(UiPolish.shouldHideAttachItem("DeepThink (R1)"))
-        assertTrue(UiPolish.shouldHideAttachItem("Web Search Mode"))
-        assertTrue(UiPolish.shouldHideAttachItem("DeepThink"))
-        assertTrue(UiPolish.shouldHideAttachItem("Deep Think"))
-        assertTrue(UiPolish.shouldHideAttachItem("Web Search"))
-        assertTrue(UiPolish.shouldHideAttachItem("ডিপথিঙ্ক"))
-        assertTrue(UiPolish.shouldHideAttachItem("ওয়েব সার্চ মোড"))
-    }
-
-    @Test
-    fun `attach sheet keeps upload and fetch rows`() {
-        assertFalse(UiPolish.shouldHideAttachItem("Upload File"))
-        assertFalse(UiPolish.shouldHideAttachItem("Upload Folder"))
-        assertFalse(UiPolish.shouldHideAttachItem("GitHub Repo"))
-        assertFalse(UiPolish.shouldHideAttachItem("Fetch Web Page"))
-        assertFalse(UiPolish.shouldHideAttachItem("ওয়েব পেজ ফেচ"))
-        assertFalse(UiPolish.shouldHideAttachItem("Camera"))
-    }
-
-    @Test
-    fun `attach rule is scoped to the sheet selector only`() {
-        assertEquals(
-            ".bds-attach-dropdown .bds-attach-item",
-            UiPolish.ATTACH_ITEM_SELECTOR,
-        )
+        assertFalse(UiPolish.shouldHideText("DeepThink"))
     }
 
     // ── Label repairs ────────────────────────────────────────────────────
@@ -115,19 +84,21 @@ class UiPolishTest {
     }
 
     @Test
-    fun `script scopes attach hiding to the sheet`() {
+    fun `the plus sheet is left to the engine bundle`() {
+        // The "+" sheet's card set is defined in the bundle itself; a DOM
+        // sweep over it would only cause a flash of removed cards on open.
         val script = UiPolish.buildScript()
-        assertTrue(script.contains(UiPolish.ATTACH_ITEM_SELECTOR))
+        assertFalse(script.contains("bds-attach-dropdown"))
+        assertFalse(script.contains("bds-attach-item"))
+        assertFalse(script.contains("attach-menu-deep-code"))
     }
 
     @Test
-    fun `sheet cards and dead chrome are removed from the DOM, not just hidden`() {
-        // Product decision: the Web Search / DeepThink cards and the search
-        // bars must be GONE (node removal), not merely display:none.
+    fun `dead chrome is removed from the DOM, not just hidden`() {
+        // Product decision: the search bars etc. must be GONE (node removal),
+        // not merely display:none.
         val script = UiPolish.buildScript()
-        assertTrue("attach sweep must remove nodes", script.contains("items[a].remove()"))
         assertTrue("dead sweep must remove nodes", script.contains("dead[k].remove()"))
-        assertFalse(script.contains("items[a].style.display"))
         assertFalse(script.contains("dead[k].style.display"))
     }
 
@@ -180,8 +151,6 @@ class UiPolishTest {
         val script = UiPolish.buildScript()
         assertTrue(script.contains("ভয়েস মোড"))
         assertTrue(script.contains("ডিপ কোড"))
-        // \s inside a pattern survives as \\s in the JSON-escaped JS string
-        assertTrue(script.contains("Deep\\\\s*Think"))
         // Ignore-case flag is present because some rules are case-insensitive
         assertTrue(script.contains("new RegExp(p,\"i\")"))
     }
@@ -213,7 +182,6 @@ class UiPolishTest {
                 ".bds-tip-bar",
                 ".bds-github-link",
                 ".bds-deep-code-mount",
-                "[data-testid=\"attach-menu-deep-code\"]",
                 ".bds-category-nav",
                 ".bds-drawer-search-bar",
                 ".bds-advanced-search-wrapper",
@@ -221,8 +189,7 @@ class UiPolishTest {
             UiPolish.HIDDEN_SELECTORS,
         )
         UiPolish.HIDDEN_SELECTORS.forEach { selector ->
-            val insideEngineNs = selector.startsWith(".bds-") ||
-                selector.startsWith("[data-testid=\"attach-")
+            val insideEngineNs = selector.startsWith(".bds-")
             assertTrue("selector must stay inside the engine namespace: $selector", insideEngineNs)
         }
     }

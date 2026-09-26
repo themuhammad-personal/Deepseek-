@@ -120,7 +120,12 @@ internal fun classifyPickedFile(
     return PickedItemResult.Ok(PickedFile(name, content))
 }
 
-internal fun compressImageIfNeeded(bytes: ByteArray, maxDim: Int = 2048, quality: Int = 85): ByteArray {
+internal fun compressImageIfNeeded(
+        bytes: ByteArray,
+        maxDim: Int = 2048,
+        quality: Int = 85,
+        forceJpeg: Boolean = false,
+): ByteArray {
     try {
         val options = android.graphics.BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -131,7 +136,7 @@ internal fun compressImageIfNeeded(bytes: ByteArray, maxDim: Int = 2048, quality
 
         if (origWidth <= 0 || origHeight <= 0) return bytes
 
-        if (origWidth <= maxDim && origHeight <= maxDim && bytes.size < 1_500_000) {
+        if (!forceJpeg && origWidth <= maxDim && origHeight <= maxDim && bytes.size < 1_500_000) {
             return bytes
         }
 
@@ -159,8 +164,9 @@ internal fun encodePickedImage(
         name: String,
         bytes: ByteArray,
         capBytes: Long = WebViewBridge.MAX_PICKED_IMAGE_SIZE,
+        forceJpeg: Boolean = false,
 ): PickedItemResult {
-    val processedBytes = compressImageIfNeeded(bytes)
+    val processedBytes = compressImageIfNeeded(bytes, forceJpeg = forceJpeg)
     if (processedBytes.size.toLong() > capBytes) {
         return PickedItemResult.Skipped(name, "too-large")
     }
@@ -172,6 +178,20 @@ internal fun encodePickedImage(
                     mime = mimeForImageName(name),
             )
     )
+}
+
+/**
+ * Gallery/camera URIs don't always carry a supported image extension
+ * (`media/1234`, `IMG_1.heic`). When the provider reports an image MIME type,
+ * returns the name to deliver it under plus whether it must be re-encoded to
+ * JPEG (formats the chat can't take, e.g. HEIC/AVIF). Null when not an image.
+ */
+internal fun imagePickNameForMime(name: String, mime: String?): Pair<String, Boolean>? {
+    val type = mime?.lowercase()?.substringBefore(';')?.trim() ?: return null
+    if (!type.startsWith("image/")) return null
+    val base = name.substringBeforeLast('.', name).ifBlank { "image" }
+    val ext = WebViewBridge.IMAGE_MIME_TYPES.entries.firstOrNull { it.value == type }?.key
+    return if (ext != null) "$base.$ext" to false else "$base.jpg" to true
 }
 
 internal fun mimeForImageName(name: String): String {
@@ -384,7 +404,7 @@ class WebViewBridge(
 
         val safeMode =
                 when (mode) {
-                    "images", "folder", "folder+images", "files+images" -> mode
+                    "camera", "images", "folder", "folder+images", "files+images" -> mode
                     else -> "files"
                 }
         val handler = onPickFiles
@@ -471,6 +491,13 @@ class WebViewBridge(
                 return PickedItemResult.Skipped(name, "image-requires-vision")
             }
             return readPickedImageUri(uri, name)
+        }
+
+        if (acceptImages && !hasDocumentFileExtension(name) && !hasTextFileExtension(name)) {
+            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+            imagePickNameForMime(name, mime)?.let { (imageName, forceJpeg) ->
+                return readPickedImageUri(uri, imageName, forceJpeg)
+            }
         }
 
         if (hasDocumentFileExtension(name)) {
@@ -622,7 +649,7 @@ class WebViewBridge(
         return classifyPickedFile(relPath, length, content, requireKnownExtension = true)
     }
 
-    private fun readPickedImageUri(uri: Uri, name: String): PickedItemResult {
+    private fun readPickedImageUri(uri: Uri, name: String, forceJpeg: Boolean = false): PickedItemResult {
         val length = runCatching { getContentLength(uri) }.getOrDefault(-1L)
         if (length > MAX_PICKED_IMAGE_SIZE) {
             return PickedItemResult.Skipped(name, "too-large")
@@ -643,7 +670,7 @@ class WebViewBridge(
         return if (bytes == null) {
             PickedItemResult.Skipped(name, "unreadable")
         } else {
-            encodePickedImage(name, bytes)
+            encodePickedImage(name, bytes, forceJpeg = forceJpeg)
         }
     }
 

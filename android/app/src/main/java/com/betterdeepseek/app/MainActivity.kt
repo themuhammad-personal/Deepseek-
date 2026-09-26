@@ -24,6 +24,7 @@ import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.FrameLayout
 import android.provider.MediaStore
@@ -121,6 +122,55 @@ internal fun buildFileChooserIntent(acceptTypes: Array<String>?, allowMultiple: 
     }
 }
 
+/** Which Android picker serves an engine `AndroidBridge.pickFiles(mode)` request. */
+internal enum class NativePickKind { CAMERA, PHOTOS, FOLDER, FILES }
+
+/** Most photos the gallery picker hands back in one go. */
+internal const val MAX_GALLERY_PICK = 10
+
+/**
+ * Maps the engine's pick modes onto pickers. "files+images" is still the
+ * generic file picker — the suffix only means picked images are accepted.
+ * Unknown modes fall back to the generic file picker.
+ */
+internal fun nativePickKind(mode: String): NativePickKind = when {
+    mode == "camera" -> NativePickKind.CAMERA
+    mode == "images" -> NativePickKind.PHOTOS
+    mode.startsWith("folder") -> NativePickKind.FOLDER
+    else -> NativePickKind.FILES
+}
+
+/** Whether picked images should be delivered (as images) for this mode. */
+internal fun nativePickAcceptsImages(mode: String): Boolean =
+    mode == "camera" || mode.contains("images")
+
+/** ACTION_IMAGE_CAPTURE writing the full-size photo to [output] (a FileProvider URI). */
+internal fun buildCameraIntent(output: Uri): Intent =
+    Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+        putExtra(MediaStore.EXTRA_OUTPUT, output)
+        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+/**
+ * Gallery picker for devices without the system Photo Picker: ACTION_PICK on
+ * MediaStore images opens a gallery app, not the Files/Documents browser.
+ */
+internal fun buildGalleryFallbackIntent(): Intent =
+    Intent(Intent.ACTION_PICK).apply {
+        setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*")
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+    }
+
+/** Every URI a picker returned (multi-select clipData and/or single data), de-duplicated. */
+internal fun parsePickedUris(data: Intent?): List<Uri> {
+    val uris = linkedSetOf<Uri>()
+    data?.clipData?.let { clip ->
+        for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
+    }
+    data?.data?.let { uris.add(it) }
+    return uris.toList()
+}
+
 internal fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>? {
     if (resultCode != Activity.RESULT_OK) return null
     val uris = linkedSetOf<Uri>()
@@ -199,7 +249,7 @@ class MainActivity : ComponentActivity() {
             val file = File(cacheDir, "capture-${System.currentTimeMillis()}.jpg")
             val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
             cameraPhotoUri = uri
-            Intent(MediaStore.ACTION_IMAGE_CAPTURE).putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            buildCameraIntent(uri)
         } catch (t: Throwable) {
             Log.e("SuperDeepSeek", "Camera intent failed", t)
             cameraPhotoUri = null
@@ -219,49 +269,54 @@ class MainActivity : ComponentActivity() {
     /** Engine native-pick request waiting for [nativePickLauncher]: id to mode. */
     private var nativePickRequest: Pair<String, String>? = null
 
+    /** Where the camera writes the photo for a native "camera" pick (FileProvider URI). */
+    private var nativeCameraUri: Uri? = null
+
     /**
      * The engine (injected into the official DeepSeek page) asks the native
      * side to pick files (`AndroidBridge.pickFiles(mode, requestId)`) and waits
-     * for a CustomEvent delivered back INTO THE SAME WebView. Without this
-     * launcher every native pick died with "picker-launch-failed", which is why
-     * camera/file/folder uploads looked broken.
+     * for CustomEvents delivered back INTO THE SAME WebView: status "opened"
+     * once the picker is up, status "reading" while files are read, then the
+     * chunked result. The engine rejects any other status phase as a malformed
+     * payload, so these exact phases matter.
+     *
+     * Files are read off the main thread — a large pick must not freeze the UI.
      */
     private val nativePickLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val request = nativePickRequest
             nativePickRequest = null
+            val cameraUri = nativeCameraUri
+            nativeCameraUri = null
             if (request == null) return@registerForActivityResult
             val (requestId, mode) = request
-            if (result.resultCode != Activity.RESULT_OK || result.data == null) {
+            if (result.resultCode != Activity.RESULT_OK) {
                 bridge.deliverPickError(requestId, "cancelled")
                 return@registerForActivityResult
             }
-            try {
-                val data = result.data
-                if (mode.startsWith("folder")) {
-                    val tree = data?.data
-                    if (tree == null) {
-                        bridge.deliverPickError(requestId, "cancelled")
-                        return@registerForActivityResult
+            val kind = nativePickKind(mode)
+            val data = result.data
+            val folder = if (kind == NativePickKind.FOLDER) data?.data else null
+            // ACTION_IMAGE_CAPTURE returns no data intent: the photo is at EXTRA_OUTPUT.
+            val uris = if (kind == NativePickKind.CAMERA) listOfNotNull(cameraUri) else parsePickedUris(data)
+            if (folder == null && uris.isEmpty()) {
+                bridge.deliverPickError(requestId, "cancelled")
+                return@registerForActivityResult
+            }
+            if (folder != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(folder, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            bridge.deliverPickStatus(requestId, "reading")
+            val acceptImages = nativePickAcceptsImages(mode)
+            Thread {
+                try {
+                    if (folder != null) {
+                        val read = bridge.readPickedFolderTree(folder, acceptImages)
+                        bridge.deliverPickedFiles(requestId, read.files, read.skipped, read.folderName)
+                        return@Thread
                     }
-                    runCatching {
-                        contentResolver.takePersistableUriPermission(
-                            tree, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                        )
-                    }
-                    val read = bridge.readPickedFolderTree(tree, mode.contains("images"))
-                    bridge.deliverPickedFiles(requestId, read.files, read.skipped, read.folderName)
-                } else {
-                    val uris = linkedSetOf<Uri>()
-                    data?.clipData?.let { clip ->
-                        for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) }
-                    }
-                    data?.data?.let { uris.add(it) }
-                    if (uris.isEmpty()) {
-                        bridge.deliverPickError(requestId, "cancelled")
-                        return@registerForActivityResult
-                    }
-                    val acceptImages = mode.contains("images")
                     val files = ArrayList<PickedFile>()
                     val skipped = ArrayList<SkippedFile>()
                     for (uri in uris) {
@@ -272,12 +327,43 @@ class MainActivity : ComponentActivity() {
                     }
                     if (files.isEmpty()) bridge.deliverPickError(requestId, "no-readable-files")
                     else bridge.deliverPickedFiles(requestId, files, skipped, null)
+                } catch (t: Throwable) {
+                    Log.e("SuperDeepSeek", "Native pick handling failed", t)
+                    bridge.deliverPickError(requestId, "read-failed")
                 }
-            } catch (t: Throwable) {
-                Log.e("SuperDeepSeek", "Native pick handling failed", t)
-                bridge.deliverPickError(requestId, "read-failed")
+            }.start()
+        }
+
+    /**
+     * Builds the picker for one engine pick mode (see [nativePickKind]):
+     *  - camera → the camera app directly (photo lands in our cache via FileProvider);
+     *  - images → the gallery: the system Photo Picker where available, otherwise
+     *    ACTION_PICK on MediaStore images (a gallery app, never the Files browser);
+     *  - folder → the document-tree picker;
+     *  - files  → the generic "any file" document picker.
+     */
+    private fun buildNativePickIntent(mode: String): Intent = when (nativePickKind(mode)) {
+        NativePickKind.CAMERA -> {
+            val file = File(cacheDir, "capture-${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+            nativeCameraUri = uri
+            buildCameraIntent(uri)
+        }
+        NativePickKind.PHOTOS -> {
+            if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(this)) {
+                ActivityResultContracts.PickMultipleVisualMedia(MAX_GALLERY_PICK).createIntent(
+                    this,
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            } else {
+                buildGalleryFallbackIntent()
             }
         }
+        NativePickKind.FOLDER -> Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        NativePickKind.FILES -> buildFileChooserIntent(null, true)
+    }
 
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -532,23 +618,14 @@ class MainActivity : ComponentActivity() {
         bridge.onPickFiles = { mode, requestId ->
             handler.post {
                 try {
-                    val intent: Intent = when {
-                        mode.startsWith("folder") -> Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        mode.contains("images") -> Intent(Intent.ACTION_GET_CONTENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                        }
-                        else -> buildFileChooserIntent(null, true)
-                    }
                     nativePickRequest = requestId to mode
-                    nativePickLauncher.launch(intent)
-                    bridge.deliverPickStatus(requestId, "launched")
+                    nativePickLauncher.launch(buildNativePickIntent(mode))
+                    // "opened" is the phase the engine expects once a picker is up.
+                    bridge.deliverPickStatus(requestId, "opened")
                 } catch (t: Throwable) {
                     Log.e("SuperDeepSeek", "Native pick launch failed", t)
                     nativePickRequest = null
+                    nativeCameraUri = null
                     bridge.deliverPickError(requestId, "picker-launch-failed")
                 }
             }

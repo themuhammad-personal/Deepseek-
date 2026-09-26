@@ -167,6 +167,36 @@ class WebViewBridgePickerTest {
     }
 
     @Test
+    fun `pickFiles passes the camera mode through to the native picker`() {
+        var capturedMode: String? = null
+        bridge.onPickFiles = { mode, _ -> capturedMode = mode }
+
+        bridge.pickFiles("camera", "req-cam")
+
+        assertEquals("camera", capturedMode)
+    }
+
+    @Test
+    fun `imagePickNameForMime keeps supported image types under a matching extension`() {
+        assertEquals("1000123.jpg" to false, imagePickNameForMime("1000123", "image/jpeg"))
+        assertEquals("shot.png" to false, imagePickNameForMime("shot", "image/png"))
+        assertEquals("anim.webp" to false, imagePickNameForMime("anim.bin", "IMAGE/WEBP"))
+    }
+
+    @Test
+    fun `imagePickNameForMime transcodes unsupported image types to jpeg`() {
+        assertEquals("IMG_0001.jpg" to true, imagePickNameForMime("IMG_0001.heic", "image/heic"))
+        assertEquals("image.jpg" to true, imagePickNameForMime("", "image/avif"))
+    }
+
+    @Test
+    fun `imagePickNameForMime ignores non-image and unknown types`() {
+        assertNull(imagePickNameForMime("notes", "text/plain"))
+        assertNull(imagePickNameForMime("report", "application/pdf"))
+        assertNull(imagePickNameForMime("mystery", null))
+    }
+
+    @Test
     fun `encodePickedImage encodes an image under the cap as base64 with mime`() {
         val bytes = byteArrayOf(0x01, 0x02, 0x03, 0x04)
 
