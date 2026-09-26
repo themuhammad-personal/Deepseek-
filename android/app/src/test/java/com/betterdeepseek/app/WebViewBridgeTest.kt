@@ -104,6 +104,23 @@ class WebViewBridgeTest {
         verify(prefsEditor).apply()
     }
 
+    @Test
+    fun `a foreign page gets no storage, fetch or sandbox`() {
+        `when`(prefs.getString("k", null)).thenReturn("secret")
+        bridge.trustedPage = false
+
+        assertNull(bridge.getStorage("k"))
+        bridge.setStorage("k", "v")
+        bridge.removeStorage("k")
+        verify(prefsEditor, never()).putString(any(), any())
+        verify(prefsEditor, never()).remove(any())
+        val reply = JSONObject(bridge.fetch("""{"type":"bds-mcp-call","serverUrl":"sandbox","toolName":"run","args":{}}"""))
+        assertFalse(reply.getBoolean("ok"))
+
+        bridge.trustedPage = true
+        assertEquals("secret", bridge.getStorage("k"))
+    }
+
     // ── asset URL ───────────────────────────────────────────────────────
 
     @Test

@@ -1,5 +1,12 @@
 package com.betterdeepseek.app
 
+/** Pages that may use `window.AndroidBridge`: DeepSeek's chat over https. */
+internal fun isTrustedBridgeUrl(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+    return uri.scheme == "https" && uri.host == "chat.deepseek.com" && uri.rawUserInfo == null
+}
+
 /** Which page URLs may be reopened after a renderer crash or process restore. */
 internal object ChatUrls {
     private val CONVERSATION = Regex("^/a/chat/s/[A-Za-z0-9-]{1,80}/?$")

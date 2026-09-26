@@ -436,6 +436,7 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun pickFiles(mode: String?, requestId: String?) {
+        if (!trustedPage) return
         val safeId =
                 requestId
                         ?.let(::sanitizePickRequestId)
@@ -863,18 +864,21 @@ class WebViewBridge(
 
     @JavascriptInterface
     fun getStorage(key: String?): String? {
+        if (!trustedPage) return null
         if (key.isNullOrEmpty()) return null
         return prefs.getString(key, null)
     }
 
     @JavascriptInterface
     fun setStorage(key: String?, value: String?) {
+        if (!trustedPage) return
         if (key.isNullOrEmpty()) return
         prefs.edit().putString(key, value ?: "").apply()
     }
 
     @JavascriptInterface
     fun removeStorage(key: String?) {
+        if (!trustedPage) return
         if (key.isNullOrEmpty()) return
         prefs.edit().remove(key).apply()
     }
@@ -904,6 +908,7 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun downloadBlob(base64: String?, mimeType: String?, fileName: String?) {
+        if (!trustedPage) return
         val payload = base64?.takeIf { it.isNotEmpty() }
         if (payload == null) {
             Log.w(TAG, "downloadBlob: empty payload, ignoring (name=$fileName)")
@@ -1128,6 +1133,7 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun fetchAsync(payloadJson: String?, callbackId: String?) {
+        if (!trustedPage) return
         val id = sanitizeCallbackId(callbackId)
         if (id.isEmpty()) return
         // Sandbox commands can run for many minutes: give them their own
@@ -1138,6 +1144,13 @@ class WebViewBridge(
             postScript(buildBridgeReplyScript(id, result, blobs))
         }
     }
+
+    /**
+     * False while the WebView shows a page other than chat.deepseek.com (set by
+     * the activity on every main-frame load). Storage, files, fetch/MCP and the
+     * sandbox then refuse to serve it.
+     */
+    @Volatile var trustedPage: Boolean = true
 
     // ── Linux sandbox (built-in MCP server "sandbox") ────────────────────────
 
@@ -1152,6 +1165,7 @@ class WebViewBridge(
 
     @JavascriptInterface
     fun openStudio() {
+        if (!trustedPage) return
         onOpenStudio?.invoke()
     }
 
@@ -1185,6 +1199,7 @@ class WebViewBridge(
     /** The page's agent loop started/finished: keeps the app protected for the whole task. */
     @JavascriptInterface
     fun sandboxAgentActive(active: Boolean) {
+        if (!trustedPage) return
         runCatching { SandboxService.onAgentActiveChanged(context, active) }
     }
 
@@ -1227,6 +1242,7 @@ class WebViewBridge(
      */
     @JavascriptInterface
     fun fetch(payloadJson: String?): String {
+        if (!trustedPage) return UNTRUSTED_REPLY
         val response = JSONObject()
         try {
             val payload = JSONObject(payloadJson ?: "{}")
@@ -2377,6 +2393,7 @@ class WebViewBridge(
         // Shared with UpdateChecker, which keeps the update channel and the dismissed-build
         // digest alongside the JS storage keys.
         internal const val PREFS_NAME = "bds_storage"
+        private const val UNTRUSTED_REPLY = "{\"ok\":false,\"error\":\"Not available on this page.\"}"
         /** "0" turns the Linux sandbox off (default on). Shared with the page via get/setStorage. */
         internal const val KEY_SANDBOX_ENABLED = "sd_sandbox_enabled"
         /** "auto" runs the agent's sandbox commands directly; "ask" confirms each one. */

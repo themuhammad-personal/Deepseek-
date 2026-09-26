@@ -29,4 +29,15 @@ class ChatUrlsTest {
             "javascript:alert(1)",
         ).forEach { assertNull(it, ChatUrls.restorable(it)) }
     }
+
+    @Test
+    fun onlyTheDeepSeekChatMayUseTheBridge() {
+        org.junit.Assert.assertTrue(isTrustedBridgeUrl("https://chat.deepseek.com/"))
+        org.junit.Assert.assertTrue(isTrustedBridgeUrl("https://chat.deepseek.com/a/chat/s/abc?x=1"))
+        listOf(
+            null, "", "about:blank", "http://chat.deepseek.com/",
+            "https://chat.deepseek.com.evil.example/", "https://evil.example/?chat.deepseek.com",
+            "https://user@chat.deepseek.com/", "https://accounts.google.com/",
+        ).forEach { org.junit.Assert.assertFalse(it.toString(), isTrustedBridgeUrl(it)) }
+    }
 }

@@ -586,6 +586,13 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                     return true
                 }
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    // The bridge (storage, files, MCP keys, the Linux sandbox) only
+                    // serves the DeepSeek page — never a foreign page this WebView
+                    // may be redirected to.
+                    bridge.trustedPage = isTrustedBridgeUrl(url)
+                }
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     Log.d("SuperDeepSeek", "Official WebView loaded: $url")
