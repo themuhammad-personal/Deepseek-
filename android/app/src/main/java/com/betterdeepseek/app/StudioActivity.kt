@@ -634,8 +634,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         val guest = (if (cwd == "/") "" else cwd) + "/" + f.name
         if (f.isDirectory) { loadDir(guest); return }
         val bytes = runCatching { f.inputStream().use { s -> val b = ByteArray(minOf(f.length(), 256 * 1024L).toInt()); var r = 0; while (r < b.size) { val n = s.read(b, r, b.size - r); if (n < 0) break; r += n }; b.copyOf(r) } }.getOrNull()
-        val binary = bytes == null || bytes.take(4096).any { it.toInt() == 0 }
-        val body: View = if (binary) {
+        val body: View = if (bytes == null || bytes.take(4096).any { it.toInt() == 0 }) {
             label(t("Binary file · ${humanSize(f.length())}", "বাইনারি ফাইল · ${humanSize(f.length())}"), 14f, cMuted).apply { setPadding(dp(20), dp(16), dp(20), dp(8)) }
         } else {
             val text = String(bytes, Charsets.UTF_8) + if (f.length() > bytes.size) "\n\n[… ${t("truncated", "কাটা হয়েছে")} …]" else ""
