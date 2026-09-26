@@ -529,6 +529,43 @@ class WebViewBridge(
         mainHandler.post { evaluateJs?.invoke(script) }
     }
 
+    /**
+     * Reads several picked URIs, a few at a time (image compression and
+     * content sniffing are the slow parts), keeping the pick order.
+     */
+    internal fun readPickedContentUris(uris: List<Uri>, acceptImages: Boolean): Pair<List<PickedFile>, List<SkippedFile>> {
+        val results = arrayOfNulls<PickedItemResult>(uris.size)
+        if (uris.size <= 1) {
+            uris.forEachIndexed { i, uri -> results[i] = readPickedContentUriSafely(uri, acceptImages) }
+        } else {
+            val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(PICK_READ_PARALLELISM, uris.size))
+            try {
+                val futures = uris.map { uri -> pool.submit<PickedItemResult> { readPickedContentUriSafely(uri, acceptImages) } }
+                futures.forEachIndexed { i, f -> results[i] = f.get() }
+            } finally {
+                pool.shutdown()
+            }
+        }
+        val files = ArrayList<PickedFile>()
+        val skipped = ArrayList<SkippedFile>()
+        for (r in results) {
+            when (r) {
+                is PickedItemResult.Ok -> files.add(r.file)
+                is PickedItemResult.Skipped -> skipped.add(SkippedFile(r.name, r.reason))
+                null -> {}
+            }
+        }
+        return files to skipped
+    }
+
+    private fun readPickedContentUriSafely(uri: Uri, acceptImages: Boolean): PickedItemResult =
+            try {
+                readPickedContentUri(uri, acceptImages)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Picked file unreadable: $uri", t)
+                PickedItemResult.Skipped(uri.lastPathSegment?.substringAfterLast('/') ?: "file", "unreadable")
+            }
+
     internal fun readPickedContentUri(uri: Uri, acceptImages: Boolean = false): PickedItemResult {
         val name = resolvePickedDisplayName(uri)
         if (hasImageFileExtension(name)) {
@@ -2283,6 +2320,9 @@ class WebViewBridge(
          * DeepSeek's own per-file upload limit. Streamed, so never held in memory.
          */
         internal const val MAX_PICKED_BLOB_SIZE = 100L * 1024 * 1024
+
+        /** Picked files read concurrently (see readPickedContentUris). */
+        internal const val PICK_READ_PARALLELISM = 3
 
         /** Page/API bodies returned by bds-fetch-url are cut here (flagged truncated). */
         internal const val MAX_FETCH_BODY_BYTES = 16L * 1024 * 1024

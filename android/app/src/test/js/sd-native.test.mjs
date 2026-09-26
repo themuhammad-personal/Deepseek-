@@ -161,3 +161,15 @@ test('loads once per document', () => {
   vm.runInContext(SRC, win);
   assert.equal(win.__sdNative, first);
 });
+
+test('skip messages name the files and the reasons', () => {
+  const { win } = load();
+  const msg = win.__sdSkipMessage([
+    { name: 'dir/big.iso', reason: 'too-large' },
+    { name: 'x.bin', reason: 'unreadable' },
+  ], 3);
+  assert.equal(msg, 'Not attached (2/5): big.iso — over the size limit; x.bin — could not be read');
+  const many = win.__sdSkipMessage([1, 2, 3, 4, 5].map((n) => ({ name: n + '.zip', reason: 'weird' })), 0);
+  assert.match(many, /^Not attached: 1\.zip — weird; 2\.zip — weird; 3\.zip — weird \(\+2\)$/);
+  assert.equal(win.__sdSkipMessage([], 1), '');
+});

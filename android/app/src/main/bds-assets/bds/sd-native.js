@@ -297,11 +297,35 @@
     });
   }
 
-  function skippedMessage(skipped) {
+  var REASONS = {
+    'too-large': ['over the size limit', 'আকার সীমার বেশি'],
+    'unreadable': ['could not be read', 'পড়া যায়নি'],
+    'binary': ['not a text file', 'টেক্সট ফাইল নয়'],
+    'unsupported-type': ['unsupported type', 'অসমর্থিত ধরন'],
+    'image-requires-vision': ['images need a vision model', 'ছবির জন্য ভিশন মডেল দরকার'],
+    'image-cap-exceeded': ['too many images', 'অনেক বেশি ছবি'],
+    'file-cap-exceeded': ['too many files', 'অনেক বেশি ফাইল'],
+  };
+
+  function reasonText(reason) {
+    var r = REASONS[reason];
+    return r ? t(r[0], r[1]) : String(reason || '');
+  }
+
+  /**
+   * One line saying which files were not attached and why, e.g.
+   * "Not attached (2 of 5): big.iso — over the size limit; x.bin — could not be read".
+   */
+  function skippedMessage(skipped, attachedCount) {
     if (!skipped || skipped.length === 0) return '';
-    var names = skipped.slice(0, 3).map(function (s) { return s.name; }).join(', ');
-    var more = skipped.length > 3 ? ' +' + (skipped.length - 3) : '';
-    return t('Not attached: ', 'সংযুক্ত হয়নি: ') + names + more;
+    var shown = skipped.slice(0, 3).map(function (s) {
+      var name = String(s.name || 'file').split('/').pop();
+      return name + ' — ' + reasonText(s.reason);
+    }).join('; ');
+    var more = skipped.length > 3 ? ' (+' + (skipped.length - 3) + ')' : '';
+    var count = typeof attachedCount === 'number' && attachedCount > 0
+      ? ' (' + skipped.length + '/' + (skipped.length + attachedCount) + ')' : '';
+    return t('Not attached', 'সংযুক্ত হয়নি') + count + ': ' + shown + more;
   }
 
   function receiveShare(action) {
@@ -324,7 +348,7 @@
         });
         if (files.length && !attachFiles(files)) toast(t('Could not attach the shared files.', 'শেয়ার করা ফাইল সংযুক্ত করা যায়নি।'));
         if (text) setComposerText(text);
-        var msg = skippedMessage(res.skipped);
+        var msg = skippedMessage(res.skipped, files.length);
         if (msg) toast(msg);
       });
   }
@@ -374,6 +398,7 @@
   window.__sdAdaptUpload = adaptUpload;
   window.__sdBridgeFetch = bridgeFetch;
   window.__sdBridgeReply = bridgeReply;
+  window.__sdSkipMessage = skippedMessage;
   window.__sdNative = {
     version: 1,
     receive: receive,

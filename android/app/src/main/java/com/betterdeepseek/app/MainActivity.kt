@@ -359,15 +359,9 @@ class MainActivity : ComponentActivity() {
                         bridge.deliverPickedFiles(requestId, read.files, read.skipped, read.folderName)
                         return@Thread
                     }
-                    val files = ArrayList<PickedFile>()
-                    val skipped = ArrayList<SkippedFile>()
-                    for (uri in uris) {
-                        when (val picked = bridge.readPickedContentUri(uri, acceptImages)) {
-                            is PickedItemResult.Ok -> files.add(picked.file)
-                            is PickedItemResult.Skipped -> skipped.add(SkippedFile(picked.name, picked.reason))
-                        }
-                    }
-                    if (files.isEmpty()) bridge.deliverPickError(requestId, "no-readable-files")
+                    val (files, skipped) = bridge.readPickedContentUris(uris, acceptImages)
+                    // All skipped: still a result, so the page can say why (too large…).
+                    if (files.isEmpty() && skipped.isEmpty()) bridge.deliverPickError(requestId, "no-readable-files")
                     else bridge.deliverPickedFiles(requestId, files, skipped, null)
                 } catch (t: Throwable) {
                     Log.e("SuperDeepSeek", "Native pick handling failed", t)
@@ -1501,19 +1495,8 @@ class MainActivity : ComponentActivity() {
                 val streams = request.streams.take(MAX_SHARED_FILES)
                 val overflow = request.streams.drop(MAX_SHARED_FILES)
                 Thread {
-                    val files = ArrayList<PickedFile>()
-                    val skipped = ArrayList<SkippedFile>()
-                    for (uri in streams) {
-                        when (val r = try {
-                            bridge.readPickedContentUri(uri, acceptImages = true)
-                        } catch (t: Throwable) {
-                            Log.w("SuperDeepSeek", "Shared file unreadable", t)
-                            PickedItemResult.Skipped(uri.lastPathSegment ?: "file", "unreadable")
-                        }) {
-                            is PickedItemResult.Ok -> files.add(r.file)
-                            is PickedItemResult.Skipped -> skipped.add(SkippedFile(r.name, r.reason))
-                        }
-                    }
+                    val (files, readSkipped) = bridge.readPickedContentUris(streams, acceptImages = true)
+                    val skipped = ArrayList(readSkipped)
                     overflow.forEach { skipped.add(SkippedFile(it.lastPathSegment ?: "file", "file-cap-exceeded")) }
                     val json = buildShareActionJson(request.text, files, skipped)
                     runOnUiThread { deliverPageAction(json) }
