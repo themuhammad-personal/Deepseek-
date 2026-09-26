@@ -3,12 +3,16 @@ package com.betterdeepseek.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -61,13 +65,35 @@ internal fun parseRgb(raw: String?): Int? {
     return (0xFF shl 24) or (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
 }
 
-/** True when dark system-bar icons are the readable choice on [color]. */
-internal fun isLightColor(color: Int): Boolean {
+/**
+ * The colour covering the largest share of [pixels] (ARGB), or null when no
+ * single colour reaches [minShare]. Used on a thin strip of the rendered page:
+ * the page background wins even when a few icon or text pixels cross it.
+ */
+internal fun dominantColor(pixels: IntArray, minShare: Float = 0.4f): Int? {
+    if (pixels.isEmpty()) return null
+    val counts = HashMap<Int, Int>()
+    var best = 0
+    var bestCount = 0
+    for (px in pixels) {
+        val c = px or (0xFF shl 24)
+        val n = (counts[c] ?: 0) + 1
+        counts[c] = n
+        if (n > bestCount) { best = c; bestCount = n }
+    }
+    return if (bestCount >= pixels.size * minShare) best else null
+}
+
+/** Perceived brightness of [color], 0 (black) to 255 (white). */
+internal fun perceivedLuminance(color: Int): Double {
     val r = (color shr 16) and 0xFF
     val g = (color shr 8) and 0xFF
     val b = color and 0xFF
-    return 0.299 * r + 0.587 * g + 0.114 * b > 150.0
+    return 0.299 * r + 0.587 * g + 0.114 * b
 }
+
+/** True when dark system-bar icons are the readable choice on [color]. */
+internal fun isLightColor(color: Int): Boolean = perceivedLuminance(color) > 150.0
 
 internal fun shouldOpenExternally(url: Uri, assetHost: String = "bds-asset.local"): Boolean {
     val scheme = url.scheme?.lowercase() ?: return false
@@ -410,8 +436,15 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { false }
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        pageBarColor = storedDarkPageColor()
+        pageNavBarColor = pageBarColor
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
+        // No system scrim over the bars: their colour is exactly the page's.
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
 
         cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
@@ -489,6 +522,7 @@ class MainActivity : ComponentActivity() {
                         pageFinishedAt = android.os.SystemClock.uptimeMillis()
                         startReadyPoll()
                         syncSystemBarsWithPage()
+                        if (bootView == null) scheduleBarRefresh(BAR_REFRESH_THEME_MS)
                     }
                 }
             }
@@ -677,9 +711,9 @@ class MainActivity : ComponentActivity() {
         // bars at once, then sample the exact page colour after the switch paints.
         bridge.onThemeChanged = { isDark ->
             runOnUiThread {
-                applyPageBarColor(if (isDark) PAGE_DARK_FALLBACK else Color.WHITE)
-                handler.postDelayed({ syncSystemBarsWithPage() }, 150L)
-                handler.postDelayed({ syncSystemBarsWithPage() }, 700L)
+                applyPageBarColor(if (isDark) storedDarkPageColor() else Color.WHITE)
+                mayRememberDarkColor = isDark
+                scheduleBarRefresh(BAR_REFRESH_THEME_MS)
             }
         }
         showNativeBootOverlay()
@@ -693,6 +727,8 @@ class MainActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                // Back may close a sheet or drawer without any touch: re-measure the bars.
+                if (bootView == null) scheduleBarRefresh(BAR_REFRESH_TOUCH_MS)
                 if (isReactVisible) {
                     reactWebView.evaluateJavascript("(function(){ var btn=document.querySelector('#bds-close, .bds-sheet-close'); if(btn&&btn.offsetParent!==null){btn.click(); return true;} return false;})()") { result ->
                         if (result != "true" && result != "\"true\"") {
@@ -855,8 +891,21 @@ class MainActivity : ComponentActivity() {
         const val BOOT_NO_POLISH_GRACE_MS = 3_000L
         /** Let the engine's first layout settle before revealing the page. */
         const val BOOT_SETTLE_MS = 450L
-        /** Dark fallback for the bars until the page colour has been sampled. */
-        const val PAGE_DARK_FALLBACK = 0xFF292A2D.toInt()
+        /**
+         * The chat's dark background until it has been measured on this device
+         * (then [storedDarkPageColor] remembers the real value). Matches
+         * @color/bds_splash_bg so the splash hand-off is seamless.
+         */
+        const val PAGE_DARK_DEFAULT = 0xFF1E1F23.toInt()
+        const val UI_PREFS = "sd_ui"
+        const val PREF_DARK_PAGE_COLOR = "dark_page_color"
+        /** Only clearly dark colours are remembered as the chat's dark background. */
+        const val DARK_PAGE_MAX_LUMINANCE = 70.0
+        /** Re-measure the bars after a theme switch has painted (and settled). */
+        val BAR_REFRESH_THEME_MS = longArrayOf(220L, 800L)
+        /** Re-measure after a touch: drawers, sheets and navigation change the page. */
+        val BAR_REFRESH_TOUCH_MS = longArrayOf(420L, 1000L)
+        val BAR_REFRESH_RESUME_MS = longArrayOf(300L, 900L)
 
         /** "1" once the enhanced chat (or the sign-in form) is actually on screen. */
         val READY_PROBE_JS = """
@@ -911,7 +960,14 @@ class MainActivity : ComponentActivity() {
                 android.graphics.BitmapFactory.Options().apply { inScaled = false },
             )
         }.getOrNull()
-        val view = BootScreenView(this, getString(R.string.bds_boot_title), brandFont, icon).apply {
+        val view = BootScreenView(
+            this,
+            getString(R.string.bds_boot_title),
+            brandFont,
+            icon,
+            baseColor = storedDarkPageColor(),
+            splashColor = runCatching { getColor(R.color.bds_splash_bg) }.getOrDefault(PAGE_DARK_DEFAULT),
+        ).apply {
             // Swallow touches so nothing reaches the page underneath.
             isClickable = true
             isFocusable = true
@@ -919,7 +975,12 @@ class MainActivity : ComponentActivity() {
         view.onExitFinished = {
             (view.parent as? ViewGroup)?.removeView(view)
             bootView = null
-            applySystemBarIcons(pageBarColor)
+            // The page is fully visible now: paint the bars and measure the exact
+            // on-screen colours.
+            applyBarColors(pageBarColor, pageNavBarColor)
+            mayRememberDarkColor = true
+            refreshBarColors()
+            handler.postDelayed(barRefreshLate, 700L)
         }
         bootView = view
         findViewById<ViewGroup>(android.R.id.content).addView(
@@ -927,7 +988,7 @@ class MainActivity : ComponentActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
-        applySystemBarIcons(0xFF070A1C.toInt()) // light icons over the dark launch scene
+        applySystemBarIcons(PAGE_DARK_DEFAULT, PAGE_DARK_DEFAULT) // light icons over the dark scene
         handler.postDelayed({ forceDismissBoot() }, BOOT_FORCE_DISMISS_MS)
         Log.d("SuperDeepSeek", "Launch screen shown")
     }
@@ -984,7 +1045,7 @@ class MainActivity : ComponentActivity() {
         bootDismissed = true
         val view = bootView
         if (view == null) {
-            applySystemBarIcons(pageBarColor)
+            applyBarColors(pageBarColor, pageNavBarColor)
             return
         }
         view.finish()
@@ -995,26 +1056,150 @@ class MainActivity : ComponentActivity() {
     // status and navigation bars take the page's own background colour, and
     // the bar icons turn dark on light pages. The WebView itself stays inside
     // the safe area, so the page header never slides under the status bar.
+    //
+    // The colour is MEASURED on screen (PixelCopy of a thin strip at the top and
+    // bottom edge of the page), not read from CSS: DeepSeek paints its header
+    // with gradient fade bands and layered surfaces, so computed styles can be
+    // a shade off. While the launch screen is up, a CSS estimate is used.
     // ─────────────────────────────────────────────────────────────────────────
 
-    private var pageBarColor = PAGE_DARK_FALLBACK
+    private val uiPrefs by lazy { getSharedPreferences(UI_PREFS, MODE_PRIVATE) }
 
-    private fun applyPageBarColor(color: Int) {
-        pageBarColor = color
-        if (::rootLayout.isInitialized) rootLayout.setBackgroundColor(color)
-        if (::officialWebView.isInitialized) officialWebView.setBackgroundColor(color)
-        if (bootView == null) applySystemBarIcons(color)
+    /** The chat's dark background as last measured on this device. */
+    private fun storedDarkPageColor(): Int =
+        runCatching { uiPrefs.getInt(PREF_DARK_PAGE_COLOR, PAGE_DARK_DEFAULT) }.getOrDefault(PAGE_DARK_DEFAULT)
+
+    /**
+     * Set only at trustworthy moments (fresh page right after the launch screen,
+     * or just after a switch to dark), cleared by the next touch: a sheet's dim
+     * scrim must never be remembered as the page colour.
+     */
+    private var mayRememberDarkColor = false
+
+    private fun rememberDarkPageColor(color: Int) {
+        if (!mayRememberDarkColor || perceivedLuminance(color) > DARK_PAGE_MAX_LUMINANCE) return
+        if (color == storedDarkPageColor()) return
+        runCatching { uiPrefs.edit().putInt(PREF_DARK_PAGE_COLOR, color).apply() }
+    }
+
+    private var pageBarColor = PAGE_DARK_DEFAULT
+    private var pageNavBarColor = PAGE_DARK_DEFAULT
+
+    /** One colour for both bars (CSS estimate or theme-switch guess). */
+    private fun applyPageBarColor(color: Int) = applyBarColors(color, color)
+
+    private fun applyBarColors(top: Int, bottom: Int) {
+        pageBarColor = top
+        pageNavBarColor = bottom
+        if (::rootLayout.isInitialized) rootLayout.setBackgroundColor(top)
+        if (::officialWebView.isInitialized) officialWebView.setBackgroundColor(top)
+        // While the launch screen is up the bars stay transparent over its scene.
+        if (bootView != null) return
+        window.statusBarColor = top
+        window.navigationBarColor = bottom
+        applySystemBarIcons(top, bottom)
     }
 
     /** Dark bar icons on light backgrounds, light icons on dark ones. */
-    private fun applySystemBarIcons(background: Int) {
-        val light = isLightColor(background)
+    private fun applySystemBarIcons(top: Int, bottom: Int) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = light
-        controller.isAppearanceLightNavigationBars = light
+        controller.isAppearanceLightStatusBars = isLightColor(top)
+        controller.isAppearanceLightNavigationBars = isLightColor(bottom)
     }
 
-    /** Samples the page's real background colour and applies it to the bars. */
+    /** Best available measurement: on-screen pixels, or the CSS estimate. */
+    private fun refreshBarColors() {
+        if (bootView == null && sampleBarsFromScreen()) return
+        syncSystemBarsWithPage()
+    }
+
+    private val barRefresh = Runnable { refreshBarColors() }
+    private val barRefreshLate = Runnable { refreshBarColors() }
+
+    /** Debounced re-measure at the given delays (earlier pending ones are replaced). */
+    private fun scheduleBarRefresh(delays: LongArray) {
+        handler.removeCallbacks(barRefresh)
+        handler.removeCallbacks(barRefreshLate)
+        handler.postDelayed(barRefresh, delays[0])
+        if (delays.size > 1) handler.postDelayed(barRefreshLate, delays[1])
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        val handled = super.dispatchTouchEvent(ev)
+        val action = ev.actionMasked
+        if (action == MotionEvent.ACTION_DOWN) mayRememberDarkColor = false
+        if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && bootView == null) {
+            scheduleBarRefresh(BAR_REFRESH_TOUCH_MS)
+        }
+        return handled
+    }
+
+    private var barSampleBusy = false
+    private var stripTop: Bitmap? = null
+    private var stripBottom: Bitmap? = null
+
+    /**
+     * Copies a thin strip just inside the top and the bottom edge of the page
+     * from the window surface and applies the dominant colour of each.
+     * Returns false when the page area cannot be measured right now.
+     */
+    private fun sampleBarsFromScreen(): Boolean {
+        if (!::rootLayout.isInitialized || !rootLayout.isAttachedToWindow) return false
+        if (barSampleBusy) return true
+        val loc = IntArray(2)
+        rootLayout.getLocationInWindow(loc)
+        val left = loc[0] + rootLayout.paddingLeft
+        val right = loc[0] + rootLayout.width - rootLayout.paddingRight
+        val pageTop = loc[1] + rootLayout.paddingTop
+        val pageBottom = loc[1] + rootLayout.height - rootLayout.paddingBottom
+        val density = resources.displayMetrics.density
+        val strip = maxOf(1, Math.round(2f * density))
+        val gap = maxOf(1, Math.round(1f * density))
+        val width = right - left
+        if (width <= 0 || pageBottom - pageTop <= 4 * (strip + gap)) return false
+
+        val top = reuseStrip(stripTop, width, strip).also { stripTop = it }
+        val bottom = reuseStrip(stripBottom, width, strip).also { stripBottom = it }
+        val topRect = Rect(left, pageTop + gap, right, pageTop + gap + strip)
+        val bottomRect = Rect(left, pageBottom - gap - strip, right, pageBottom - gap)
+        barSampleBusy = true
+        try {
+            PixelCopy.request(window, topRect, top, { topResult ->
+                if (topResult != PixelCopy.SUCCESS || isFinishing || isDestroyed) {
+                    barSampleBusy = false
+                    return@request
+                }
+                PixelCopy.request(window, bottomRect, bottom, { bottomResult ->
+                    barSampleBusy = false
+                    if (isFinishing || isDestroyed || bootView != null) return@request
+                    val topColor = dominantColor(pixelsOf(top))
+                    val bottomColor = if (bottomResult == PixelCopy.SUCCESS) dominantColor(pixelsOf(bottom)) else null
+                    if (topColor == null && bottomColor == null) return@request
+                    val t = topColor ?: pageBarColor
+                    val b = bottomColor ?: t
+                    if (t != pageBarColor || b != pageNavBarColor) applyBarColors(t, b)
+                    rememberDarkPageColor(t)
+                }, handler)
+            }, handler)
+        } catch (e: IllegalArgumentException) {
+            // Window not ready for a copy (e.g. no surface yet).
+            barSampleBusy = false
+            return false
+        }
+        return true
+    }
+
+    private fun reuseStrip(current: Bitmap?, width: Int, height: Int): Bitmap =
+        if (current != null && !current.isRecycled && current.width == width && current.height == height) current
+        else Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+    private fun pixelsOf(bitmap: Bitmap): IntArray {
+        val px = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(px, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        return px
+    }
+
+    /** CSS estimate of the page colour (used while the launch screen covers the page). */
     private fun syncSystemBarsWithPage() {
         if (!::officialWebView.isInitialized) return
         officialWebView.evaluateJavascript(PAGE_BG_PROBE_JS) { result ->
@@ -1108,7 +1293,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         cookieManager.flush()
         // The page may have switched theme while we were in the background.
-        if (bootView == null && ::officialWebView.isInitialized) syncSystemBarsWithPage()
+        if (bootView == null && ::rootLayout.isInitialized) scheduleBarRefresh(BAR_REFRESH_RESUME_MS)
     }
 
     override fun onPause() {

@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Launch palette. The system splash and the window share the top colour of
-      the launch screen (BootScreenView.BG_TOP), so "tap icon → splash → launch
-      animation" has no white flash and no colour jump. launcher_background is
-      the adaptive-icon backdrop and is independent of this.
+      Launch palette. The system splash and the window use the chat's default
+      dark background (MainActivity.PAGE_DARK_DEFAULT), so "tap icon → splash →
+      launch screen" has no white flash and no colour jump. Once the real chat
+      colour has been measured on the device, the launch screen eases into it.
+      launcher_background is the adaptive-icon backdrop.
     -->
     <color name="launcher_background">#1E1F23</color>
-    <color name="bds_splash_bg">#070A1C</color>
-    <color name="bds_window_bg">#070A1C</color>
+    <color name="bds_splash_bg">#1E1F23</color>
+    <color name="bds_window_bg">#1E1F23</color>
     <color name="bds_accent">#4D6BFE</color>
     <color name="bds_electric">#00E5FF</color>
 </resources>

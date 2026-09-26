@@ -73,11 +73,15 @@ re-injects it.
 
 ## Launch screen
 
-`BootScreenView` is a single native view drawn on the Canvas: an aurora background,
-the app icon with a spinning gradient ring, the Sora wordmark (per-letter reveal with a
-flowing colour gradient) and a slim progress bar. It is timed from its own frame clock,
-so it plays even when the user has turned system animations off. The system splash
-hands over on the first frame (same background colour, icon in the same place).
+`BootScreenView` is a single native view drawn on the Canvas, in the chat's own dark
+palette: the page's dark background colour (measured on an earlier run and remembered,
+see below) with a soft vignette, a slow star field and an occasional faint shooting star,
+the app icon with a faint brand-blue glow, and the Sora wordmark. The wordmark **is the
+progress indicator**: its letters rise in dim, then fill with light from left to right
+while the page loads, with a soft blue glow on the moving edge. The fill approaches 92%
+and waits; it only completes when the page is ready. It is timed from its own frame
+clock, so it plays even when the user has turned system animations off. The system
+splash hands over on the first frame (same colour, icon in the same place).
 
 The screen is released only when the enhanced page is really on screen, never on a
 timer alone:
@@ -87,8 +91,9 @@ timer alone:
    (`window.__sdHandleBack`) and a visible composer or sign-in field.
 2. The probe must pass **and** `AndroidBridge.onUiPolished()` must have fired, or 3 s must
    have passed since `onPageFinished` if the polish signal never comes.
-3. The progress bar completes and the screen fades out. A minimum intro of 2.2 s keeps a
-   fast (cached) launch from cutting the animation short.
+3. The wordmark fills to the end, a light sweeps across it and the screen fades into
+   the chat. A minimum intro of 2 s keeps a fast (cached) launch from cutting the
+   animation short.
 
 The hard cap is 18 s (`BOOT_FORCE_DISMISS_MS`), so a stalled network can never trap the
 user on the launch screen.
@@ -96,12 +101,25 @@ user on the launch screen.
 ## System bars
 
 The WebView stays inside the safe area (the root layout is padded by the status and
-navigation bar insets), so DeepSeek's header buttons keep their position. The area
-behind the bars is painted with the page's own background colour, sampled from the
-top of the page (`PAGE_BG_PROBE_JS`), and the bar icons switch between light and dark
-for contrast. The engine reports every light/dark switch through
-`AndroidBridge.reportTheme()`; the bars recolour at once and are re-sampled after the
-switch has painted. While the launch screen is up, the bars stay dark with light icons.
+navigation bar insets), so DeepSeek's header buttons keep their position. The strips
+behind the bars take the page's own colour, and the bar icons switch between light and
+dark for contrast.
+
+The colour is **measured on screen**: `PixelCopy` copies a 2 dp strip just inside the
+top and the bottom edge of the page, and the dominant colour of each strip
+(`dominantColor`) becomes the status bar and the navigation bar colour (opaque, with the
+system contrast scrims turned off). Reading computed CSS is not exact enough, because
+DeepSeek paints its header with gradient fade bands and layered surfaces. The bars are
+measured again after every touch (drawers, sheets and navigation change the page),
+after a light/dark switch (`AndroidBridge.reportTheme()`, which also recolours the bars
+at once) and on resume. While the launch screen covers the page, a CSS estimate
+(`PAGE_BG_PROBE_JS`) is used and the bars stay transparent over the launch scene.
+
+The measured dark page colour is stored (`sd_ui` preferences), and the next launch
+screen is built on it, so the launch screen and the chat share exactly the same
+background. It is only stored at trustworthy moments: the fresh page right after the
+launch screen, or just after a switch to dark, and never after a touch (an open sheet's
+dim scrim must not be mistaken for the page colour).
 
 ## Back button
 
