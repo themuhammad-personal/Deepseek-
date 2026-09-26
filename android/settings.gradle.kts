@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BetterDeepSeek"
+rootProject.name = "SuperDeepSeek"
 include(":app")

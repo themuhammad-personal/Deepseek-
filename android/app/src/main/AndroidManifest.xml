@@ -46,7 +46,7 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:theme="@style/Theme.BetterDeepSeek">
+        android:theme="@style/Theme.SuperDeepSeek">
         <!-- configChanges must cover every input-peripheral configuration change.
              MainActivity is a single-WebView host whose onCreate always calls
              loadUrl(bds_target_url), so any unhandled config change destroys and
