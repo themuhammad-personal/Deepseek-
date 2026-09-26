@@ -684,8 +684,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    if (officialWebView.canGoBack()) officialWebView.goBack()
-                    else moveTaskToBack(true)
+                    // Let the engine close its own sheet, dialog or command popup first;
+                    // only navigate the page when nothing of ours was open.
+                    officialWebView.evaluateJavascript("(function(){try{return !!(window.__sdHandleBack&&window.__sdHandleBack());}catch(e){return false;}})()") { result ->
+                        if (result != "true" && result != "\"true\"") {
+                            if (officialWebView.canGoBack()) officialWebView.goBack()
+                            else moveTaskToBack(true)
+                        }
+                    }
                 }
             }
         })

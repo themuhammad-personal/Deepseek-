@@ -75,27 +75,19 @@ jobs:
           set -o pipefail
           ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee /tmp/gradle-unit.log
 
-      - name: Commit unit-test failure diagnostics to the branch
-        # Branch-only debug loop: on a failed unit-test run, drop the full
-        # Gradle log + failing test XML reports into android/ci-debug and push
-        # them to the SAME branch so the failure is inspectable without
-        # Actions-log access. Never fires on main/tag builds.
-        if: failure() && steps.unittests.outcome == 'failure' && github.ref_name == 'arena/01a0cebd-deepseek'
-        working-directory: android
-        run: |
-          mkdir -p ci-debug
-          cp /tmp/gradle-unit.log ci-debug/gradle-unit.log || true
-          tar czf ci-debug/test-results.tgz app/build/test-results/testDebugUnitTest 2>/dev/null || true
-          if [ -f app/build/reports/tests/testDebugUnitTest/index.html ]; then
-            cp -r app/build/reports/tests/testDebugUnitTest ci-debug/html-report
-          fi
-          du -sh ci-debug || true
-          cd ..
-          git config user.name "superdeepseek-ci"
-          git config user.email "actions@users.noreply.github.com"
-          git add -f android/ci-debug
-          git commit -m "chore(ci): unit-test failure diagnostics (run ${{ github.run_number }}) [skip ci]"
-          git push origin "HEAD:${{ github.ref_name }}"
+      - name: Upload unit-test reports on failure
+        # Inspect failures from the run page (Artifacts) instead of committing
+        # generated reports back into the repository.
+        if: failure() && steps.unittests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            /tmp/gradle-unit.log
+            android/app/build/reports/tests/testDebugUnitTest
+            android/app/build/test-results/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Setup Signing Keystore
         working-directory: android
         env:
@@ -183,34 +175,24 @@ jobs:
           tag_name: ${{ steps.rel_cfg.outputs.tag }}
           name: ${{ steps.rel_cfg.outputs.title }}
           body: |
-            ### Super DeepSeek — same-origin DeepSeek client
+            ### Super DeepSeek for Android
 
             **Version:** `${{ steps.rel_cfg.outputs.version }}`
             **Build:** `${{ github.run_number }}`
             **Commit:** `${{ github.sha }}`
 
-            #### What changed in this build
+            The official DeepSeek chat, supercharged: the Super DeepSeek engine runs on
+            top of chat.deepseek.com inside a native Android shell.
 
-            Chat no longer goes through the WebView/Kotlin bridge. The SPA is served
-            from `chat.deepseek.com` itself, so every `/api/v0/...` call is
-            same-origin: no CORS preflight, real cookies, and traffic the API cannot
-            tell apart from the official web app's.
-
-            Only sign-in still uses the native WebView, because `POST /users/login`
-            is the one endpoint behind the AWS WAF JS challenge. The token it
-            produces is verified against `/users/current` before the app trusts it.
-
-            Failures are now reported with their real cause instead of a blanket
-            "DeepSeek is unavailable right now." See `docs/ARCHITECTURE.md` and
-            `docs/DIAGNOSIS-AND-FIX-PLAN.md`.
-
-            #### Features
-            - Official DeepSeek email / phone sign-in, token verified on login
-            - Direct DeepSeek API chat with WASM proof-of-work (DeepSeekHashV1)
-            - DeepThink, web search, Deep Research, RAG, MCP, projects, memories
-            - OLED dark UI, offline queue, artifacts
+            #### Highlights
+            - Slash commands, snippets and a command palette
+            - Memory, personas, system prompts, skills and projects
+            - MCP servers, Deep Research, web fetch, code runners and file tools
+            - Export chats (Markdown, PDF, HTML, image), light and dark themes
+            - Native file / camera picker, downloads, haptics and in-app updates
 
             Install on Android 8.0+ and sign in with your DeepSeek account.
+            Builds are signed with the same key, so each one installs as an update.
           files: |
             *.apk
             *.sha256

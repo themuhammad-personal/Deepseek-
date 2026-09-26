@@ -186,3 +186,6 @@
   .bds-api-builder{min-width:0}
   .bds-api-select{min-width:0;max-width:100%}
 }
+/* Memory "import from other AI" link: hover-only styling was nearly invisible on touch. */
+.bds-memory-import-label{opacity:1!important;color:var(--bds-accent)!important;font-size:12px!important;font-weight:500;min-height:36px;margin:8px 0 2px!important}
+.bds-memory-import-label:active{opacity:.7!important}

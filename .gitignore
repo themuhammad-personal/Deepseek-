@@ -13,3 +13,6 @@ dist-android/
 design-preview/content.css
 design-preview/our-skin.css
 design-preview/runtime-styles.css
+
+# CI failure reports are uploaded as workflow artifacts, never committed
+android/ci-debug/

@@ -1,117 +1,162 @@
-# Super DeepSeek — Android
+<div align="center">
 
-A native-feeling Android client for [DeepSeek](https://chat.deepseek.com) that runs the
-proven **better-deepseek** engine on top of the official site, wrapped in our own design
-frame. Chat, multi-turn memory, MCP tools, skills, memory library and artifacts all work
-exactly as in the reference extension — because they *are* the reference code.
+<img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="104" alt="Super DeepSeek icon" />
 
-> Voice and DeepCode are intentionally excluded. Everything else is ported.
+# Super DeepSeek
+
+**The official DeepSeek chat, supercharged, as a native Android app.**
+
+Slash commands · memory · personas · MCP tools · Deep Research · code runners · one-tap exports
+
+[![Download APK](https://img.shields.io/badge/Download-APK-4d6bfe?style=for-the-badge&logo=android&logoColor=white)](https://github.com/themuhammad-personal/Deepseek-/releases/latest/download/super-deepseek-latest.apk)
+&nbsp;
+[![Latest release](https://img.shields.io/github/v/release/themuhammad-personal/Deepseek-?style=for-the-badge&label=release&color=1f2233)](https://github.com/themuhammad-personal/Deepseek-/releases)
+
+[![Build](https://github.com/themuhammad-personal/Deepseek-/actions/workflows/build-and-release-apk.yml/badge.svg)](https://github.com/themuhammad-personal/Deepseek-/actions/workflows/build-and-release-apk.yml)
+![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84?logo=android&logoColor=white)
+![Languages](https://img.shields.io/badge/UI-6%20languages-8a63d2)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<img src="docs/assets/showcase.jpg" alt="Super DeepSeek screens: advanced settings, slash commands, command help, Bengali UI" width="100%" />
+
+</div>
 
 ---
+
+## Why Super DeepSeek?
+
+Most "DeepSeek clients" re-implement a private API and break whenever it changes.
+Super DeepSeek takes the opposite route: it runs **the real chat.deepseek.com** and adds
+a powerful engine on top of it. Sign-in, models, DeepThink and web search work exactly as
+DeepSeek ships them, and everything else is extra.
+
+| | |
+|---|---|
+| 🧠 **It remembers you** | A memory library, personas and multiple system prompts, applied to every chat automatically. |
+| ⚡ **Type less** | Type `/` for commands and your own snippets. Pick one, add details, send. |
+| 🔌 **Plug in tools** | Connect remote MCP servers, and the AI discovers and calls their tools by itself. |
+| 🔎 **Research deeply** | Multi-step Deep Research with page fetching, source ranking and a context guard. |
+| 📦 **Take it with you** | Export any chat as Markdown, PDF, HTML or an image. Back up and restore all data in one file. |
+| 📱 **Feels native** | Native file and camera picker, downloads, haptics, edge-to-edge layout, light and dark themes. |
+
+## Features
+
+<details open>
+<summary><b>💬 Chat superpowers</b></summary>
+
+- **Slash commands**: `/search`, `/new`, `/export`, `/compress`, `/summarize`, `/help`, plus
+  your own commands mapped to saved snippets
+- **Command palette and help sheet**: tap any command to drop it into the composer
+- **Message queue**: keep typing while DeepSeek is still answering, and it sends when ready
+- **Compress and hand off**: summarise a long chat and continue in a fresh one with full context
+- Collapsible long messages, optional timestamps, chat tags, token cost estimates
+</details>
+
+<details>
+<summary><b>🧠 Personal AI</b></summary>
+
+- **Memory**: facts the AI keeps about you, with import from other assistants
+- **Prompts and personas**: multi-system-prompt mode, characters and reusable skills
+- **Projects**: per-project files and instructions injected when you need them
+- **Language**: answer language and app language (English, বাংলা, فارسی, Русский, Türkçe, 中文)
+</details>
+
+<details>
+<summary><b>🛠️ Tools the AI can use</b></summary>
+
+- **MCP servers** over HTTP / Streamable HTTP, with optional API keys and ready-to-use tool discovery
+- **Deep Research** with DuckDuckGo and Bing, configurable deep fetch and a token budget
+- **Web, GitHub, X/Twitter and YouTube fetching** straight into the conversation
+- **Code runners** for Python (Pyodide), JavaScript, TypeScript, Lua and Ruby, sandboxed
+- **Documents and charts**: generate PowerPoint, Excel and Word files, and interactive charts
+- **API playground** for the DeepSeek developer API, with history and presets
+</details>
+
+<details>
+<summary><b>📱 Native Android shell</b></summary>
+
+- Branded boot animation that hides page loading, with no white flash
+- System file, gallery and camera pickers; downloads land in *Downloads*
+- Haptic feedback and a keyboard-aware layout
+- The **Back** button closes the open sheet, dialog or command popup first, then navigates
+- **In-app updates** from GitHub Releases (stable or beta channel)
+- Every build is signed with the same key, so new versions install as updates
+</details>
+
+## Install
+
+1. Download **[super-deepseek-latest.apk](https://github.com/themuhammad-personal/Deepseek-/releases/latest/download/super-deepseek-latest.apk)** on your phone.
+2. Open it and allow installing from this source when Android asks.
+3. Sign in with your DeepSeek account. That's it.
+
+Requires Android 8.0 (API 26) or newer. The app checks for updates itself; you can
+switch between stable and beta builds in the update dialog.
 
 ## How it works
 
 ```
-┌────────────────────────────────────────────┐
-│  Android WebView  →  https://chat.deepseek.com
-│    └─ onPageStarted  → branded boot splash (no white flash)
-│    └─ onPageFinished → injects the engine:
-│         1. injected.js   (network/bridge patch)
-│         2. content.css   (engine UI)  + our-skin.css (our brand)
-│         3. content.js    (mounts sidebar / drawer / MCP / memory UI)
-│    └─ shouldInterceptRequest → serves bundled assets at bds-asset.local
-└────────────────────────────────────────────┘
+Android app ─▶ WebView: https://chat.deepseek.com (the real site)
+                  └─ on load: inject the Super DeepSeek engine
+                        injected.js  →  network layer (context, tools, memory)
+                        content.css  →  styles
+                        content.js   →  UI: drawer, settings, commands, cards
+               AndroidBridge ⇄ native storage, pickers, downloads, haptics, updates
 ```
 
-- **Engine, not re-implementation.** The official site is the chat surface; the engine
-  bundle (committed under `android/app/src/main/bds-assets/bds/`) provides the features.
-- **Our frame.** `our-skin.css` overrides the engine's `--bds-*` CSS variables and polishes
-  the drawer, settings, buttons, switches, modals and scrollbars to match our brand
-  (accent `#4d6bfe`, 14px radius, OLED-friendly dark palette).
-- **Native shell.** Kotlin `MainActivity`/`WebViewBridge` handle file picking, camera,
-  downloads, keyboard insets, storage and the asset loader.
+Because the chat surface *is* DeepSeek's own site, the app never needs your API key
+and keeps working as DeepSeek evolves. Read the full design in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Features
-
-- DeepSeek sign-in (email / phone) with session restore
-- Multi-turn context that actually remembers (parent-chain protocol)
-- DeepThink (R1), live web search, Deep Research
-- MCP presets + custom servers, tools, skills, memory library
-- File / image / folder upload, camera capture, export
-- Branded boot splash, themed dark UI, animated loading indicator
-- Signed release APK built & published by GitHub Actions
-
-## Native launch (no white flash)
-
-The launch pipeline is a single unbroken brand surface:
-
-```
-tap icon → system splash (warm charcoal, app icon)
-         → window (same charcoal — android:windowBackground)
-         → WebView paints → branded boot overlay (icon + wordmark + spinner)
-         → engine mounts → overlay fades to the app
-```
-
-`MainActivity` holds the system splash on screen until the WebView's **first paint**
-(`splashScreen.setKeepOnScreenCondition`) with a 4 s failsafe, so the old
-"white screen → raw page → UI" three-stage load is gone. All launch colors live in
-`res/values/colors.xml` (`#262624` warm charcoal) and every boot surface shares them.
-
-## Design policy (learned from live testing)
-
-The engine fork's own design — branded drawer, sheets, settings, controls — IS the
-app's design. A custom CSS skin layered on top of it caused patchwork (dark body in
-light mode, mis-tinted official bars, a drawer that no longer fit phone screens), so
-`our-skin.css` is retired (empty). Functional shaping only:
-
-- `UiPolish.kt` hides out-of-scope entries (voice, Deep Code), trims the redundant
-  DeepThink / Web Search rows from the "+" sheet, removes both settings search bars,
-  the upstream GitHub footer, the tip strip, and repairs raw i18n keys — all
-  unit-tested (`UiPolishTest`).
-- Colors are never overridden: the official page keeps its own light/dark palette.
-
-## Engine bundle provenance
-
-The committed bundle (`android/app/src/main/bds-assets/bds/`) is a **patched superset**
-of public upstream (EdgeTypE/better-deepseek v0.1.14): it carries this app's branding,
-android-target hardening and layout fixes, so upstream lags behind it. Do not blind-copy
-an upstream build over it. To check upstream drift:
-
-```bash
-scripts/bds-sync.sh            # build upstream, diff vs committed bundle (dry run)
-scripts/bds-sync.sh --replace  # actually refresh the committed bundle
-```
-
-`injected.js` / `sandbox.js` being byte-identical to upstream means the network core is
-in sync; only `content.js` / `content.css` should ever differ (our patches).
-
-## Build
+## Build from source
 
 ```bash
 npm ci
-npm run typecheck && npm run test:app   # web app checks
-npm run build:android                   # SPA → android/app/src/main/assets
+npm run typecheck && npm run test:app     # workspace checks
+npm run build:android                     # web assets → android/app/src/main/assets
+rm -rf android/app/src/main/assets/bds && \
+  cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds   # stage engine
+cd android && ./gradlew testDebugUnitTest assembleRelease
 ```
 
-The engine bundle is staged into `assets/bds` by CI after the vite build (vite empties the
-assets dir). Then:
+CI (`.github/workflows/build-and-release-apk.yml`) runs the same steps, verifies the APK
+signature and publishes releases. Pushing a `v*` tag creates a versioned release.
 
-```bash
-cd android && ./gradlew assembleRelease
-```
+<details>
+<summary><b>Project layout</b></summary>
 
-## Releases
+| Path | What lives there |
+|---|---|
+| `android/app/src/main/java/…/app/` | Kotlin shell: `MainActivity`, `WebViewBridge`, `UiPolish`, `UpdateChecker` |
+| `android/app/src/main/bds-assets/bds/` | The Super DeepSeek engine bundle (JS / CSS / sandbox) |
+| `android/app/src/test/` | JVM unit tests for the shell |
+| `docs/` | Architecture notes (`archive/` holds the retired SPA design) |
+| `scripts/` | Build helpers, including `bds-sync.sh` (upstream diff, dry run by default) |
+| `src/` | Legacy React SPA, still built into assets but no longer the chat surface |
+</details>
 
-Push to `main` for a continuous build, or tag `v*` for a versioned public release.
-`.github/workflows/build-and-release-apk.yml` runs typecheck + unit tests, builds a signed
-release APK and publishes it to GitHub Releases.
+## Privacy
 
-## Versioning
+Super DeepSeek has no servers and no analytics. Your chats go only to DeepSeek, as in
+the official web app. Memory, prompts, snippets and settings are stored on your device.
+Optional tools such as MCP servers, web fetching and GitHub only contact the services
+you configure.
 
-`package.json`, `android/app/build.gradle.kts` (`versionName`) and the release tag stay in
-sync. `versionCode` is derived from the CI run number so every build is upgradable.
+## Contributing
+
+Issues and pull requests are welcome, especially translations, bug reports with
+screenshots, and new commands or tools.
+[Open an issue →](https://github.com/themuhammad-personal/Deepseek-/issues/new)
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE). Super DeepSeek is an independent project and is not affiliated with
+DeepSeek.
 
+---
+
+<div align="center">
+<sub>
+Thanks to <a href="https://github.com/EdgeTypE/better-deepseek"><b>Better DeepSeek</b></a> by Çağrı DÜRÜ.
+Super DeepSeek's engine began as that open-source extension. 💙
+</sub>
+</div>

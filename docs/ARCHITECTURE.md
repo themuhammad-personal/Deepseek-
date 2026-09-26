@@ -1,93 +1,94 @@
 # Architecture
 
-How a message gets from the composer to DeepSeek, and why it is shaped this way.
-
-## The one rule
-
-**Every DeepSeek API call is a plain same-origin `fetch`.** There is no bridge,
-no callback round trip, and no server of our own on the chat path.
+Super DeepSeek is a native Android shell around the **official** DeepSeek web chat.
+Instead of re-implementing DeepSeek's private API, it loads `chat.deepseek.com` in a
+WebView and injects the Super DeepSeek engine, which adds every feature on top of the
+real page. The protocol, sign-in, anti-bot checks and model behaviour stay exactly
+what DeepSeek ships.
 
 ```
-composer
-  └─ src/lib/send-chat.ts
-       └─ src/lib/deepseek/api.ts
-            ├─ POST /api/v0/chat_session/create
-            ├─ POST /api/v0/chat/create_pow_challenge
-            ├─ solvePow()                      ← src/lib/deepseek/pow-browser.ts + ds/sha3_wasm_bg.wasm
-            └─ POST /api/v0/chat/completion    → SSE, parsed by parse-sse.ts
+┌──────────────────────────── MainActivity ───────────────────────────┐
+│ system splash ─▶ native boot overlay (icon + wordmark animation)    │
+│                                                                     │
+│ officialWebView ──▶ https://chat.deepseek.com/                      │
+│   onPageFinished ─▶ injectBdsScripts():                             │
+│        1. injected.js   network hooks (prompt injection, tool tags) │
+│        2. content.css   engine styles  (style#bds-css)              │
+│        3. content.js    engine UI + logic (Svelte)                  │
+│        4. UiPolish      hides out-of-scope features, signals ready  │
+│   shouldInterceptRequest ─▶ https://bds-asset.local/bds/* from APK  │
+│                                                                     │
+│ AndroidBridge (WebViewBridge) — JS ⇄ native                         │
+│   storage · file/camera picker · downloads · haptics · MCP fetch    │
+│   locale/theme · update checks (UpdateChecker)                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-`/api/v0` is **relative on purpose**. It resolves to the right place in both
-shells without the client knowing where it is running.
+## Layers
 
-## Why same-origin
+| Layer | Where | Responsibility |
+|---|---|---|
+| Native shell | `android/app/src/main/java/com/betterdeepseek/app/` | WebView setup, splash/boot overlay, insets, back handling, file chooser, external links |
+| Bridge | `WebViewBridge.kt` | `window.AndroidBridge`: persistent storage, native pickers, blob downloads, haptics, CORS-free fetch for MCP/web tools |
+| Engine | `android/app/src/main/bds-assets/bds/` | `content.js` (UI + features), `content.css`, `injected.js` (network layer), `sandbox.*` (isolated code runners) |
+| Polish | `UiPolish.kt` | Small, unit-tested DOM sweep: hides voice / Deep Code entries and repairs raw labels |
+| Updates | `UpdateChecker.kt` | Polls this repository's GitHub Releases (stable or beta channel) and installs the signed APK |
 
-DeepSeek does not allow cross-origin API calls:
+The package name `com.betterdeepseek.app` is historical and intentionally unchanged:
+it is the Android application id, and changing it would break updates for every
+installed copy.
 
-| probe | result |
-|---|---|
-| `OPTIONS /api/v0/chat_session/create` | **403** |
-| `POST` response headers | `access-control-allow-credentials: true`, **no `Access-Control-Allow-Origin`** |
+## The engine bundle
 
-So a WebView hosted anywhere else cannot send an `Authorization` header to the
-API. The fix is to stop being a different origin.
+The engine is a patched, pre-built bundle committed to the repo. It began as the
+open-source [better-deepseek](https://github.com/EdgeTypE/better-deepseek) extension and
+now carries this project's own UI, mobile layouts, Bengali translations and fixes, so
+**never overwrite it with an upstream build**. `scripts/bds-sync.sh` can diff it against
+upstream in dry-run mode.
 
-**Android** — `MainActivity` points `WebViewAssetLoader` at `chat.deepseek.com`
-instead of `appassets.androidplatform.net`, so the bundled SPA is served from
-`https://chat.deepseek.com/android-spa.html`. Requests to `/api/v0/*` are then
-same-origin (never preflighted), carry the real cookies, and are
-indistinguishable from the official web app's traffic. The asset loader only
-owns paths it actually has; `/api/*` is explicitly excluded and falls through to
-the network.
+Things inside the bundle that deliberately keep their original names:
 
-**Web (`npm run dev`)** — the Vite dev server proxies `/api/v0` to
-`https://chat.deepseek.com`. Same code, same relative path.
+- the hidden `<BetterDeepSeek>…</BetterDeepSeek>` tag the engine wraps around injected
+  context — it is stored in every existing conversation, so renaming it would break
+  how old chats render;
+- storage keys (`bds_*`) and CSS classes (`bds-*`), so user data survives updates;
+- the third-party DeepSeek Harness *Better DeepSeek Bridge* plugin and its endpoints.
 
-## What still uses the native bridge
+## Slash commands
 
-**Sign-in only.** `POST /api/v0/users/login` is behind an AWS WAF JS challenge
-(`202` + `x-amzn-waf-action: challenge`), which needs a real browser to solve.
-`src/lib/deepseek/client-direct.ts` hands the credentials to the DeepSeek
-WebView and then **verifies the token with `/users/current`** before accepting
-it — a scraped token is never trusted blind.
+Typing `/` in the composer opens the command popup.
 
-Everything else the old bridge did (`dsChatNative`, `requestPowSolve`,
-`onPowSolved`, `onChatChunk`, …) has been removed from the client.
+- Choosing an item only **fills the composer** (`/help `, `/export `…); nothing runs yet.
+- A command runs when it is **sent** — Enter on a keyboard, or the send button, which
+  is intercepted in the capture phase before DeepSeek's own handler.
+- Unknown `/text` is sent to the AI unchanged.
+- `/new` and `/compress` switch chats through DeepSeek's own new-chat control, so the
+  page is never reloaded (a reload would briefly show the un-enhanced official page).
 
-## The proof-of-work contract
+## Page lifecycle
 
-`sha3_wasm_bg.wasm` exports `wasm_solve(retptr, chPtr, chLen, pfxPtr, pfxLen, budget)`.
-Verified by disassembly and by `src/lib/deepseek/pow.test.ts`:
+The engine is injected on every `onPageFinished` of `chat.deepseek.com`. In-app
+navigation (DeepSeek is a single-page app) keeps the engine alive; a full reload
+re-injects it. The native boot overlay stays up until `AndroidBridge.onUiPolished()`
+fires, with a page-finished fallback and a 9 s failsafe.
 
-- `challenge` is **hex**, and is hex-decoded inside the module. A base64 value
-  makes it bail instantly.
-- `difficulty` is an **iteration budget**, not a leading-zero-bit difficulty.
-- The loop compares `SHA3-256(prefix ++ decimal(counter))` against the first 32
-  bytes of the decoded challenge, where `prefix = "${salt}_${expire_at}_"`.
-- `Int32[retptr] === 1` means solved; the answer is the `Float64` at `retptr+8`.
+## Back button
 
-`api.ts` validates the challenge before solving and retries **once** on a
-rejected proof (`40300`/`40301`) with a fresh challenge.
+`MainActivity` asks the engine first: it evaluates `window.__sdHandleBack()` (defined at
+the end of `content.js`). The helper closes the topmost engine surface — command popup,
+dialog, help sheet, or steps a drawer subpage back to the overview — and returns `true`.
+Only when it returns `false` does the WebView navigate back (or the app move to the
+background on the first page).
 
-## Error handling
+## Tests
 
-Errors are surfaced, never masked. Two rules came out of debugging this project:
+- Kotlin unit tests: `android/app/src/test/…` (`./gradlew testDebugUnitTest`), run in CI.
+- Web workspace checks: `npm run typecheck && npm run test:app`, run in CI.
+- CI (`.github/workflows/build-and-release-apk.yml`) builds and verifies a signed release
+  APK; failing unit-test reports are uploaded as a workflow artifact.
 
-1. DeepSeek reports business errors as **HTTP 200 with a JSON envelope**
-   (`{"code":40003,...}`), so `res.ok` alone is meaningless — `completeStream`
-   checks the content type.
-2. A failed call must name its cause in the UI. The generic
-   *"DeepSeek is unavailable right now."* string hid the real failure for 86
-   builds; see `docs/DIAGNOSIS-AND-FIX-PLAN.md`.
+## Legacy code
 
-## Testing
-
-```bash
-npx tsx --test src/lib/deepseek/pow.test.ts   # WASM contract, planted-answer recovery
-npx tsx --test src/lib/deepseek/api.test.ts   # client: envelope, PoW header, retry, expiry
-npm run typecheck
-```
-
-`pow.test.ts` mints challenges with the same WASM the app ships and asserts the
-solver recovers the planted counter, so a regression in the calling convention
-fails in CI instead of in production.
+`src/` contains the earlier React SPA. It is still built into the APK assets by
+`npm run build:android`, but is no longer shown: the official site is the chat surface.
+`MainActivity` keeps an idle `reactWebView` for it that never loads a page.
