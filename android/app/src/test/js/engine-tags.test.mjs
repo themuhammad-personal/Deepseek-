@@ -175,3 +175,73 @@ test('old default prompts are still recognised after the rename', () => {
   assert.equal(isLegacy({ systemPrompt: 'My own prompt' }), false);
   assert.equal(isLegacy({ systemPrompt: 'You are Better DeepSeek inside a tool-enabled extension.', systemPromptTemplateVersion: N1 }), false);
 });
+
+// ── Auto-sent messages are not shown being typed ─────────────────────────────
+
+function quietCtx() {
+  const classes = new Set();
+  const ctx = vm.createContext({
+    console, Promise, setTimeout,
+    window: {},
+    document: { documentElement: { classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) } } },
+  });
+  ctx.window = ctx;
+  vm.runInContext(`${DECLS.get('sdQuiet')};this.sdQuiet=sdQuiet;`, ctx);
+  return { sdQuiet: ctx.sdQuiet, classes };
+}
+
+test('sdQuiet marks the page while an engine message is being sent, and clears it after', async () => {
+  const { sdQuiet, classes } = quietCtx();
+  let seen = null;
+  const r = sdQuiet(async () => { seen = classes.has('sd-auto-send'); return 7; });
+  assert.equal(await r, 7);
+  assert.equal(seen, true);
+  assert.equal(classes.has('sd-auto-send'), false);
+});
+
+test('sdQuiet copes with overlapping sends and failures', async () => {
+  const { sdQuiet, classes } = quietCtx();
+  let release;
+  const slow = sdQuiet(() => new Promise((res) => { release = res; }));
+  await assert.rejects(sdQuiet(async () => { throw new Error('x'); }));
+  assert.equal(classes.has('sd-auto-send'), true, 'still sending the slow one');
+  release();
+  await slow;
+  assert.equal(classes.has('sd-auto-send'), false);
+});
+
+test('engine sends go through sdQuiet', () => {
+  assert.match(DECLS.get('nc'), /sdQuiet\(/);
+  assert.match(DECLS.get('ml'), /sdQuiet\(/);
+});
+
+// ── Mixed Arabic + Bengali replies are not flipped as a whole ────────────────
+
+test('a reply with Arabic in it no longer forces the whole message right-to-left', () => {
+  const nct = engineFn('nct');
+  const attrs = { dir: 'rtl' };
+  const removed = [];
+  const old = {
+    classList: { remove: (c) => removed.push(c) },
+    getAttribute: (n) => attrs[n] ?? null,
+    removeAttribute: (n) => { delete attrs[n]; },
+    style: { direction: 'rtl', textAlign: 'right' },
+  };
+  const md = { querySelectorAll: (sel) => (sel === '.bds-rtl-native' ? [old] : []) };
+  nct(md, true);
+  assert.deepEqual(removed, ['bds-rtl-native']);
+  assert.equal(attrs.dir, undefined);
+  assert.equal(old.style.direction, '');
+  assert.equal(old.style.textAlign, '');
+  assert.doesNotMatch(DECLS.get('nct'), /setAttribute\("dir","rtl"\)/);
+  assert.doesNotMatch(DECLS.get('xg'), /Pe\(U,"dir",s\(\)\?"rtl":"ltr"\)/);
+});
+
+test('each paragraph takes its own direction (skin CSS)', () => {
+  const skin = fs.readFileSync(path.join(bds, 'our-skin.css'), 'utf8');
+  assert.match(skin, /unicode-bidi:\s*plaintext/);
+});
+
+test('the prompt keeps tool work out of LONG_WORK', () => {
+  assert.match(CONTENT, /Never wrap sandbox work or tool calls in LONG_WORK/);
+});

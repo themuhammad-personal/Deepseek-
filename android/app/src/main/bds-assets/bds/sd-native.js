@@ -43,6 +43,124 @@
 
   function t(en, bn) { return isBn() ? bn : en; }
 
+  // ── Keyboard: only the user opens it ─────────────────────────────────────
+  //
+  // The engine and the chat page focus text fields by themselves (after every
+  // automatic message, when a question panel appears, when a sheet closes…).
+  // On a phone every such focus() popped the soft keyboard and the screen
+  // jumped up and down while the agent worked. A focus() that does not follow
+  // a real touch or key press now focuses without the keyboard
+  // (inputmode="none"); the keyboard comes back as soon as the user taps it.
+
+  var GESTURE_MS = 1000;
+  var SILENT = 'data-sd-silent-im';
+  var NO_ATTR = '__none__';
+  var lastGestureAt = 0;
+
+  function allowKeyboard() { lastGestureAt = Date.now(); }
+
+  function isTextField(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'TEXTAREA') return !el.readOnly && !el.disabled;
+    if (tag === 'INPUT') {
+      var type = String(el.type || 'text').toLowerCase();
+      return !el.readOnly && !el.disabled &&
+        ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].indexOf(type) >= 0;
+    }
+    return !!el.isContentEditable;
+  }
+
+  function unsilence(el) {
+    if (!el || typeof el.hasAttribute !== 'function' || !el.hasAttribute(SILENT)) return;
+    var orig = el.getAttribute(SILENT);
+    el.removeAttribute(SILENT);
+    if (orig === NO_ATTR) el.removeAttribute('inputmode'); else el.setAttribute('inputmode', orig);
+  }
+
+  function installFocusGuard() {
+    var proto = typeof HTMLElement === 'function' ? HTMLElement.prototype : null;
+    if (!proto || proto.focus.__sdGuard || typeof document.addEventListener !== 'function') return;
+    var nativeFocus = proto.focus;
+    var guarded = function (opts) {
+      try {
+        if (isTextField(this) && document.activeElement !== this && Date.now() - lastGestureAt > GESTURE_MS) {
+          if (!this.hasAttribute(SILENT)) {
+            this.setAttribute(SILENT, this.hasAttribute('inputmode') ? this.getAttribute('inputmode') : NO_ATTR);
+            this.setAttribute('inputmode', 'none');
+          }
+          return nativeFocus.call(this, { preventScroll: true });
+        }
+      } catch (_) {}
+      return nativeFocus.apply(this, arguments);
+    };
+    guarded.__sdGuard = true;
+    proto.focus = guarded;
+
+    function gesture(ev) { if (ev && ev.isTrusted) lastGestureAt = Date.now(); }
+    ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach(function (type) {
+      document.addEventListener(type, gesture, true);
+    });
+    document.addEventListener('focusout', function (ev) { unsilence(ev.target); }, true);
+    // A tap on a silenced field gives it its keyboard back.
+    document.addEventListener('pointerdown', function (ev) {
+      if (!ev.isTrusted || !ev.target || typeof ev.target.closest !== 'function') return;
+      var field = ev.target.closest('[' + SILENT + ']');
+      if (!field) return;
+      unsilence(field);
+      field.__sdReopen = true;
+    }, true);
+    document.addEventListener('click', function (ev) {
+      if (!ev.isTrusted || !ev.target || typeof ev.target.closest !== 'function') return;
+      var field = ev.target.closest('textarea, input, [contenteditable]');
+      if (!field || !field.__sdReopen) return;
+      field.__sdReopen = false;
+      if (document.activeElement === field) {
+        try { field.blur(); nativeFocus.call(field, { preventScroll: true }); } catch (_) {}
+      }
+    }, true);
+  }
+
+  installFocusGuard();
+
+  // The page may already have focused the composer on load, before this ran.
+  (function silenceInitialFocus() {
+    try {
+      var el = document.activeElement;
+      if (!isTextField(el) || Date.now() - lastGestureAt <= GESTURE_MS || el.hasAttribute(SILENT)) return;
+      el.setAttribute(SILENT, el.hasAttribute('inputmode') ? el.getAttribute('inputmode') : NO_ATTR);
+      el.setAttribute('inputmode', 'none');
+      el.blur();
+      el.focus({ preventScroll: true });
+    } catch (_) {}
+  })();
+
+  // Automatic messages are written into the composer and sent by the engine
+  // (sdQuiet in content.js marks <html> meanwhile): keep that text from
+  // flashing in the composer and from resizing it.
+  (function injectQuietStyle() {
+    try {
+      if (!document.createElement || document.getElementById('sd-quiet-style')) return;
+      var st = document.createElement('style');
+      st.id = 'sd-quiet-style';
+      st.textContent =
+        'html.sd-auto-send textarea#chat-input,html.sd-auto-send .ds-textarea textarea{' +
+        'color:transparent!important;-webkit-text-fill-color:transparent!important;' +
+        'caret-color:transparent!important;max-height:2.6em!important;overflow:hidden!important}';
+      (document.head || document.documentElement).appendChild(st);
+      // The moment the user touches or types in a field, it is theirs again:
+      // never hide what they type, even if an engine send is still retrying.
+      if (typeof document.addEventListener === 'function') {
+        var takeOver = function (ev) {
+          if (!ev || !ev.isTrusted || !isTextField(ev.target)) return;
+          var root = document.documentElement;
+          if (root && root.classList && root.classList.contains('sd-auto-send')) root.classList.remove('sd-auto-send');
+        };
+        ['pointerdown', 'keydown', 'beforeinput'].forEach(function (type) { document.addEventListener(type, takeOver, true); });
+      }
+    } catch (_) {}
+  })();
+
   // ── Picked files ───────────────────────────────────────────────────────────
 
   /** Run fn over items with at most `limit` in flight; results keep their order. */
@@ -381,6 +499,8 @@
           } catch (err) { console.warn('[SD] deep research toggle failed', err); }
         }
         var c = composer();
+        // Opened from a launcher shortcut: the user asked to type.
+        allowKeyboard();
         if (c) c.focus();
       });
     }
@@ -406,8 +526,10 @@
   window.__sdNative = {
     version: 1,
     receive: receive,
+    allowKeyboard: allowKeyboard,
     // Exposed for tests.
     _acceptsFile: acceptsFile,
+    _isTextField: isTextField,
     _pool: pool,
   };
 })();

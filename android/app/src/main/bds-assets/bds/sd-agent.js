@@ -385,6 +385,16 @@
     '#sd-agent-confirm button{border:0;border-radius:12px;padding:10px 14px;font:600 13px/1 system-ui,sans-serif;',
     'background:rgba(255,255,255,.1);color:#fff}',
     '#sd-agent-confirm button.sd-primary{background:#4d6bfe;color:#fff}',
+    // Tool cards in the chat: the spinner stops once the call is over.
+    '.bds-mcp-loading.sd-done,.bds-mcp-loading.sd-stopped{animation:none!important}',
+    '.bds-mcp-loading.sd-done{border-left-color:#22c55e!important}',
+    '.bds-mcp-loading.sd-stopped{border-left-color:#8e8ea0!important}',
+    '.sd-done .bds-mcp-loading-spinner,.sd-stopped .bds-mcp-loading-spinner{animation:none!important;',
+    'border-color:transparent!important;position:relative}',
+    '.sd-done .bds-mcp-loading-spinner::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;',
+    'border:solid #22c55e;border-width:0 2px 2px 0;transform:rotate(45deg)}',
+    '.sd-stopped .bds-mcp-loading-spinner::after{content:"";position:absolute;left:3px;top:3px;width:10px;height:10px;',
+    'border-radius:2px;background:#8e8ea0}'
   ].join('');
 
   var chip = null;
@@ -553,11 +563,74 @@
         function (err) { endCall(); return { ok: false, error: String((err && err.message) || err) }; });
   }
 
+  // ── Tool cards: stop the spinner when the call is over ─────────────────────
+  //
+  // The engine draws a spinning card for every tool call in a reply and never
+  // updates it; the result arrives as the next message. A card is finished
+  // once a later message exists, or when nothing is running any more.
+
+  var mcpPending = 0;
+  var mcpLastEnd = 0;
+  var CARD_IDLE_MS = 4000;
+
+  function trackMcp(promise) {
+    mcpPending++;
+    var done = function () { mcpPending = Math.max(0, mcpPending - 1); mcpLastEnd = Date.now(); sweepSoon(); };
+    return Promise.resolve(promise).then(function (v) { done(); return v; }, function (e) { done(); throw e; });
+  }
+
+  function messageOf(el) {
+    return (el.closest && el.closest('.ds-message')) || null;
+  }
+
+  function lastMessage() {
+    var all = document.querySelectorAll('.ds-message');
+    return all.length ? all[all.length - 1] : null;
+  }
+
+  function sweepCards() {
+    if (!document.querySelectorAll) return 0;
+    var cards = document.querySelectorAll('.bds-mcp-loading:not(.sd-done):not(.sd-stopped)');
+    if (!cards.length) return 0;
+    var last = lastMessage();
+    var idle = mcpPending === 0 && !generating() && Date.now() - Math.max(mcpLastEnd, state.lastActivity || 0) > CARD_IDLE_MS;
+    var left = 0;
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var msg = messageOf(card);
+      var superseded = !!(msg && last && msg !== last && !msg.contains(last));
+      if (superseded || idle) card.classList.add(window.__sdAgentStopped && !superseded ? 'sd-stopped' : 'sd-done');
+      else left++;
+    }
+    return left;
+  }
+
+  var sweepTimer = null;
+  function sweepSoon() {
+    if (sweepTimer) return;
+    sweepTimer = setTimeout(function tick() {
+      sweepTimer = null;
+      if (sweepCards() > 0) sweepTimer = setTimeout(tick, 1500);
+    }, 300);
+  }
+
+  function watchCards() {
+    if (typeof MutationObserver !== 'function' || !document.body) return;
+    new MutationObserver(function (records) {
+      for (var i = 0; i < records.length; i++) {
+        if (records[i].addedNodes && records[i].addedNodes.length) { sweepSoon(); return; }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+    sweepSoon();
+  }
+
   function install() {
     var inner = window.__sdBridgeFetch;
     if (typeof inner === 'function' && !inner.__sdAgentWrapped) {
       var wrapped = function (payload) {
-        if (payload && payload.type === 'bds-mcp-call' && isSandboxUrl(payload.serverUrl)) return sandboxCall(payload, inner);
+        if (payload && payload.type === 'bds-mcp-call') {
+          return trackMcp(isSandboxUrl(payload.serverUrl) ? sandboxCall(payload, inner) : inner(payload));
+        }
         return inner(payload);
       };
       wrapped.__sdAgentWrapped = true;
@@ -566,8 +639,8 @@
     installResumeListeners();
     // A fresh page has no running loop (clears a flag left by a reload/crash).
     try { var b = bridge(); if (b && typeof b.sandboxAgentActive === 'function') b.sandboxAgentActive(false); } catch (_) {}
-    if (document.body) watchSheet();
-    else document.addEventListener('DOMContentLoaded', watchSheet);
+    if (document.body) { watchSheet(); watchCards(); }
+    else document.addEventListener('DOMContentLoaded', function () { watchSheet(); watchCards(); });
   }
 
   install();
@@ -585,5 +658,6 @@
     _pickRawArgs: pickRawArgs,
     _assistantTexts: assistantTexts,
     _isSandboxUrl: isSandboxUrl,
+    _sweepCards: sweepCards,
   };
 })();

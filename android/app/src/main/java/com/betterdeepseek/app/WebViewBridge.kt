@@ -326,6 +326,33 @@ class WebViewBridge(
     /** Picked/shared files and large replies, streamed to the page by URL. */
     internal val blobs = NativeBlobStore()
 
+    /** Large engine storage values (see [EngineStore]); small ones stay in [prefs]. */
+    private val engineStoreLazy = lazy {
+        val dir = runCatching { context.filesDir }.getOrNull()?.let { File(it, "engine-store") }
+        EngineStore(dir).also { store -> moveLargePrefsToStore(store) }
+    }
+    internal val engineStore: EngineStore by engineStoreLazy
+
+    /** Called when the app goes to the background: write pending values now. */
+    fun flushStorageSoon() {
+        if (engineStoreLazy.isInitialized()) engineStore.flushSoon()
+    }
+
+    /** One-time move of large values out of the SharedPreferences file. */
+    private fun moveLargePrefsToStore(store: EngineStore) {
+        try {
+            val large = prefs.all?.filter { (_, v) -> v is String && v.length > EngineStore.LARGE_VALUE_CHARS } ?: return
+            if (large.isEmpty()) return
+            large.forEach { (k, v) -> store.put(k, v as String) }
+            store.flushNow()
+            val editor = prefs.edit()
+            large.keys.forEach { editor.remove(it) }
+            editor.apply()
+        } catch (t: Throwable) {
+            Log.w(TAG, "moving large storage values failed", t)
+        }
+    }
+
     private val httpClient: OkHttpClient =
             httpClient
                     ?: OkHttpClient.Builder()
@@ -866,20 +893,28 @@ class WebViewBridge(
     fun getStorage(key: String?): String? {
         if (!trustedPage) return null
         if (key.isNullOrEmpty()) return null
-        return prefs.getString(key, null)
+        return engineStore.get(key) ?: prefs.getString(key, null)
     }
 
     @JavascriptInterface
     fun setStorage(key: String?, value: String?) {
         if (!trustedPage) return
         if (key.isNullOrEmpty()) return
-        prefs.edit().putString(key, value ?: "").apply()
+        val v = value ?: ""
+        if (v.length > EngineStore.LARGE_VALUE_CHARS) {
+            engineStore.put(key, v)
+            if (prefs.contains(key)) prefs.edit().remove(key).apply()
+        } else {
+            if (engineStore.has(key)) engineStore.remove(key)
+            prefs.edit().putString(key, v).apply()
+        }
     }
 
     @JavascriptInterface
     fun removeStorage(key: String?) {
         if (!trustedPage) return
         if (key.isNullOrEmpty()) return
+        engineStore.remove(key)
         prefs.edit().remove(key).apply()
     }
 

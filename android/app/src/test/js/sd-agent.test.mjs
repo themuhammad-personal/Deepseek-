@@ -170,3 +170,37 @@ test('the app is told while the agent works, and when it stops', async () => {
   assert.equal(actives.at(-1), false);
   assert.deepEqual(actives, [false, true, false], 'reported only on changes');
 });
+
+test('tool-call spinners stop once a later message exists, or when all is idle', async () => {
+  const { win } = load();
+  const m1 = { id: 1, contains(x) { return x === this; } };
+  const m2 = { id: 2, contains(x) { return x === this; } };
+  const card = (msg) => {
+    const cls = new Set(['bds-mcp-loading']);
+    return { classList: { add: (c) => cls.add(c), has: (c) => cls.has(c) }, closest: () => msg, cls };
+  };
+  const old = card(m1);
+  const current = card(m2);
+  win.document.querySelectorAll = (sel) => {
+    if (sel.startsWith('.bds-mcp-loading')) return [old, current].filter((c) => !c.cls.has('sd-done') && !c.cls.has('sd-stopped'));
+    if (sel === '.ds-message') return [m1, m2];
+    return [];
+  };
+  // A call is still running for the last message: only the older card is done.
+  const running = win.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'https://other.example/mcp', toolName: 't', args: {} });
+  assert.equal(win.__sdAgent._sweepCards(), 1);
+  assert.ok(old.cls.has('sd-done'));
+  assert.ok(!current.cls.has('sd-done'));
+  await running;
+  // Finished, but still inside the idle grace period.
+  assert.equal(win.__sdAgent._sweepCards(), 1);
+  // Later: idle → done.
+  const realNow = win.Date.now;
+  win.Date.now = () => realNow() + 10000;
+  try {
+    assert.equal(win.__sdAgent._sweepCards(), 0);
+  } finally {
+    win.Date.now = realNow;
+  }
+  assert.ok(current.cls.has('sd-done'));
+});

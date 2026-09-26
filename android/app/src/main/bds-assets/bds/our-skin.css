@@ -11,3 +11,24 @@
    Functional shaping (hiding out-of-scope entries, trimming redundant rows,
    repairing raw i18n keys) lives in UiPolish.kt, not here.
    ========================================================================== */
+
+/* ==========================================================================
+   Mixed-script text (Arabic + Bengali/English in one reply)
+   Each paragraph takes its direction from its own text, so an Arabic verse
+   reads right-to-left and the Bengali around it stays left-to-right —
+   instead of the whole reply being flipped because it contains Arabic.
+   ========================================================================== */
+.ds-markdown :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd),
+.bds-message-overlay :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd) {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+.ds-markdown :is(pre, code, .md-code-block),
+.bds-message-overlay :is(pre, code, .md-code-block) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.ds-markdown pre,
+.bds-message-overlay pre {
+  text-align: left;
+}

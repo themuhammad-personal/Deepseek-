@@ -173,3 +173,124 @@ test('skip messages name the files and the reasons', () => {
   assert.match(many, /^Not attached: 1\.zip — weird; 2\.zip — weird; 3\.zip — weird \(\+2\)$/);
   assert.equal(win.__sdSkipMessage([], 1), '');
 });
+
+// ── Keyboard guard ───────────────────────────────────────────────────────────
+
+function loadWithDom() {
+  const listeners = {};
+  class HTMLElement {
+    constructor(tag) { this.tagName = tag; this.nodeType = 1; this.attrs = {}; this.focused = 0; this.lastOpts = null; }
+    hasAttribute(n) { return n in this.attrs; }
+    getAttribute(n) { return n in this.attrs ? this.attrs[n] : null; }
+    setAttribute(n, v) { this.attrs[n] = String(v); }
+    removeAttribute(n) { delete this.attrs[n]; }
+    closest(sel) { return sel.includes('data-sd-silent-im') ? (this.hasAttribute('data-sd-silent-im') ? this : null) : this; }
+    blur() { if (doc.activeElement === this) doc.activeElement = null; }
+    focus(opts) { this.focused++; this.lastOpts = opts; doc.activeElement = this; }
+  }
+  const set = new Set();
+  const rootClasses = { add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) };
+  const doc = {
+    activeElement: null,
+    documentElement: { lang: 'en', classList: rootClasses, appendChild: () => {} },
+    head: null,
+    createElement: (tag) => ({ tagName: tag }),
+    getElementById: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
+  };
+  const ctx = {
+    console, setTimeout, clearTimeout, Promise, JSON, Math, Object, Array, String, Date, Uint8Array,
+    Blob, File, URL, HTMLElement,
+    navigator: { language: 'en' },
+    document: doc,
+    location: { pathname: '/', host: 'chat.deepseek.com', search: '' },
+    AndroidBridge: {},
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(SRC, ctx);
+  const fire = (type, target, trusted = true) => (listeners[type] || []).forEach((fn) => fn({ type, target, isTrusted: trusted }));
+  return { win: ctx, HTMLElement, doc, fire };
+}
+
+test('a focus() nobody tapped for does not open the keyboard', () => {
+  const { HTMLElement } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  box.focus();
+  assert.equal(box.focused, 1, 'still focused (the engine needs that to type)');
+  assert.equal(box.getAttribute('inputmode'), 'none');
+  assert.equal(box.lastOpts.preventScroll, true, 'and the page does not jump');
+});
+
+test('after a real touch, focus() behaves normally', () => {
+  const { HTMLElement, fire } = loadWithDom();
+  const button = new HTMLElement('DIV');
+  const box = new HTMLElement('TEXTAREA');
+  fire('pointerdown', button);
+  box.focus();
+  assert.equal(box.getAttribute('inputmode'), null);
+});
+
+test('untrusted (scripted) events do not count as a touch', () => {
+  const { HTMLElement, fire } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  fire('pointerdown', box, false);
+  box.focus();
+  assert.equal(box.getAttribute('inputmode'), 'none');
+});
+
+test('tapping a silenced field gives the keyboard back and keeps its own inputmode', () => {
+  const { HTMLElement, fire, doc } = loadWithDom();
+  const box = new HTMLElement('INPUT');
+  box.type = 'text';
+  box.setAttribute('inputmode', 'numeric');
+  box.focus();
+  assert.equal(box.getAttribute('inputmode'), 'none');
+  fire('pointerdown', box);
+  assert.equal(box.getAttribute('inputmode'), 'numeric');
+  fire('click', box);
+  assert.equal(doc.activeElement, box);
+  assert.equal(box.focused, 2, 're-focused inside the tap so the keyboard shows');
+});
+
+test('leaving a silenced field restores it', () => {
+  const { HTMLElement, fire } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  box.focus();
+  fire('focusout', box);
+  assert.equal(box.getAttribute('inputmode'), null);
+  assert.equal(box.hasAttribute('data-sd-silent-im'), false);
+});
+
+test('buttons and read-only fields are not touched', () => {
+  const { HTMLElement, win } = loadWithDom();
+  const button = new HTMLElement('BUTTON');
+  button.focus();
+  assert.equal(button.getAttribute('inputmode'), null);
+  const ro = new HTMLElement('TEXTAREA');
+  ro.readOnly = true;
+  assert.equal(win.__sdNative._isTextField(ro), false);
+  const check = new HTMLElement('INPUT');
+  check.type = 'checkbox';
+  assert.equal(win.__sdNative._isTextField(check), false);
+});
+
+test('allowKeyboard() lets the next focus open the keyboard', () => {
+  const { HTMLElement, win } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  win.__sdNative.allowKeyboard();
+  box.focus();
+  assert.equal(box.getAttribute('inputmode'), null);
+});
+
+test('typing in the composer shows the text again even while an engine send retries', () => {
+  const { HTMLElement, doc, fire } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  doc.documentElement.classList.add('sd-auto-send');
+  fire('keydown', box, false);
+  assert.equal(doc.documentElement.classList.contains('sd-auto-send'), true, 'scripted keys do not count');
+  fire('keydown', box);
+  assert.equal(doc.documentElement.classList.contains('sd-auto-send'), false);
+});

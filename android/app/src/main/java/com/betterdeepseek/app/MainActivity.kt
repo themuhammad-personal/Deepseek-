@@ -1430,6 +1430,7 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         isForeground = false
         cookieManager.flush()
+        if (::bridge.isInitialized) bridge.flushStorageSoon()
     }
 
     override fun onNewIntent(intent: Intent) {
