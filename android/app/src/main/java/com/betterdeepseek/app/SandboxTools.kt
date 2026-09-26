@@ -339,7 +339,17 @@ internal class SandboxTools(
             when {
                 !s.optBoolean("supported") -> append("unavailable — ").append(s.optString("reason"))
                 !s.optBoolean("installed") -> append("not set up yet (it is downloaded automatically on first use, ~4 MB)")
-                else -> append("${s.optString("distro")} ${s.optString("version")} (${s.optString("abi")}), ready")
+                else -> {
+                    append("${s.optString("distro")} ${s.optString("version")} (${s.optString("abi")})")
+                    // A real round trip, so "ready" means commands actually run.
+                    val probe = runCatching { sandbox.exec("uname -srm", timeoutSec = 30, maxOutput = 4000) }
+                    val r = probe.getOrNull()
+                    when {
+                        r == null -> append(", NOT WORKING — ").append(probe.exceptionOrNull()?.message ?: "error")
+                        r.exitCode == 0 -> append(", working (kernel ").append(r.output.trim().take(120)).append(")")
+                        else -> append(", NOT WORKING — ").append(Sandbox.stripAnsi(r.output).trim().take(600))
+                    }
+                }
             }
             append("\nWorkspace: ${Sandbox.WORKSPACE}")
             val free = s.optLong("freeBytes", -1)

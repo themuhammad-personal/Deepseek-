@@ -175,7 +175,7 @@
 
   function bridgeFetch(payload) {
     var b = bridge();
-    if (!b) return Promise.resolve({ ok: false, error: '[BDS] window.AndroidBridge is not available.' });
+    if (!b) return Promise.resolve({ ok: false, error: '[SDS] window.AndroidBridge is not available.' });
     var body = JSON.stringify(payload || {});
     if (typeof b.fetchAsync !== 'function') {
       // Older native side: the blocking call.

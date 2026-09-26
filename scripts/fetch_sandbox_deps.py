@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Fetch the native pieces of the Linux sandbox into the Android build.
 
-  * proot + its loader + libtalloc from the Termux package repository
+  * proot + its loaders + every shared library it needs (libtalloc,
+    libandroid-shmem, ...) from the Termux package repository
     (GPL-2.0 / LGPL-3.0), for every ABI the app ships, into
     android/app/src/main/jniLibs/<abi>/ as lib*.so so the package manager
     extracts them into nativeLibraryDir, the one app-owned place Android
@@ -146,19 +147,99 @@ def deb_files(deb: bytes) -> dict[str, tarfile.TarFile | bytes]:
 def patch_cstring(blob: bytes, old: bytes, new: bytes) -> bytes:
     """Same-length, in-place rename of a NUL-terminated string (no ELF relayout)."""
     assert len(new) <= len(old)
-    needle = old + b"\0"
+    needle = b"\0" + old + b"\0"
     if needle not in blob:
         return blob
-    return blob.replace(needle, new + b"\0" * (len(old) - len(new) + 1))
+    return blob.replace(needle, b"\0" + new + b"\0" * (len(old) - len(new) + 1))
+
+
+# ------------------------------------------------------------------- ELF ---
+
+def elf_dynamic(blob: bytes) -> tuple[list[str], str | None]:
+    """(DT_NEEDED names, DT_SONAME) of an ELF file; ([], None) for static ones."""
+    import struct
+    if blob[:4] != b"\x7fELF":
+        raise ValueError("not an ELF file")
+    is64 = blob[4] == 2
+    end = "<" if blob[5] == 1 else ">"
+    if is64:
+        e_phoff, = struct.unpack_from(end + "Q", blob, 0x20)
+        e_phentsize, e_phnum = struct.unpack_from(end + "HH", blob, 0x36)
+    else:
+        e_phoff, = struct.unpack_from(end + "I", blob, 0x1C)
+        e_phentsize, e_phnum = struct.unpack_from(end + "HH", blob, 0x2A)
+    loads, dyn = [], None
+    for i in range(e_phnum):
+        off = e_phoff + i * e_phentsize
+        if is64:
+            p_type, _flags, p_offset, p_vaddr, _pa, p_filesz = struct.unpack_from(end + "IIQQQQ", blob, off)
+        else:
+            p_type, p_offset, p_vaddr, _pa, p_filesz = struct.unpack_from(end + "IIIII", blob, off)
+        if p_type == 1:
+            loads.append((p_vaddr, p_offset, p_filesz))
+        elif p_type == 2:
+            dyn = (p_offset, p_filesz)
+    if dyn is None:
+        return [], None
+    fmt, size = (end + "qQ", 16) if is64 else (end + "iI", 8)
+    entries = []
+    for off in range(dyn[0], dyn[0] + dyn[1], size):
+        tag, val = struct.unpack_from(fmt, blob, off)
+        if tag == 0:
+            break
+        entries.append((tag, val))
+    strtab = next((v for t, v in entries if t == 5), None)
+    if strtab is None:
+        return [], None
+    base = next((o + (strtab - va) for va, o, sz in loads if va <= strtab < va + sz), strtab)
+
+    def cstr(o: int) -> str:
+        return blob[base + o: blob.index(b"\0", base + o)].decode()
+    needed = [cstr(v) for t, v in entries if t == 1]
+    soname = next((cstr(v) for t, v in entries if t == 14), None)
+    return needed, soname
+
+
+# Libraries every Android device provides to apps (NDK stable system libs).
+ANDROID_SYSTEM_LIBS = {
+    "libc.so", "libm.so", "libdl.so", "liblog.so", "libz.so", "libandroid.so",
+    "libstdc++.so", "libjnigraphics.so", "libEGL.so", "libGLESv2.so",
+    "libOpenSLES.so", "libmediandk.so", "libnativewindow.so", "libvulkan.so",
+}
+
+
+def android_name(soname: str) -> str:
+    """libfoo.so.2.4 -> libfoo.so (the only names Android installs from an APK)."""
+    i = soname.find(".so")
+    return soname[: i + 3] if i >= 0 else soname
+
+
+def dep_names(field: str) -> list[str]:
+    out = []
+    for part in field.split(","):
+        alt = part.split("|")[0].strip()
+        name = alt.split("(")[0].strip()
+        if name:
+            out.append(name)
+    return out
 
 
 def fetch_proot(out_dir: str) -> dict:
+    """proot, its loaders, and every shared library it needs (the whole
+    Termux dependency closure), renamed to lib*.so, and checked: each
+    DT_NEEDED must resolve to a shipped library or an Android system one,
+    otherwise the build fails here instead of on the phone."""
     notice = {}
     for abi, (arch, _) in ABIS.items():
         mirror, pkgs = termux_index(arch)
         got: dict[str, bytes] = {}
-        versions = {}
-        for pkg in ("proot", "libtalloc"):
+        versions: dict[str, str] = {}
+        queue, seen = ["proot"], set()
+        while queue:
+            pkg = queue.pop(0)
+            if pkg in seen:
+                continue
+            seen.add(pkg)
             meta = pkgs.get(pkg)
             if not meta:
                 raise RuntimeError(f"{pkg} missing from the Termux index for {arch}")
@@ -178,18 +259,45 @@ def fetch_proot(out_dir: str) -> dict:
                 if loader32 is not None:
                     got["libproot-loader32.so"] = loader32
             else:
-                lib = files.get(TERMUX_PREFIX + "lib/libtalloc.so.2")
-                if lib is None:
-                    cand = sorted(n for n in files if "/lib/libtalloc.so." in n)
-                    if not cand:
-                        raise RuntimeError(f"libtalloc.so.2 missing for {arch}")
-                    lib = files[cand[0]]
-                got["libtalloc.so"] = lib
-        # Android only installs lib*.so from the APK, so libtalloc must be
-        # called libtalloc.so; rename proot's DT_NEEDED and the library's
-        # SONAME to match, in place.
-        got["libproot.so"] = patch_cstring(got["libproot.so"], b"libtalloc.so.2", b"libtalloc.so")
-        got["libtalloc.so"] = patch_cstring(got["libtalloc.so"], b"libtalloc.so.2", b"libtalloc.so")
+                for name, data in files.items():
+                    if not name.startswith(TERMUX_PREFIX + "lib/") or "/" in name[len(TERMUX_PREFIX + "lib/"):]:
+                        continue
+                    base = os.path.basename(name)
+                    if ".so" not in base or not isinstance(data, bytes) or data[:4] != b"\x7fELF":
+                        continue
+                    _, soname = elf_dynamic(data)
+                    target = android_name(soname or base)
+                    # Prefer the file the SONAME points at (libfoo.so.2 over libfoo.so).
+                    if target not in got or (soname and base == soname):
+                        got[target] = data
+            queue.extend(d for d in dep_names(meta.get("Depends", "")) if d not in seen)
+
+        # Rename versioned DT_NEEDED / DT_SONAME strings to the lib*.so names
+        # Android installs, in place, then prove every dependency resolves.
+        renames: dict[str, str] = {}
+        for name, data in got.items():
+            needed, soname = elf_dynamic(data)
+            for n in needed + ([soname] if soname else []):
+                if android_name(n) != n:
+                    renames[n] = android_name(n)
+        for name in list(got):
+            for old, new in renames.items():
+                got[name] = patch_cstring(got[name], old.encode(), new.encode())
+        # Drop libraries nothing needs (keeps the APK small).
+        wanted, stack = set(), ["libproot.so"]
+        while stack:
+            cur = stack.pop()
+            if cur in wanted:
+                continue
+            wanted.add(cur)
+            for n in elf_dynamic(got[cur])[0]:
+                if n in got:
+                    stack.append(n)
+                elif n not in ANDROID_SYSTEM_LIBS:
+                    raise RuntimeError(f"{abi}: {cur} needs {n}, which is neither shipped nor an Android system library")
+        wanted |= {n for n in got if n.startswith("libproot-loader")}
+        got = {n: d for n, d in got.items() if n in wanted}
+
         dest = os.path.join(out_dir, "jniLibs", abi)
         os.makedirs(dest, exist_ok=True)
         for name, data in got.items():
@@ -197,7 +305,10 @@ def fetch_proot(out_dir: str) -> dict:
                 f.write(data)
             os.chmod(os.path.join(dest, name), 0o755)
         notice[abi] = {"arch": arch, "mirror": mirror, **versions}
-        log(f"{abi}: proot {versions['proot']}, libtalloc {versions['libtalloc']} ({', '.join(sorted(got))})")
+        deps = {n: elf_dynamic(d)[0] for n, d in got.items()}
+        log(f"{abi}: {', '.join(f'{k} {v}' for k, v in versions.items())}")
+        for n, d in sorted(deps.items()):
+            log(f"  {n}: needs {', '.join(d) or '(static)'}")
     return notice
 
 

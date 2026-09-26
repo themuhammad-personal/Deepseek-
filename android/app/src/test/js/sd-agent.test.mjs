@@ -68,6 +68,13 @@ test('parses MCP tags: body JSON, args attribute, base64Args, self-closing', () 
   assert.deepEqual(plain(win.__sdAgent._tagArgs(tags[2])), { command: 'echo "hi"' });
 });
 
+test('SDS tags (the current spelling) are parsed like BDS ones', () => {
+  const { win } = load();
+  const tags = win.__sdAgent._parseTags('<SDS:AUTO:MCP url="sandbox" tool="run">{"command":"echo a_b"}</SDS:AUTO:MCP>');
+  assert.equal(tags.length, 1);
+  assert.deepEqual(plain(win.__sdAgent._tagArgs(tags[0])), { command: 'echo a_b' });
+});
+
 test('a ">" inside a quoted attribute does not end the tag', () => {
   const { win } = load();
   const tags = win.__sdAgent._parseTags(`<BDS:AUTO:MCP url="sandbox" tool="run" args='{"command":"echo 1 > f"}'></BDS:AUTO:MCP>`);

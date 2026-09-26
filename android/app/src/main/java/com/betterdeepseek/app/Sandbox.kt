@@ -460,6 +460,17 @@ internal class Sandbox private constructor(private val app: Context) {
         return pb
     }
 
+    /**
+     * proot itself failing to start (a packaging or device problem, not the
+     * command's fault) is reported as an error the model will not retry.
+     */
+    private fun engineFailure(output: String): String? {
+        val line = output.lineSequence().take(5).firstOrNull { it.startsWith("CANNOT LINK EXECUTABLE") }
+                ?: return null
+        return "The Linux sandbox engine (proot) could not start on this device: ${line.trim().take(400)}. " +
+                "This is an app problem, not something to fix from inside the sandbox; tell the user to update the app."
+    }
+
     /** Guest shell: cd into [cwd] (created if missing), then eval the command. */
     private fun shellArgv(): List<String> = listOf(
             "/bin/sh", "-lc",
@@ -509,6 +520,10 @@ internal class Sandbox private constructor(private val app: Context) {
             if (!finished) terminate(process)
             reader.join(3000)
             val exit = runCatching { process.exitValue() }.getOrDefault(-1)
+            if (exit != 0) engineFailure(collector.text())?.let { msg ->
+                if (announce) emit(JSONObject().put("type", "exec").put("phase", "end").put("id", id).put("exitCode", exit).put("timedOut", false))
+                throw IOException(msg)
+            }
             if (announce) emit(JSONObject().put("type", "exec").put("phase", "end").put("id", id).put("exitCode", exit).put("timedOut", !finished))
             return ExecResult(
                     exitCode = exit,

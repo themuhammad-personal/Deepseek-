@@ -506,7 +506,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                             }
                         }
                     } catch (_: Exception) {}
-                    if (shell === p) shell = null
+                    if (shell === p) {
+                        // Ended by itself (not ^C): say so, so a failure is never silent.
+                        shell = null
+                        val code = runCatching { p.waitFor() }.getOrNull()
+                        main.post { if (!isDestroyed) appendTerm(t("[shell exited", "[শেল বন্ধ হয়েছে") + (code?.let { " · $it" } ?: "") + "]\n", cMuted) }
+                    }
                 }, "studio-shell").start()
                 main.post { refreshStatus() }
                 then(p)

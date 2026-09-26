@@ -5,7 +5,7 @@
  * The sandbox is exposed to the engine as an MCP server named "sandbox"
  * (url sandbox://linux) that the native side implements. The engine then
  * does the agent loop by itself: the model writes
- *   <BDS:AUTO:MCP url="sandbox" tool="run">{"command":"…"}</BDS:AUTO:MCP>
+ *   <SDS:AUTO:MCP url="sandbox" tool="run">{"command":"…"}</SDS:AUTO:MCP>
  * the engine calls the tool and sends the result back as the next message.
  *
  * This file adds what the loop needs on a phone:
@@ -92,11 +92,11 @@
     return a;
   }
 
-  /** Every <BDS:AUTO:MCP …>body</BDS:AUTO:MCP> (or self-closing) tag, in order. */
+  /** Every <SDS:AUTO:MCP …>body</SDS:AUTO:MCP> (or self-closing) tag, in order. */
   function parseTags(text) {
     var out = [];
     var s = String(text || '');
-    var re = /<BDS:(?:AUTO:)?MCP\b/gi;
+    var re = /<[BS]DS:(?:AUTO:)?MCP\b/gi;
     var m;
     while ((m = re.exec(s))) {
       var i = m.index + m[0].length;
@@ -114,7 +114,7 @@
       var body = '';
       var end = i + 1;
       if (!selfClosing) {
-        var close = /<\/BDS:(?:AUTO:)?MCP\s*>/gi;
+        var close = /<\/[BS]DS:(?:AUTO:)?MCP\s*>/gi;
         close.lastIndex = i + 1;
         var cm = close.exec(s);
         if (cm) { body = s.slice(i + 1, cm.index); end = cm.index + cm[0].length; }
