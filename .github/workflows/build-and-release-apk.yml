@@ -6,6 +6,7 @@ on:
       - main
       - v3-real-exact-ui
       - arena/01a0cebd-deepseek
+      - arena/01a0dc4d-deepseek
     tags:
       - "v*"
   pull_request:
