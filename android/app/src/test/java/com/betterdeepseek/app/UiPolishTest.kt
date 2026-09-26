@@ -56,6 +56,15 @@ class UiPolishTest {
     // ── Injected script contract ─────────────────────────────────────────
 
     @Test
+    fun `mutation sweeps are throttled while the page streams`() {
+        val script = UiPolish.buildScript()
+        // The busy flag is released only by the trailing sweep, so a burst of
+        // mutations costs two sweeps instead of two per mutation.
+        assertTrue(script.contains("setTimeout(function(){pend=false;sweep(document);},380)"))
+        assertFalse(script.contains("pend=false;scheduleSweep"))
+    }
+
+    @Test
     fun `script embeds every hidden selector and is idempotent`() {
         val script = UiPolish.buildScript()
         assertTrue(script.contains("__bdsUiPolished"))

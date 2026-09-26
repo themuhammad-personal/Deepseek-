@@ -1,26 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Super DeepSeek</string>
-    <string name="bds_target_url">https://chat.deepseek.com/</string>
-    <string name="bds_asset_authority">bds-asset.local</string>
-
     <!-- ইন-অ্যাপ আপডেট সংক্রান্ত মেসেজ -->
     <string name="bds_update_title">নতুন আপডেট পাওয়া গেছে</string>
     <string name="bds_update_message">Super DeepSeek %1$s সংস্করণটি এখন পাওয়া যাচ্ছে। আপনার বর্তমান সংস্করণ %2$s।</string>
-    <string name="bds_update_message_beta">নতুন বেটা সংস্করণ পাওয়া গেছে। আপনার সংস্করণ %1$s।</string>
+    <string name="bds_update_message_beta">Super DeepSeek %1$s-এর একটি নতুন বিল্ড পাওয়া গেছে।</string>
     <string name="bds_update_download">ডাউনলোড</string>
     <string name="bds_update_later">পরে</string>
-    <string name="bds_update_channel">চ্যানেল</string>
-    <string name="bds_update_channel_title">আপডেট চ্যানেল</string>
-    <string name="bds_update_channel_release">স্ট্যাবল রিলিজ</string>
-    <string name="bds_update_channel_beta">বেটা বিল্ড</string>
-    <string name="bds_update_downloading">আপডেট ডাউনলোড হচ্ছে...</string>
+    <string name="bds_update_downloading">আপডেট ডাউনলোড হচ্ছে…</string>
     <string name="bds_update_download_failed">ডাউনলোড ব্যর্থ হয়েছে (%1$s)।</string>
     <string name="bds_update_need_permission">Super DeepSeek-এর জন্য অজানা অ্যাপ ইনস্টল করার অনুমতি দিন, তারপর আবার চেষ্টা করুন।</string>
     <string name="bds_download_started">%1$s ডাউনলোড হচ্ছে…</string>
     <string name="bds_update_install_failed">প্যাকেজ ইনস্টলার চালু করা যায়নি।</string>
-    <!-- Branded boot overlay -->
-    <string name="bds_boot_title">Super DeepSeek</string>
 
     <!-- Linux sandbox (foreground service notification) -->
     <string name="sandbox_channel">লিনাক্স স্যান্ডবক্স</string>
@@ -32,4 +22,8 @@
         <item quantity="one">%dটি কমান্ড চলছে</item>
         <item quantity="other">%dটি কমান্ড চলছে</item>
     </plurals>
+
+    <!-- App Shortcuts -->
+    <string name="shortcut_new_chat">নতুন চ্যাট</string>
+    <string name="shortcut_deep_research">গভীর গবেষণা</string>
 </resources>

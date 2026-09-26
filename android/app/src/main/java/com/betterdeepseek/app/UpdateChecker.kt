@@ -15,20 +15,16 @@ import java.util.concurrent.TimeUnit
  * In-app update support for the Android shell.
  *
  * Two channels are offered, both backed by the GitHub Releases that
- * `.github/workflows/release.yml` already publishes:
+ * `.github/workflows/build-and-release-apk.yml` publishes:
  *
- * - [UpdateChannel.RELEASE] reads `GET /repos/{owner}/{repo}/releases/latest`, which returns the
- *   newest non-prerelease release — i.e. the last `v*` tag.
- * - [UpdateChannel.BETA] reads `GET /repos/{owner}/{repo}/releases/tags/latest`, the `latest` tag
- *   release that is rebuilt on every push to `main`.
+ * - [UpdateChannel.RELEASE] (the default) reads `GET /repos/{owner}/{repo}/releases/latest`, the
+ *   release GitHub marks as latest. CI publishes every build with `make_latest: true` — a `v*` tag
+ *   or the continuously rebuilt `latest` tag — so this is always the newest published build.
+ * - [UpdateChannel.BETA] reads `GET /repos/{owner}/{repo}/releases/tags/latest`, the continuous
+ *   build itself, even while a newer tagged release is marked latest.
  *
- * The two endpoints never return the same build: `release.yml` publishes the `latest` tag with
- * `prerelease: true`, and `/releases/latest` deliberately skips prereleases. Do not "simplify"
- * this to a single endpoint — `/releases/latest` returns the last tagged release, so a beta user
- * would be told they are up to date while `main` keeps moving.
- *
- * No CI changes are required: the releases API already exposes the APK's `browser_download_url`,
- * its `sha256:` digest and the asset upload time.
+ * The releases API exposes the APK's `browser_download_url`, its `sha256:` digest, size and upload
+ * time; the release body carries the CI build number ([parseBuildId]).
  *
  * The decision helpers below are top-level `internal` functions so they can be unit-tested on the
  * JVM without a device.
@@ -79,10 +75,9 @@ internal fun compareVersions(a: List<Int>, b: List<Int>): Int {
 /**
  * Pick the Android APK out of a release's asset list.
  *
- * Both channels publish exactly one APK, `better-deepseek-android-*-signed.apk`. The browser
- * bundles are zips and the repository also carries a legacy `better-deepseek-latest.zip`, so the
- * match must be anchored on both the android prefix and the signed-apk suffix. Only assets the
- * API reports as `uploaded` are eligible.
+ * CI publishes one APK per release, `super-deepseek-latest.apk`; an asset whose name starts
+ * with `super-deepseek` wins, otherwise the first other `.apk` is taken (older releases). Only
+ * assets the API reports as `uploaded` and that have a download URL are eligible.
  */
 internal fun pickApkAsset(assets: JSONArray?): JSONObject? {
     if (assets == null) return null
@@ -125,17 +120,17 @@ internal fun parseSha256Digest(raw: String?): String? {
  * without uninstalling. The version is read from the release tag, which is this project's own
  * convention (`v0.1.14`).
  *
- * When the versions tie, only the beta channel has anything left to decide, and it has two signals
- * to do it with:
+ * When the versions tie, two signals are left:
  *
- * 1. **CI build numbers** ([remoteBuildId] against [installedBuildId]). Every push to `main`
- *    rebuilds the same `versionCode`/`versionName`, so beta users need a per-build identity to
- *    keep receiving builds. This is the preferred signal: it compares two integers produced by the
- *    same counter, so no clocks are involved and nothing can drift.
- * 2. **Upload time against install time**, used only when either build number is 0 — releases
- *    published before the ids existed, and APKs built outside CI. This one is a heuristic: the two
- *    timestamps come from different clocks, so a device clock that lags can hide a newer build,
- *    and installing a stale APK late can do the same. It is still better than offering nothing.
+ * 1. **CI build numbers** ([remoteBuildId] against [installedBuildId]), on both channels. Every
+ *    push to `main` rebuilds the same `versionCode`/`versionName` and republishes it as the latest
+ *    release, so a per-build identity is the only way to keep receiving those builds. It compares
+ *    two integers produced by the same counter, so no clocks are involved and nothing can drift.
+ * 2. **Upload time against install time**, beta channel only, used when either build number is 0 —
+ *    releases published before the ids existed, and APKs built outside CI. This one is a
+ *    heuristic: the two timestamps come from different clocks, so a device clock that lags can
+ *    hide a newer build, and installing a stale APK late can do the same. The stable channel
+ *    does not guess and stays quiet instead.
  *
  * [declinedDigest] records the build the user already answered "Later" to, so a single dismissal
  * is not re-asked on every launch while that same build is current.
@@ -164,7 +159,8 @@ internal fun decideUpdate(
         return UpdateDecision(false, REASON_NO_VERSION_INFO)
     }
 
-    if (channel != UpdateChannel.BETA) return UpdateDecision(false, REASON_UP_TO_DATE)
+    val newerBuild = remoteBuildId > 0L && installedBuildId > 0L && remoteBuildId > installedBuildId
+    if (channel != UpdateChannel.BETA && !newerBuild) return UpdateDecision(false, REASON_UP_TO_DATE)
 
     if (remoteDigest != null && remoteDigest == declinedDigest) {
         return UpdateDecision(false, REASON_DECLINED)
@@ -172,7 +168,7 @@ internal fun decideUpdate(
 
     // Clock-free path. Taken whenever both sides know their build number.
     if (remoteBuildId > 0L && installedBuildId > 0L) {
-        return if (remoteBuildId > installedBuildId) {
+        return if (newerBuild) {
             UpdateDecision(true, REASON_NEWER_BUILD_ID)
         } else {
             UpdateDecision(false, REASON_UP_TO_DATE)
@@ -404,14 +400,25 @@ internal class UpdateChecker(
 
                 val digest = MessageDigest.getInstance("SHA-256")
                 target.parentFile?.mkdirs()
+                var written = 0L
                 target.outputStream().use { sink ->
                     val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
                     while (true) {
                         val read = source.read(buffer)
-                        if (read <= 0) break
+                        if (read < 0) break
+                        if (read == 0) continue
                         digest.update(buffer, 0, read)
                         sink.write(buffer, 0, read)
+                        written += read
                     }
+                }
+                // Older assets carry no digest: then at least the size must match, so a
+                // connection cut mid-way is not handed to the installer as a broken APK.
+                if (!isCompleteDownload(written, info.sizeBytes)) {
+                    Log.w(TAG, "APK size mismatch: expected ${info.sizeBytes}, got $written")
+                    target.delete()
+                    failure = "incomplete"
+                    return@use
                 }
 
                 val expected = info.digest
@@ -466,10 +473,13 @@ internal const val SHA256_PREFIX = "sha256:"
 internal const val SHA256_HEX_LENGTH = 64
 
 /**
- * Marker `release.yml` appends to the `latest` release body, inside an HTML comment so it stays
+ * Marker the CI workflow writes into the release body, inside an HTML comment so it stays
  * invisible in the rendered release notes.
  */
 internal const val BUILD_ID_PATTERN = """bds-build-id:\s*(\d+)"""
+
+/** The visible "**Build:** `123`" line of the release notes, for releases without the marker. */
+internal const val BUILD_LINE_PATTERN = """\*\*Build:\*\*\s*`(\d+)`"""
 
 internal const val REASON_INSTALLED_NEWER = "installed-is-newer"
 internal const val REASON_NEWER_VERSION = "newer-version"
@@ -487,14 +497,19 @@ internal const val REASON_NEWER_BUILD_ID = "newer-build-id"
  * "older": the tagged releases are published without one, and so are APKs built outside CI.
  */
 internal fun parseBuildId(raw: String?): Long {
-    val match = Regex(BUILD_ID_PATTERN).find(raw ?: "") ?: return 0L
+    val text = raw ?: return 0L
+    val match = Regex(BUILD_ID_PATTERN).find(text) ?: Regex(BUILD_LINE_PATTERN).find(text) ?: return 0L
     return match.groupValues[1].toLongOrNull() ?: 0L
 }
 
+/** A download is complete when its size matches the asset's, or the asset reports no size. */
+internal fun isCompleteDownload(written: Long, expected: Long): Boolean =
+        expected <= 0L || written == expected
+
 /**
  * Parse the ISO-8601 timestamps the releases API returns (`2026-09-16T12:35:49Z`) into epoch
- * millis, or 0 when the value is missing or unparseable. Java 8's `Instant` is unavailable on
- * API 26 without desugaring, and the format is fixed, so it is parsed by hand.
+ * millis, or 0 when the value is missing or unparseable. The format is fixed, so it is parsed
+ * strictly by hand: anything else (offsets, fractions) is rejected rather than guessed at.
  */
 internal fun parseIso8601Millis(raw: String?): Long {
     val value = raw?.trim() ?: return 0L

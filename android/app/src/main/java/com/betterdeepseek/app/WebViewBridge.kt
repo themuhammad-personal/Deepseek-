@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Vibrator
@@ -304,15 +303,12 @@ private fun fileExtension(filename: String): String =
 /**
  * @JavascriptInterface object exposed to the WebView as `window.AndroidBridge`.
  *
- * Methods here back the chrome.* polyfill in src/platform/android-chrome-polyfill.js. All methods
- * MUST be safe to call from arbitrary JS — they validate inputs and return JSON strings (or null)
- * rather than throwing.
- *
- * Phase 1 implements:
- * - SharedPreferences-backed key/value storage
- * - Generic HTTP GET/POST via OkHttp routed by message.type
- * - Asset URL resolution against the WebViewAssetLoader authority
- * - Blob download stub (Phase 2 will implement the actual file write)
+ * It backs the engine injected into chat.deepseek.com: key/value storage (prefs plus
+ * [EngineStore] for large values), the native file/folder/camera picker (files streamed through
+ * [NativeBlobStore]), downloads, CORS-free fetch / GitHub / MCP calls, haptics and the built-in
+ * Linux sandbox. Every method MUST be safe to call from arbitrary JS — inputs are validated and
+ * JSON strings (or null) are returned rather than thrown — and the sensitive ones refuse to serve
+ * any page but https://chat.deepseek.com ([trustedPage]).
  */
 class WebViewBridge(
         private val context: Context,
@@ -385,47 +381,6 @@ class WebViewBridge(
      * overlay waits for this before revealing the app.
      */
     @Volatile var onUiPolishedCallback: (() -> Unit)? = null
-
-    /**
-     * CORS-free JSON-RPC transport for MCP servers. The WebView origin
-     * (chat.deepseek.com) is refused by third-party MCP endpoints, so the SPA
-     * hands the request to OkHttp here and receives the reply asynchronously via
-     * `window.__mcpResult(callbackName, json)`.
-     */
-    @JavascriptInterface
-    fun mcpRequest(endpoint: String, headersJson: String, body: String, callbackName: String) {
-        Thread {
-            val result = try {
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val hb = org.json.JSONObject(headersJson)
-                val builder = okhttp3.Request.Builder()
-                    .url(endpoint)
-                    .post(body.toRequestBody("application/json".toMediaTypeOrNull()))
-                val keys = hb.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    builder.header(k, hb.optString(k))
-                }
-                client.newCall(builder.build()).execute().use { res ->
-                    org.json.JSONObject()
-                        .put("status", res.code)
-                        .put("contentType", res.header("Content-Type") ?: "")
-                        .put("body", res.body?.string() ?: "")
-                        .toString()
-                }
-            } catch (e: Exception) {
-                Log.e("SuperDeepSeek", "MCP native request failed", e)
-                org.json.JSONObject().put("error", e.message ?: "network error").toString()
-            }
-            val js = "window.__mcpResult && window.__mcpResult(" +
-                org.json.JSONObject.quote(callbackName) + ", " +
-                org.json.JSONObject.quote(result) + ")"
-            evaluateJs?.invoke(js)
-        }.start()
-    }
 
     /**
      * Returns the last DeepSeek page theme written by the extension's theme.js via
@@ -760,6 +715,10 @@ class WebViewBridge(
             if (child.isDirectory) {
                 traverseDocumentTree(child, relPath, out, skipped, depth + 1, acceptImages, imageCounter)
             } else if (child.isFile) {
+                if (out.size >= MAX_FOLDER_FILES) {
+                    skipped.add(SkippedFile(relPath, "file-cap-exceeded"))
+                    continue
+                }
                 when (val picked = readDocumentFile(child, relPath, acceptImages, imageCounter)) {
                     is PickedItemResult.Ok -> out.add(picked.file)
                     is PickedItemResult.Skipped -> skipped.add(SkippedFile(picked.name, picked.reason))
@@ -930,14 +889,10 @@ class WebViewBridge(
      * folder.
      *
      * Strategy:
-     * - API 29+ (Q): insert into MediaStore.Downloads, write via openOutputStream.
-     * ```
-     *     The system DownloadManager surfaces the file to the user automatically.
-     * ```
-     * - Legacy (API 26-28): write into Environment.DIRECTORY_DOWNLOADS, fire
-     * ```
-     *     a DOWNLOAD_COMPLETE broadcast and try ACTION_VIEW via FileProvider.
-     * ```
+     * - API 29+ (Q): insert into MediaStore.Downloads (pending until fully written).
+     * - API 26-28: write into the shared Downloads folder, or the app's own one until the storage
+     *   permission is granted ([LegacyDownloads]); then offer ACTION_VIEW via FileProvider.
+     *
      * The JS side is fire-and-forget; failures are logged and surfaced as a Toast so the user is
      * never left wondering why the download didn't appear.
      */
@@ -952,10 +907,14 @@ class WebViewBridge(
 
         val safeName = sanitizeDownloadName(fileName)
         val resolvedMime = mimeType?.takeIf { it.isNotBlank() } ?: "application/octet-stream"
+        runCatching { onDownloadRequested?.invoke() }
         // Decode and write off the JS thread: a large ZIP used to freeze the page
         // until the file was on disk.
         ioExecutor.execute { saveDownload(payload, safeName, resolvedMime) }
     }
+
+    /** Set by the activity: a download is starting (Android 8–9 asks for storage access once). */
+    @Volatile var onDownloadRequested: (() -> Unit)? = null
 
     private fun saveDownload(payload: String, safeName: String, resolvedMime: String) {
         try {
@@ -972,17 +931,6 @@ class WebViewBridge(
             Log.e(TAG, "downloadBlob failed for $safeName", t)
             showToast("Download error: ${t.message ?: "unknown"}")
         }
-    }
-
-    /** Callback to apply native hardware blur on the underlying WebView view. */
-    @Volatile var onNativeBlurRequested: ((enabled: Boolean, radius: Float) -> Unit)? = null
-
-    /**
-     * Request native hardware GPU blur (RenderEffect) on Android 12+.
-     */
-    @JavascriptInterface
-    fun setNativeBlur(enabled: Boolean, radius: Float) {
-        onNativeBlurRequested?.invoke(enabled, radius)
     }
 
     /**
@@ -1004,7 +952,7 @@ class WebViewBridge(
 
             if (!vibrator.hasVibrator()) return
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            run {
                 val effect =
                         when (type?.lowercase()) {
                             "heavy" ->
@@ -1031,9 +979,6 @@ class WebViewBridge(
                                     VibrationEffect.createOneShot(12, VibrationEffect.DEFAULT_AMPLITUDE)
                         }
                 vibrator.vibrate(effect)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(15)
             }
         } catch (_: Throwable) {
             // Silently ignore if device does not support vibration
@@ -1041,8 +986,7 @@ class WebViewBridge(
     }
 
     /**
-     * Simple duration-based vibration the engine bundle calls
-     * (`AndroidBridge.vibrate(ms)`) for menu open / toggle haptics. Clamped so a
+     * Simple duration-based vibration (`AndroidBridge.vibrate(ms)`). Clamped so a
      * page script can never hold the motor.
      */
     @JavascriptInterface
@@ -1060,12 +1004,7 @@ class WebViewBridge(
                         context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
                     } ?: return
             if (!vibrator.hasVibrator()) return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(ms)
-            }
+            vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
         } catch (_: Throwable) {
             // Device without a vibrator — haptics are optional polish.
         }
@@ -1086,19 +1025,20 @@ class WebViewBridge(
                     }
             val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
             val itemUri = resolver.insert(collection, values) ?: return null
-
-            resolver.openOutputStream(itemUri)?.use { it.write(bytes) } ?: return null
-
-            values.clear()
-            values.put(MediaStore.Downloads.IS_PENDING, 0)
-            resolver.update(itemUri, values, null, null)
+            try {
+                resolver.openOutputStream(itemUri)?.use { it.write(bytes) }
+                        ?: throw java.io.IOException("could not open the download for writing")
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(itemUri, values, null, null)
+            } catch (t: Throwable) {
+                // A failed write must not leave a hidden, half-written pending entry behind.
+                runCatching { resolver.delete(itemUri, null, null) }
+                throw t
+            }
             itemUri
         } else {
-            @Suppress("DEPRECATION")
-            val downloadsDir =
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-            val file = uniqueFileIn(downloadsDir, fileName)
+            val file = uniqueFileIn(LegacyDownloads.folder(context), fileName)
             FileOutputStream(file).use { it.write(bytes) }
 
             val authority = "${context.packageName}.fileprovider"
@@ -1126,20 +1066,6 @@ class WebViewBridge(
         }
     }
 
-    private fun uniqueFileIn(dir: File, baseName: String): File {
-        val candidate = File(dir, baseName)
-        if (!candidate.exists()) return candidate
-        val dot = baseName.lastIndexOf('.')
-        val stem = if (dot > 0) baseName.substring(0, dot) else baseName
-        val ext = if (dot > 0) baseName.substring(dot) else ""
-        var i = 1
-        while (true) {
-            val f = File(dir, "${stem}_$i$ext")
-            if (!f.exists()) return f
-            i++
-        }
-    }
-
     private fun sanitizeDownloadName(fileName: String?): String {
         val raw = fileName?.trim().orEmpty().ifEmpty { "download.bin" }
         // Strip path separators and characters Android FS rejects. Mirrors
@@ -1156,7 +1082,7 @@ class WebViewBridge(
     }
 
     /** Background pool for bridge work that must not block the page's JS thread. */
-    private val ioExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+    private val ioExecutor = java.util.concurrent.Executors.newFixedThreadPool(IO_THREADS)
 
     /**
      * Non-blocking [fetch]. `fetch()` is a synchronous @JavascriptInterface call,
@@ -1215,7 +1141,7 @@ class WebViewBridge(
 
     /** Sandbox state for the page: {supported, enabled, installed, mode, …}. Never throws. */
     @JavascriptInterface
-    fun sandboxInfo(): String = try {
+    fun sandboxInfo(): String = if (!trustedPage) UNTRUSTED_SANDBOX_INFO else try {
         sandbox.status()
                 .put("enabled", isSandboxEnabled())
                 .put("mode", prefs.getString(KEY_SANDBOX_MODE, "auto") ?: "auto")
@@ -1226,7 +1152,7 @@ class WebViewBridge(
 
     /** Stop button: ends every sandbox command and background job. */
     @JavascriptInterface
-    fun sandboxStop(): Int = try {
+    fun sandboxStop(): Int = if (!trustedPage) 0 else try {
         SandboxService.onAgentActiveChanged(context, false)
         sandbox.killAll()
     } catch (t: Throwable) { 0 }
@@ -2056,18 +1982,6 @@ class WebViewBridge(
         return transcriptArray
     }
 
-    // ── Super DeepSeek Official Login Architecture ──
-    // Official WebView loads https://chat.deepseek.com for 100% official login
-    // React WebView shows custom OLED UI after token extracted
-    @Volatile var mainWebView: android.webkit.WebView? = null
-    @Volatile var hiddenWebView: android.webkit.WebView? = null
-    @Volatile var officialWebView: android.webkit.WebView? = null
-    @Volatile var reactWebView: android.webkit.WebView? = null
-    @Volatile var evaluateHiddenJs: ((String) -> Unit)? = null
-    @Volatile var onOfficialLogin: ((String) -> Unit)? = null
-    @Volatile var onSwitchToOfficial: (() -> Unit)? = null
-    @Volatile var lastToken: String? = null
-
     /**
      * Fired by the injected engine bundle once its UI polish pass has run —
      * the definitive "engine UI is up" signal for the boot overlay.
@@ -2077,351 +1991,14 @@ class WebViewBridge(
         onUiPolishedCallback?.invoke()
     }
 
-    @JavascriptInterface
-    fun onOfficialToken(token: String?) {
-        val t = token?.trim() ?: ""
-        if (t.length < 20) {
-            Log.w(TAG, "onOfficialToken: invalid token length ${t.length}")
-            return
-        }
-        Log.d(TAG, "onOfficialToken: received token length ${t.length}")
-        // Memory only: a session token in plain prefs is a liability, and any
-        // copy an older build persisted is removed at startup.
-        lastToken = t
-        onOfficialLogin?.invoke(t)
+    /** Removes the session token a legacy build kept in plain prefs (native call, not for JS). */
+    fun removeLegacyToken() {
+        engineStore.remove(LEGACY_TOKEN_KEY)
+        prefs.edit().remove(LEGACY_TOKEN_KEY).apply()
     }
 
-    @JavascriptInterface
-    fun getOfficialToken(): String? {
-        return lastToken
-    }
-
-    @JavascriptInterface
-    fun switchToOfficialLogin() {
-        // Called from React UI when user wants to re-login
-        lastToken = null
-        prefs.edit().remove("ds_official_token").apply()
-        mainHandler.post {
-            try {
-                onSwitchToOfficial?.invoke()
-                officialWebView?.post {
-                    officialWebView?.loadUrl("https://chat.deepseek.com/")
-                }
-            } catch (_: Exception) {}
-        }
-    }
-
-    @JavascriptInterface
-    fun dsLoginNative(payloadJson: String?, callbackId: String?) {
-        val safeCallbackId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
-        if (safeCallbackId.isEmpty()) return
-        // Always use hidden WebView first - it has correct Origin https://chat.deepseek.com and WAF cookies
-        try {
-            val payload = try { JSONObject(payloadJson ?: "{}") } catch (_: Exception) { JSONObject() }
-            val email = payload.optString("email").trim().ifEmpty { null }
-            val mobile = payload.optString("mobile").trim().ifEmpty { null }
-            val password = payload.optString("password")
-            if (password.isEmpty() || (email == null && mobile == null)) {
-                deliverDsLoginError(safeCallbackId, "Email or phone and password required")
-                return
-            }
-            // Try hidden WebView directly - most reliable for WAF bypass
-            tryHiddenWebViewLogin(payload, safeCallbackId)
-        } catch (t: Throwable) {
-            Log.e(TAG, "dsLoginNative failed", t)
-            deliverDsLoginError(safeCallbackId, t.message ?: "Network error")
-        }
-    }
-
-    // Fallback OkHttp method (kept for reference, but hidden WebView is primary)
-    private fun dsLoginViaOkHttp(payload: JSONObject, callbackId: String) {
-        Thread {
-            try {
-                val email = payload.optString("email").trim().ifEmpty { null }
-                val mobile = payload.optString("mobile").trim().ifEmpty { null }
-                val areaCode = payload.optString("area_code").trim().ifEmpty { "+880" }
-                val password = payload.optString("password")
-                val deviceId = generateDeviceId()
-                val dsPayload = JSONObject().apply {
-                    put("email", email?.let { if (it.isNotEmpty()) it else JSONObject.NULL } ?: JSONObject.NULL)
-                    put("mobile", mobile?.let { if (it.isNotEmpty()) it else JSONObject.NULL } ?: JSONObject.NULL)
-                    put("password", password)
-                    put("area_code", areaCode)
-                    put("device_id", deviceId)
-                    put("os", "web")
-                }
-                val cookieManager = android.webkit.CookieManager.getInstance()
-                val cookies = cookieManager.getCookie("https://chat.deepseek.com") ?: ""
-                val requestBody = dsPayload.toString().toRequestBody("application/json".toMediaTypeOrNull())
-                val requestBuilder = Request.Builder()
-                    .url("https://chat.deepseek.com/api/v0/users/login")
-                    .post(requestBody)
-                    .header("Accept", "*/*")
-                    .header("Accept-Language", "en-US,en;q=0.9")
-                    .header("Content-Type", "application/json")
-                    .header("Origin", "https://chat.deepseek.com")
-                    .header("Referer", "https://chat.deepseek.com/")
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36")
-                    .header("X-Client-Platform", "web")
-                    .header("X-Client-Version", "1.0.0")
-                    .header("X-Client-Locale", "en_US")
-                if (cookies.isNotEmpty()) requestBuilder.header("Cookie", cookies)
-                val response = httpClient.newCall(requestBuilder.build()).execute()
-                val bodyString = response.body?.string() ?: ""
-                val code = response.code
-                val wafAction = response.header("x-amzn-waf-action")
-                Log.d(TAG, "OkHttp login code=$code waf=$wafAction body=${bodyString.take(500)}")
-                if (code == 202 && wafAction == "challenge") {
-                    tryHiddenWebViewLogin(payload, callbackId)
-                    return@Thread
-                }
-                if (bodyString.isEmpty()) {
-                    deliverDsLoginError(callbackId, "Empty response (code $code)")
-                    return@Thread
-                }
-                try {
-                    val json = JSONObject(bodyString)
-                    val data = json.optJSONObject("data")
-                    if (data != null) {
-                        val bizCode = data.optInt("biz_code", 0)
-                        if (bizCode != 0) {
-                            deliverDsLoginError(callbackId, data.optString("biz_msg", "Login failed"))
-                            return@Thread
-                        }
-                        val bizData = data.optJSONObject("biz_data")
-                        if (bizData != null) {
-                            val user = bizData.optJSONObject("user") ?: bizData
-                            val token = user.optString("token").ifEmpty { bizData.optString("token") }
-                            if (token.isNotEmpty()) {
-                                val result = JSONObject().apply {
-                                    put("token", token)
-                                    put("email", user.optString("email", email ?: ""))
-                                    put("mobile", user.optString("mobile", mobile ?: ""))
-                                }
-                                deliverDsLoginSuccess(callbackId, result)
-                                return@Thread
-                            }
-                        }
-                    }
-                    deliverDsLoginError(callbackId, json.optString("msg", "Login failed"))
-                } catch (e: Exception) {
-                    deliverDsLoginError(callbackId, "Parse error: ${e.message}")
-                }
-            } catch (t: Throwable) {
-                deliverDsLoginError(callbackId, t.message ?: "Network error")
-            }
-        }.start()
-    }
-
-    private fun tryHiddenWebViewLogin(originalPayload: JSONObject, callbackId: String, retryCount: Int = 0) {
-        val hidden = hiddenWebView
-        if (hidden == null) {
-            deliverDsLoginError(callbackId, "Hidden WebView not ready, please wait 3 sec and retry")
-            return
-        }
-        val payloadStr = JSONObject.quote(originalPayload.toString())
-        // Robust login via hidden WebView origin https://chat.deepseek.com - bypasses CORS + has WAF cookies
-        val js = """
-            (async () => {
-              try {
-                // Check if we're still on WAF challenge page
-                const isWafChallenge = document.documentElement.innerHTML.includes('aws-waf') || 
-                                       document.documentElement.innerHTML.includes('challenge') ||
-                                       document.title.includes('403') ||
-                                       document.title.includes('Challenge');
-                if (isWafChallenge && $retryCount < 2) {
-                  console.log('[HiddenLogin] WAF challenge page detected, waiting...');
-                  await new Promise(r => setTimeout(r, 2000));
-                  // Try to reload if still challenge
-                  if (document.documentElement.innerHTML.includes('aws-waf')) {
-                    window.location.reload();
-                    window.AndroidBridge.onHiddenLoginResult('$callbackId', JSON.stringify({error: 'WAF challenge - reloading, please retry in 3 sec'}), false);
-                    return;
-                  }
-                }
-                
-                const orig = JSON.parse($payloadStr);
-                const bytes = new Uint8Array(32);
-                crypto.getRandomValues(bytes);
-                let bin = '';
-                for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
-                const device_id = btoa(bin).replace(/=+$/,'');
-                const body = {
-                  email: orig.email || null,
-                  mobile: orig.mobile || null,
-                  password: orig.password,
-                  area_code: orig.area_code || '+880',
-                  device_id,
-                  os: 'web'
-                };
-                console.log('[HiddenLogin] attempting official login for', body.email || body.mobile, 'device_id', device_id.slice(0,8));
-                const res = await fetch('/api/v0/users/login', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'X-Client-Platform': 'web',
-                    'X-Client-Version': '1.0.0',
-                    'X-Client-Locale': 'en_US'
-                  },
-                  body: JSON.stringify(body),
-                  credentials: 'include'
-                });
-                console.log('[HiddenLogin] status', res.status, 'headers', [...res.headers.entries()].slice(0,5));
-                const text = await res.text();
-                console.log('[HiddenLogin] raw response', text.slice(0,800));
-                let json;
-                try { json = JSON.parse(text); } catch(e) { 
-                  // If response is HTML (WAF challenge), treat as WAF error
-                  if (text.includes('aws-waf') || text.includes('Challenge') || res.status === 202) {
-                    window.AndroidBridge.onHiddenLoginResult('$callbackId', JSON.stringify({error: 'WAF challenge solving... Please wait 5 sec and retry', isWaf: true}), false);
-                    return;
-                  }
-                  throw e;
-                }
-                const resultStr = JSON.stringify(json);
-                window.AndroidBridge.onHiddenLoginResult('$callbackId', resultStr, res.ok);
-              } catch(e) {
-                console.error('[HiddenLogin] error', e, e.stack);
-                window.AndroidBridge.onHiddenLoginResult('$callbackId', JSON.stringify({error: e.message || 'Fetch failed - WAF may be blocking, wait 5 sec'}), false);
-              }
-            })();
-        """.trimIndent()
-        hidden.post {
-            try {
-                hidden.evaluateJavascript(js, null)
-            } catch (e: Exception) {
-                Log.e(TAG, "Hidden WebView evaluate failed", e)
-                deliverDsLoginError(callbackId, "Hidden WebView error: ${e.message}")
-            }
-        }
-    }
-
-    @JavascriptInterface
-    fun onHiddenLoginResult(callbackId: String?, resultJson: String?, ok: Boolean) {
-        val safeId = callbackId?.take(64)?.filter { it.isLetterOrDigit() || it == '-' || it == '_' } ?: return
-        if (safeId.isEmpty()) return
-        Thread {
-            try {
-                val jsonStr = resultJson ?: "{}"
-                val json = try { JSONObject(jsonStr) } catch (_: Exception) { JSONObject().apply { put("error", "Invalid response") } }
-                
-                // Check if it's WAF error - if so, try OkHttp fallback
-                val isWaf = json.optBoolean("isWaf", false) || json.optString("error").contains("WAF", ignoreCase = true)
-                if (isWaf) {
-                    Log.w(TAG, "Hidden WebView got WAF, trying OkHttp fallback")
-                    // Try to extract original payload from somewhere? For now just report WAF
-                    // The JS already tried, now we try OkHttp with cookies
-                    try {
-                        val dummyPayload = JSONObject() // We lost original payload, so just report error
-                        // Actually we need to retry via OkHttp - but we don't have original payload here
-                        // So just deliver WAF error with instruction
-                        deliverDsLoginError(safeId, json.optString("error", "WAF challenge solving... Please wait 5 sec and retry"))
-                        return@Thread
-                    } catch (_: Exception) {}
-                }
-                
-                if (!ok) {
-                    val err = json.optString("error", json.optString("msg", "Login failed"))
-                    deliverDsLoginError(safeId, err)
-                    return@Thread
-                }
-                val data = json.optJSONObject("data")
-                if (data != null) {
-                    val bizCode = data.optInt("biz_code", 0)
-                    if (bizCode != 0) {
-                        deliverDsLoginError(safeId, data.optString("biz_msg", "Login failed"))
-                        return@Thread
-                    }
-                    val bizData = data.optJSONObject("biz_data")
-                    if (bizData != null) {
-                        val user = bizData.optJSONObject("user") ?: bizData
-                        val token = user.optString("token").ifEmpty { bizData.optString("token") }
-                        if (token.isNotEmpty()) {
-                            val result = JSONObject().apply {
-                                put("token", token)
-                                put("email", user.optString("email", ""))
-                                put("mobile", user.optString("mobile", ""))
-                            }
-                            deliverDsLoginSuccess(safeId, result)
-                            return@Thread
-                        }
-                    }
-                }
-                deliverDsLoginError(safeId, json.optString("msg", "Login failed"))
-            } catch (t: Throwable) {
-                Log.e(TAG, "onHiddenLoginResult failed", t)
-                deliverDsLoginError(safeId, t.message ?: "Error")
-            }
-        }.start()
-    }
-
-    private fun generateDeviceId(): String {
-        return try {
-            val bytes = ByteArray(32)
-            java.security.SecureRandom().nextBytes(bytes)
-            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).replace("=", "")
-        } catch (_: Exception) {
-            val bytes = ByteArray(32)
-            java.util.Random().nextBytes(bytes)
-            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP).replace("=", "")
-        }
-    }
-
-    private fun deliverDsLoginSuccess(callbackId: String, result: JSONObject) {
-        val escaped = JSONObject.quote(result.toString())
-        val script = """
-            (function(){
-              try {
-                const cbs = window._dsLoginCallbacks || {};
-                const cb = cbs['$callbackId'];
-                if(cb && cb.resolve) {
-                  const data = JSON.parse($escaped);
-                  cb.resolve(data);
-                  delete cbs['$callbackId'];
-                }
-              } catch(e){ console.error('[Bridge] deliver success failed', e); }
-            })();
-        """.trimIndent()
-        mainWebView?.post {
-            mainWebView?.evaluateJavascript(script, null)
-        }
-        evaluateJs?.invoke(script)
-    }
-
-    private fun deliverDsLoginError(callbackId: String, error: String) {
-        val escaped = JSONObject.quote(error)
-        val script = """
-            (function(){
-              try {
-                const cbs = window._dsLoginCallbacks || {};
-                const cb = cbs['$callbackId'];
-                if(cb && cb.reject) {
-                  cb.reject($escaped);
-                  delete cbs['$callbackId'];
-                }
-              } catch(e){ console.error('[Bridge] deliver error failed', e); }
-            })();
-        """.trimIndent()
-        mainWebView?.post {
-            mainWebView?.evaluateJavascript(script, null)
-        }
-        evaluateJs?.invoke(script)
-    }
-
-    // ── Chat bridge removed ────────────────────────────────────────────────
-    //
-    // This file used to carry the whole chat path: dsChatNative, a PoW
-    // challenge round trip (requestPowSolve / onPowSolved), OkHttp completion
-    // streaming and five onChat* callbacks injected back into the WebView.
-    //
-    // It is gone because it solved a problem that does not exist. Only
-    // GET / and POST /users/login sit behind the AWS WAF; chat_session/create,
-    // chat/create_pow_challenge and chat/completion all answer a plain HTTP
-    // client. The SPA is now served from chat.deepseek.com itself (see
-    // MainActivity), which makes those calls same-origin, so src/lib/deepseek
-    // /api.ts fetches them directly with no bridge at all.
-    //
-    // What remains here is sign-in, which genuinely does need a browser.
+    // Sign-in and chat traffic are the official page's own: the engine runs
+    // inside chat.deepseek.com, so no login or chat calls go through this bridge.
     // See docs/ARCHITECTURE.md.
     companion object {
         private const val TAG = "BdsWebViewBridge"
@@ -2429,6 +2006,8 @@ class WebViewBridge(
         // digest alongside the JS storage keys.
         internal const val PREFS_NAME = "bds_storage"
         private const val UNTRUSTED_REPLY = "{\"ok\":false,\"error\":\"Not available on this page.\"}"
+        private const val LEGACY_TOKEN_KEY = "ds_official_token"
+        private const val UNTRUSTED_SANDBOX_INFO = "{\"supported\":false,\"enabled\":false}"
         /** "0" turns the Linux sandbox off (default on). Shared with the page via get/setStorage. */
         internal const val KEY_SANDBOX_ENABLED = "sd_sandbox_enabled"
         /** "auto" runs the agent's sandbox commands directly; "ask" confirms each one. */
@@ -2478,6 +2057,12 @@ class WebViewBridge(
         internal const val MAX_UNKNOWN_FOLDER_FILE_SIZE = 2L * 1024 * 1024
 
         internal const val MAX_FOLDER_IMAGES = 30
+
+        /** Files read from one picked folder; the rest are listed as skipped. */
+        internal const val MAX_FOLDER_FILES = 1000
+
+        /** Page fetches, downloads and MCP calls in flight at once (sandbox calls have their own pool). */
+        private const val IO_THREADS = 6
 
         internal const val MAX_PICK_CHUNK_CHARS = 200_000
 

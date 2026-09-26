@@ -10,6 +10,4 @@
     <color name="launcher_background">#1E1F23</color>
     <color name="bds_splash_bg">#1E1F23</color>
     <color name="bds_window_bg">#1E1F23</color>
-    <color name="bds_accent">#4D6BFE</color>
-    <color name="bds_electric">#00E5FF</color>
 </resources>

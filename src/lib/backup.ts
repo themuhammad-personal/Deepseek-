@@ -15,7 +15,7 @@ export type BackupPayload = {
   commands?: unknown;
 };
 
-const SECTION_KEYS = [
+export const SECTION_KEYS = [
   "settings",
   "chats",
   "mcp",
@@ -48,7 +48,7 @@ export function collectBackup(sections: Set<BackupSection>): BackupPayload {
   const out: BackupPayload = { version: 2, exportedAt: Date.now() };
   if (sections.has("settings")) out.settings = s.settings;
   if (sections.has("chats")) out.chats = s.chats;
-  if (sections.has("mcp")) out.mcp = s.mcp.map(({ status, latency, lastPingMs, ...rest }) => rest);
+  if (sections.has("mcp")) out.mcp = s.mcp.map(({ status: _status, latency: _latency, lastPingMs: _lastPingMs, ...rest }) => rest);
   if (sections.has("prompts")) out.prompts = s.prompts;
   if (sections.has("memories")) out.memories = s.memories;
   if (sections.has("skills")) out.skills = s.skills;

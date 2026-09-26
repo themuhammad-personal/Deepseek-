@@ -64,7 +64,7 @@ internal class SandboxTools(
             if (count == 0) {
                 // Tolerate CRLF files edited with LF snippets.
                 if (text.contains("\r\n") && !old.contains("\r\n")) {
-                    return applyEdit(text, old.replace("\n", "\r\n"), new.replace("\n", "\r\n"), all)
+                    return applyEdit(text, old.replace("\n", "\r\n"), toCrlf(new), all)
                 }
                 return Result.failure(IllegalArgumentException(
                         "old_text was not found in the file. Read the file again and copy the exact text (including whitespace)."))
@@ -73,6 +73,9 @@ internal class SandboxTools(
                     "old_text occurs $count times. Include more surrounding lines so it is unique, or set replace_all=true."))
             return Result.success((if (all) text.replace(old, new) else text.replaceFirst(old, new)) to count)
         }
+
+        /** [s] with every line ending as CRLF (a snippet that already has CRLF stays unchanged). */
+        internal fun toCrlf(s: String): String = s.replace("\r\n", "\n").replace("\n", "\r\n")
 
         /** 1-based line window with numbered lines. */
         internal fun window(text: String, offsetLine: Int, maxLines: Int): String {

@@ -15,6 +15,13 @@ export default tseslint.config(
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
+      // Generated or vendored: build outputs and the minified engine bundles.
+      "dist-android/**",
+      "android/**/build/**",
+      "android/app/src/main/assets/**",
+      "android/app/src/main/bds-assets/bds/content.js",
+      "android/app/src/main/bds-assets/bds/injected.js",
+      "android/app/src/main/bds-assets/bds/sandbox.js",
     ],
   },
   js.configs.recommended,
@@ -37,8 +44,14 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-unused-vars": [
         "warn",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
       ],
+      // `catch (_) {}` is the deliberate "best effort" idiom in the engine.
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "@typescript-eslint/no-explicit-any": "off",
     },
   },

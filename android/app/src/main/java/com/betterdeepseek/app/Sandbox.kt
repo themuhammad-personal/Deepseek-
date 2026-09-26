@@ -1,5 +1,6 @@
 package com.betterdeepseek.app
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
@@ -42,6 +43,8 @@ internal class Sandbox private constructor(private val app: Context) {
         const val OUTPUT_KEEP = 64 * 1024
         private const val READ_KEEP = 4 * 1024 * 1024
 
+        // Holds only the application context, which lives as long as the process.
+        @SuppressLint("StaticFieldLeak")
         @Volatile private var instance: Sandbox? = null
 
         fun get(context: Context): Sandbox =
@@ -548,13 +551,18 @@ internal class Sandbox private constructor(private val app: Context) {
 
     private fun pump(input: InputStream, collector: OutputCollector, onOutput: ((String) -> Unit)?) {
         val buf = ByteArray(16 * 1024)
+        // A character split across two reads must not turn into two garbage characters.
+        val text = Utf8Chunker()
         try {
             input.use {
                 while (true) {
                     val n = it.read(buf)
                     if (n < 0) break
                     collector.write(buf, n)
-                    onOutput?.let { cb -> runCatching { cb(String(buf, 0, n, Charsets.UTF_8)) } }
+                    if (onOutput != null) {
+                        val chunk = text.decode(buf, n)
+                        if (chunk.isNotEmpty()) runCatching { onOutput(chunk) }
+                    }
                 }
             }
         } catch (_: IOException) {
@@ -731,27 +739,38 @@ internal class Sandbox private constructor(private val app: Context) {
             }
             return name
         }
-        @Suppress("DEPRECATION")
-        val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-        dir.mkdirs()
-        var out = File(dir, name)
-        var i = 1
-        while (out.exists()) {
-            val dot = name.lastIndexOf('.')
-            out = File(dir, if (dot > 0) "${name.substring(0, dot)}_$i${name.substring(dot)}" else "${name}_$i")
-            i++
-        }
+        val out = uniqueFileIn(LegacyDownloads.folder(app), name)
         src.copyTo(out)
         return out.name
     }
 
     // ── Files (through the guest, so its symlinks resolve correctly) ─────────
 
+    /**
+     * The whole file. A file larger than the read limit is an error, never a
+     * shortened copy: edit_file writes what it read back, and a copy with its
+     * middle cut out would silently destroy the file.
+     */
     fun readFile(path: String): String {
+        // Straight from disk when the file is plainly inside the rootfs: exact
+        // bytes, and no proot warning (stderr is merged into exec output) can
+        // end up inside the text that edit_file writes back.
+        val guest = guestPath(path)
+        val bound = listOf("/dev", "/proc", "/sys").any { guest == it || guest.startsWith("$it/") }
+        val host = if (bound) null else hostFile(path)
+        if (host != null && host.isFile) {
+            if (host.length() > READ_KEEP) throw IOException(tooLargeToRead(path))
+            return host.readText(Charsets.UTF_8)
+        }
         val r = exec("cat -- \"\$SD_PATH\"", extraEnv = mapOf("SD_PATH" to guestPath(path)), timeoutSec = 60, maxOutput = READ_KEEP)
         if (r.exitCode != 0) throw IOException(r.output.trim().ifEmpty { "cannot read ${guestPath(path)}" })
+        if (r.omittedBytes > 0) throw IOException(tooLargeToRead(path))
         return r.output
     }
+
+    private fun tooLargeToRead(path: String): String =
+            "${guestPath(path)} is larger than ${READ_KEEP / (1024 * 1024)} MB. " +
+                    "Work on it with run instead (e.g. sed -n '1,400p', grep -n, head/tail, or a Python script)."
 
     fun writeFile(path: String, content: ByteArray) {
         val r = exec(

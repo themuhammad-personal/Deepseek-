@@ -61,6 +61,8 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     companion object {
         const val EXTRA_PREVIEW_URL = "preview_url"
         private const val MAX_TERMINAL_CHARS = 200_000
+        /** A URL, not a label: nothing to translate. */
+        private const val DEFAULT_PREVIEW_URL = "http://127.0.0.1:8000/"
 
         fun start(context: Context, previewUrl: String? = null) {
             val i = Intent(context, StudioActivity::class.java)
@@ -94,7 +96,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     private lateinit var termText: TextView
     private lateinit var termInput: EditText
     private val termBuffer = SpannableStringBuilder()
-    private var shell: Process? = null
+    @Volatile private var shell: Process? = null
+    /** A shell is being started; commands typed meanwhile wait in [waitingForShell]. */
+    private var shellStarting = false
+    private val waitingForShell = ArrayList<(Process) -> Unit>()
+    /** One writer thread, so commands reach the shell in the order they were typed. */
+    private val shellWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val history = ArrayList<String>()
     private var historyIndex = 0
 
@@ -154,6 +161,8 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         sandbox.removeListener(this)
         shell?.let { p -> Thread { runCatching { p.destroy() } }.start() }
         shell = null
+        waitingForShell.clear()
+        shellWriter.shutdown()
         runCatching { previewWeb.destroy() }
         super.onDestroy()
     }
@@ -483,26 +492,35 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         }
     }
 
+    private fun runOnShellWriter(p: Process, then: (Process) -> Unit) {
+        runCatching { shellWriter.execute { then(p) } }
+    }
+
     private fun ensureShell(then: (Process) -> Unit) {
-        shell?.takeIf { it.isAliveCompat() }?.let { p -> Thread { then(p) }.start(); return }
+        shell?.takeIf { it.isAliveCompat() }?.let { p -> runOnShellWriter(p, then); return }
+        // Two quick commands must not start two shells: queue behind the one starting.
+        if (shellStarting) { waitingForShell.add(then); return }
         if (!sandbox.isSupported()) {
             appendTerm(sandbox.unsupportedReason() + "\n", cError)
             return
         }
         if (!sandbox.isInstalled()) appendTerm(t("Setting up Linux (one-time download, about 4 MB)…\n", "লিনাক্স প্রস্তুত হচ্ছে (একবারের ডাউনলোড, প্রায় ৪ MB)…\n"), cMuted)
+        shellStarting = true
+        waitingForShell.add(then)
         Thread {
             try {
                 val p = sandbox.startShell()
                 shell = p
                 Thread({
                     val buf = ByteArray(8192)
+                    val decoder = Utf8Chunker()
                     try {
                         p.inputStream.use { input ->
                             while (true) {
                                 val n = input.read(buf)
                                 if (n < 0) break
-                                val s = Sandbox.stripAnsi(String(buf, 0, n, Charsets.UTF_8))
-                                main.post { if (!isDestroyed) appendTerm(s, cText) }
+                                val s = Sandbox.stripAnsi(decoder.decode(buf, n))
+                                if (s.isNotEmpty()) main.post { if (!isDestroyed) appendTerm(s, cText) }
                             }
                         }
                     } catch (_: Exception) {}
@@ -513,10 +531,20 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                         main.post { if (!isDestroyed) appendTerm(t("[shell exited", "[শেল বন্ধ হয়েছে") + (code?.let { " · $it" } ?: "") + "]\n", cMuted) }
                     }
                 }, "studio-shell").start()
-                main.post { refreshStatus() }
-                then(p)
+                main.post {
+                    shellStarting = false
+                    val queued = ArrayList(waitingForShell)
+                    waitingForShell.clear()
+                    queued.forEach { runOnShellWriter(p, it) }
+                    refreshStatus()
+                }
             } catch (e: Exception) {
-                main.post { appendTerm((e.message ?: "Could not start the shell") + "\n", cError); refreshStatus() }
+                main.post {
+                    shellStarting = false
+                    waitingForShell.clear()
+                    appendTerm((e.message ?: "Could not start the shell") + "\n", cError)
+                    refreshStatus()
+                }
             }
         }.start()
     }
@@ -674,8 +702,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                         .setMessage(t("Delete ${f.name}?", "${f.name} মুছে ফেলবেন?"))
                         .setNegativeButton(android.R.string.cancel, null)
                         .setPositiveButton(t("Delete", "মুছুন")) { _, _ ->
-                            if (f.isDirectory && !runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)) deleteTreeNoFollow(f) else f.delete()
-                            loadDir(cwd)
+                            // A big folder (node_modules) takes seconds: never on the main thread.
+                            Thread {
+                                val isLink = runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)
+                                if (f.isDirectory && !isLink) deleteTreeNoFollow(f) else f.delete()
+                                main.post { if (!isDestroyed) loadDir(cwd) }
+                            }.start()
                         }.show()
             }
         }.show()
@@ -754,7 +786,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             }
         }
         previewUrl = EditText(this).apply {
-            setText("http://127.0.0.1:8000/")
+            setText(DEFAULT_PREVIEW_URL)
             typeface = Typeface.MONOSPACE
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(cText)

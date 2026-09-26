@@ -126,9 +126,7 @@ and keeps working as DeepSeek evolves. Read the full design in
 ```bash
 npm ci
 npm run typecheck && npm run test:app     # workspace checks
-npm run build:android                     # web assets → android/app/src/main/assets
-rm -rf android/app/src/main/assets/bds && \
-  cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds   # stage engine
+npm run android:stage-engine              # copy the engine into the APK assets
 cd android && ./gradlew testDebugUnitTest assembleRelease
 ```
 

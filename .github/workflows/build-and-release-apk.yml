@@ -54,15 +54,9 @@ jobs:
           npm run test:engine
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-      - name: Build React App for Android (SPA with hidden WebView + native bridge)
+      - name: Stage Super DeepSeek engine assets
         run: |
-          npm run build:android
-          echo "=== Assets ==="
-          ls -lh android/app/src/main/assets/
-          ls -lh android/app/src/main/assets/assets/ | head -n 20
-          ls -lh android/app/src/main/assets/ds/
-      - name: Stage Super DeepSeek engine assets (after vite emptyOutDir wipe)
-        run: |
+          mkdir -p android/app/src/main/assets
           rm -rf android/app/src/main/assets/bds
           cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds
           echo "=== Engine assets staged ==="
@@ -169,7 +163,7 @@ jobs:
           ls -lh "$APK_NAME" "${APK_NAME}.sha256"
           cat "${APK_NAME}.sha256"
           echo "=== APK contents ==="
-          unzip -l "$APK_NAME" | grep -E "assets/|android-spa|ds/" | head -n 20
+          unzip -l "$APK_NAME" | grep -E "assets/bds/|lib/" | head -n 20
           echo "=== Native libraries (sandbox) ==="
           unzip -l "$APK_NAME" | grep -E "lib/.*\.so|assets/sandbox" || echo "::warning::APK has no sandbox runtime"
       - name: Verify APK Signature
@@ -250,6 +244,8 @@ jobs:
 
             Install on Android 8.0+ and sign in with your DeepSeek account.
             Builds are signed with the same key, so each one installs as an update.
+
+            <!-- bds-build-id: ${{ github.run_number }} -->
           files: |
             *.apk
             *.sha256

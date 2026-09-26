@@ -333,7 +333,7 @@ export async function sendChat(payload: SendPayload, abort?: AbortController): P
       return { text: acc.text, thinking: acc.thinking, error: streamError, messageId: acc.messageId ?? null };
     };
 
-    let res = await completeStream(completeOpts);
+    const res = await completeStream(completeOpts);
 
     if (res.status === 401) {
       useAppStore.getState().setAccount(null);

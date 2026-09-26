@@ -101,6 +101,10 @@ class SandboxService : Service() {
             agentActive = false
             Sandbox.get(this).killAll()
             main.post { runCatching { onStopRequested?.invoke() } }
+            // Nothing may be running (the agent was only thinking): without this
+            // no process-count change arrives and the service never winds down.
+            val app = applicationContext
+            main.post { refresh(app, Sandbox.get(app).activeCount) }
         }
         val active = intent?.getIntExtra(EXTRA_ACTIVE, Sandbox.get(this).activeCount) ?: 0
         try {
@@ -125,7 +129,7 @@ class SandboxService : Service() {
 
     private fun buildNotification(active: Int): Notification {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
+        if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.sandbox_channel), NotificationManager.IMPORTANCE_LOW).apply {
                 setShowBadge(false)
             })

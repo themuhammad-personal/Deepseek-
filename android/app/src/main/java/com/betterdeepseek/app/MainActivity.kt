@@ -18,7 +18,6 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -38,7 +37,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.UserAgentMetadata
-import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewFeature
 
@@ -251,32 +249,25 @@ private fun mapAcceptTypes(acceptTypes: Array<String>?): List<String> {
 private val CHROME_VERSION_REGEX = Regex("""\bChrome/(\d+(?:\.\d+)*)""")
 
 /**
- * Super DeepSeek - Official DeepSeek login via visible WebView + custom React UI overlay
- * 
- * As per user request: Directly load https://chat.deepseek.com official login page,
- * let user login officially, extract token from localStorage.userToken, then show
- * custom React SPA UI (exact copy from demo) with that token.
- * 
- * Architecture:
- * - officialWebView: visible, loads https://chat.deepseek.com official site for 100% official login
- *   After login, token is extracted from localStorage: JSON.parse(localStorage.getItem("userToken")).value
- * - reactWebView: invisible initially, loads custom React SPA from local assets (OLED black UI)
- *   After official login token obtained, it becomes visible and receives token via JS bridge
- * 
- * This solves WAF/CORS completely because login happens on official domain with official cookies.
+ * Super DeepSeek's single activity.
+ *
+ * The official chat (https://chat.deepseek.com) runs in [officialWebView]: the
+ * user signs in there exactly as on the web, with the site's own cookies and
+ * WAF session. On every page load the Super DeepSeek engine (assets/bds) is
+ * injected into that page, and [WebViewBridge] (`window.AndroidBridge`) gives
+ * it native storage, file picking, downloads, fetch, MCP and the Linux
+ * sandbox — only while the page is https://chat.deepseek.com.
+ *
+ * A native launch screen ([BootScreenView]) covers the page until the
+ * enhanced chat is really on screen, so the plain official UI never flashes.
  */
 class MainActivity : ComponentActivity() {
 
-    /** Host the asset loader owns — chosen so API calls from the SPA are same-origin. */
+    /** The chat's host: blob paths are only served on it (and the engine asset host). */
     private val DS_HOST = "chat.deepseek.com"
 
-    /** Bundled React SPA, served out of assets by [assetLoader]. */
-    private val SPA_URL = "https://chat.deepseek.com/android-spa.html"
-
     private lateinit var officialWebView: WebView
-    private lateinit var reactWebView: WebView
     private lateinit var rootLayout: FrameLayout
-    private lateinit var assetLoader: WebViewAssetLoader
 
     private val bdsAssetHost by lazy { getString(R.string.bds_asset_authority) }
 
@@ -284,7 +275,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var bdsAssetLoader: WebViewAssetLoader
     private lateinit var bridge: WebViewBridge
     private lateinit var cookieManager: CookieManager
-    private var isReactVisible = false
     private var pendingFileChooser: ValueCallback<Array<Uri>>? = null
     private var cameraPhotoUri: Uri? = null
 
@@ -306,9 +296,7 @@ class MainActivity : ComponentActivity() {
             null
         }
     }
-    private var spaRetries = 0
     private val handler = Handler(Looper.getMainLooper())
-    private var tokenPollingRunnable: Runnable? = null
 
     /** Engine native-pick request waiting for [nativePickLauncher]: id to mode. */
     private var nativePickRequest: Pair<String, String>? = null
@@ -448,6 +436,21 @@ class MainActivity : ComponentActivity() {
         runCatching { notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     }
 
+    private val storagePermissionLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private var askedStoragePermission = false
+
+    /**
+     * Android 8–9 only: shared Downloads needs a runtime permission. Asked once
+     * per launch when the user downloads something; until it is granted,
+     * downloads go to the app's own Downloads folder ([LegacyDownloads]).
+     */
+    private fun maybeAskStoragePermission() {
+        if (LegacyDownloads.canWriteSharedFolder(this) || askedStoragePermission) return
+        askedStoragePermission = true
+        runCatching { storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) }
+    }
+
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
@@ -511,22 +514,6 @@ class MainActivity : ComponentActivity() {
             // Optional: without it only worker-originated blob fetches miss.
             Log.w("SuperDeepSeek", "Service-worker client unavailable", t)
         }
-        // Serve the bundled SPA from chat.deepseek.com itself.
-        //
-        // That makes every /api/v0/... fetch from the SPA same-origin, which is
-        // the whole point: DeepSeek answers an OPTIONS preflight with 403 and
-        // sends no Access-Control-Allow-Origin, so a cross-origin fetch carrying
-        // an Authorization header is blocked by the browser. Same-origin requests
-        // never preflight, carry the real cookies, and look exactly like the
-        // official web app's traffic.
-        //
-        // Paths the asset loader does not own (i.e. /api/*) fall through to the
-        // network, which is precisely what the API calls need.
-        assetLoader = WebViewAssetLoader.Builder()
-            .setDomain(DS_HOST)
-            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
-
         // Engine bundle lives at assets/bds and is requested as
         // https://bds-asset.local/bds/... by WebViewBridge.getAssetUrl().
         bdsAssetLoader = WebViewAssetLoader.Builder()
@@ -579,7 +566,7 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    if (!shouldOpenRequestExternally(request, "appassets.androidplatform.net")) return false
+                    if (!shouldOpenRequestExternally(request, bdsAssetHost)) return false
                     // Open external links in browser
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, request.url))
@@ -658,106 +645,17 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(Color.parseColor("#1e1f23")) // engine panel dark — matches the official page
         }
 
-        // React SPA WebView - custom UI, hidden initially
-        reactWebView = WebView(this).apply {
-            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            visibility = View.GONE
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                allowFileAccess = true
-                allowContentAccess = true
-                allowFileAccessFromFileURLs = true
-                allowUniversalAccessFromFileURLs = true
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                cacheMode = WebSettings.LOAD_DEFAULT
-                // Same UA as the login WebView: DeepSeek sees one consistent
-                // fingerprint for both the token and the API calls made with it.
-                userAgentString = deriveWebViewUserAgent(WebSettings.getDefaultUserAgent(this@MainActivity))
-            }
-            addJavascriptInterface(bridge, "AndroidBridge")
-            webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                    val url = request.url
-                    // API traffic must reach the real server, never the asset loader.
-                    if (url?.path?.startsWith("/api/") == true) return null
-                    return assetLoader.shouldInterceptRequest(url)
-                }
-                override fun onReceivedError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    error: WebResourceError,
-                ) {
-                    super.onReceivedError(view, request, error)
-                    if (request.isForMainFrame && request.url?.toString() == SPA_URL && spaRetries < 3) {
-                        spaRetries++
-                        Log.e("SuperDeepSeek", "SPA load failed (${error.description}); retry $spaRetries/3")
-                        view.postDelayed({ view.loadUrl(SPA_URL) }, 400)
-                    }
-                }
-                override fun onPageFinished(view: WebView, url: String) {
-                    super.onPageFinished(view, url)
-                    view.evaluateJavascript("""
-                        window.isAndroidApp = true;
-                        window.isOfficialDeepSeekLoginEnabled = true;
-                        console.log('[SuperDeepSeek] React app loaded');
-                    """.trimIndent(), null)
-                    // If we already have token, inject it
-                    bridge.lastToken?.let { token ->
-                        injectTokenToReact(token)
-                    }
-                }
-            }
-            webChromeClient = object : WebChromeClient() {
-                override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
-                    pendingFileChooser?.onReceiveValue(null)
-                    val callback = filePathCallback ?: return true
-                    pendingFileChooser = callback
-                    return try {
-                        val capture = fileChooserParams?.isCaptureEnabled == true
-                        val intent = if (capture) {
-                            buildCameraCaptureIntent() ?: fileChooserParams!!.createIntent()
-                        } else {
-                            buildFileChooserIntent(
-                                fileChooserParams?.acceptTypes,
-                                fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE,
-                            )
-                        }
-                        fileChooserLauncher.launch(intent)
-                        true
-                    } catch (e: Exception) {
-                        pendingFileChooser = null
-                        cameraPhotoUri = null
-                        callback.onReceiveValue(null)
-                        false
-                    }
-                }
-            }
-            setBackgroundColor(Color.parseColor("#1e1f23"))
-        }
-
         cookieManager.setAcceptThirdPartyCookies(officialWebView, true)
-        cookieManager.setAcceptThirdPartyCookies(reactWebView, true)
 
-        bridge.officialWebView = officialWebView
-        bridge.reactWebView = reactWebView
-        // Legacy login-path handles: the hidden-WebView login flow and the
-        // dsLoginNative callbacks all run against the official page now.
-        bridge.mainWebView = officialWebView
-        bridge.hiddenWebView = officialWebView
         // The engine bundle runs INSIDE the official WebView, so every script
         // the bridge posts (native pick results, MCP replies, theme events…)
-        // must be evaluated there. Pointing these at the hidden React WebView
-        // silently dropped them — the "file picker did not return a result"
-        // class of bugs.
+        // is evaluated there.
         bridge.scriptPoster = { script ->
             officialWebView.post { officialWebView.evaluateJavascript(script, null) }
         }
         bridge.evaluateJs = { script ->
             officialWebView.post { officialWebView.evaluateJavascript(script, null) }
         }
-        bridge.evaluateHiddenJs = { script -> officialWebView.post { officialWebView.evaluateJavascript(script, null) } }
         bridge.onPickFiles = { mode, requestId ->
             handler.post {
                 try {
@@ -773,22 +671,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        bridge.onOfficialLogin = { token -> 
-            handler.post {
-                onOfficialTokenFound(token)
-            }
-        }
-        bridge.onSwitchToOfficial = {
-            handler.post {
-                showOfficialUI()
-            }
-        }
 
         rootLayout = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             setBackgroundColor(pageBarColor) // recoloured to the page's own background
             addView(officialWebView)
-            addView(reactWebView)
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { view, insets ->
@@ -827,26 +714,23 @@ class MainActivity : ComponentActivity() {
             } else false
         }
         bridge.onOpenStudio = { runOnUiThread { StudioActivity.start(this) } }
+        bridge.onDownloadRequested = { runOnUiThread { maybeAskStoragePermission() } }
         bridge.onSandboxCallStarted = { runOnUiThread { maybeAskNotificationPermission() } }
-        SandboxService.onStopRequested = {
-            officialWebView.post { officialWebView.evaluateJavascript("window.__sdAgent&&window.__sdAgent.stop(true)", null) }
-        }
+        SandboxService.onStopRequested = stopAgentInPage
         showNativeBootOverlay()
 
-        // New architecture: the official DeepSeek site IS the chat surface. The
-        // better-deepseek engine (assets/bds) is injected on page load to provide
-        // multi-turn memory, MCP, tools, memory/skills and the skinned frame —
-        // it is proven against the live protocol, unlike a hand-rolled API client.
-        // The React SPA is no longer the chat surface, so we never flip to it.
-        // After a renderer crash or a process kill (long agent tasks in the
+        // The official DeepSeek site IS the chat surface; the engine (assets/bds)
+        // is injected on every page load. After a renderer crash or a process kill (long agent tasks in the
         // background) the open conversation is reopened instead of a blank chat.
         val restoreUrl = savedInstanceState?.getString(KEY_CHAT_URL) ?: rendererLostUrl
         rendererLostUrl = null
         officialWebView.loadUrl(ChatUrls.restorable(restoreUrl) ?: "https://chat.deepseek.com/")
         handleIncomingIntent(intent)
-        // The session token is not ours to keep (legacy polling stored it in plain prefs).
-        bridge.removeStorage("ds_official_token")
-        Thread { cleanupOldCaptures(cacheDir) }.start()
+        // The session token is not ours to keep (a legacy build stored it in plain prefs).
+        Thread {
+            runCatching { bridge.removeLegacyToken() }
+            cleanupOldCaptures(cacheDir)
+        }.start()
         maybeCheckForUpdate()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -857,36 +741,16 @@ class MainActivity : ComponentActivity() {
                     if (popup.canGoBack()) popup.goBack() else closePopupWindow()
                     return
                 }
-                if (isReactVisible) {
-                    reactWebView.evaluateJavascript("(function(){ var btn=document.querySelector('#bds-close, .bds-sheet-close'); if(btn&&btn.offsetParent!==null){btn.click(); return true;} return false;})()") { result ->
-                        if (result != "true" && result != "\"true\"") {
-                            if (reactWebView.canGoBack()) reactWebView.goBack()
-                            else {
-                                // Go back to official login
-                                showOfficialUI()
-                            }
-                        }
-                    }
-                } else {
-                    // Let the engine close its own sheet, dialog or command popup first;
-                    // only navigate the page when nothing of ours was open.
-                    officialWebView.evaluateJavascript("(function(){try{return !!(window.__sdHandleBack&&window.__sdHandleBack());}catch(e){return false;}})()") { result ->
-                        if (result != "true" && result != "\"true\"") {
-                            if (officialWebView.canGoBack()) officialWebView.goBack()
-                            else moveTaskToBack(true)
-                        }
+                // Let the engine close its own sheet, dialog or command popup first;
+                // only navigate the page when nothing of ours was open.
+                officialWebView.evaluateJavascript("(function(){try{return !!(window.__sdHandleBack&&window.__sdHandleBack());}catch(e){return false;}})()") { result ->
+                    if (result != "true" && result != "\"true\"") {
+                        if (officialWebView.canGoBack()) officialWebView.goBack()
+                        else moveTaskToBack(true)
                     }
                 }
             }
         })
-    }
-
-    private fun onOfficialTokenFound(token: String) {
-        // The engine (official site) is now the chat surface; we just persist the
-        // token for session restore instead of flipping to the removed React SPA.
-        // Kept in memory only: persisting the session token in plain prefs
-        // gained nothing (the WebView keeps its own session).
-        bridge.lastToken = token
     }
 
     private fun readAsset(name: String): String? = try {
@@ -939,13 +803,15 @@ class MainActivity : ComponentActivity() {
             val a = loadEngineAssets()
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                webView.evaluateJavascript("(function(){return window.__sdEngineInjected?1:0})()") { r ->
+                // Check and claim in ONE script: two quick onPageFinished calls
+                // would otherwise both see "not injected" before either set the flag.
+                // Anything but "1" (e.g. no answer) injects: a missing engine is worse.
+                webView.evaluateJavascript(ENGINE_CLAIM_JS) { r ->
                     if (r?.trim('"') == "1") {
                         Log.d("BDS", "engine already present in this document")
                         flushPendingPageActions()
                         return@evaluateJavascript
                     }
-                    webView.evaluateJavascript("window.__sdEngineInjected=true;", null)
                     a.injected?.let { webView.evaluateJavascript(it) { Log.d("BDS", "injected.js done") } }
                     a.cssJs?.let { webView.evaluateJavascript(it) { Log.d("BDS", "content.css done") } }
                     a.content?.let { webView.evaluateJavascript(it) { Log.d("BDS", "content.js done") } }
@@ -978,6 +844,9 @@ class MainActivity : ComponentActivity() {
     private var readyPollRunning = false
 
     private companion object {
+        /** "0" the first time in a document (and marks it), "1" afterwards. */
+        const val ENGINE_CLAIM_JS =
+            "(function(){if(window.__sdEngineInjected)return 1;window.__sdEngineInjected=true;return 0})()"
         const val KEY_ASKED_NOTIFICATIONS = "sd_asked_notifications"
         const val KEY_CHAT_URL = "sd_chat_url"
         const val LIVENESS_TIMEOUT_MS = 8_000L
@@ -1264,17 +1133,17 @@ class MainActivity : ComponentActivity() {
         val bottomRect = Rect(left, pageBottom - gap - strip, right, pageBottom - gap)
         barSampleBusy = true
         try {
-            PixelCopy.request(window, topRect, top, { topResult ->
+            PixelCopy.request(window, topRect, top, topCopy@{ topResult ->
                 if (topResult != PixelCopy.SUCCESS || isFinishing || isDestroyed) {
                     barSampleBusy = false
-                    return@request
+                    return@topCopy
                 }
-                PixelCopy.request(window, bottomRect, bottom, { bottomResult ->
+                PixelCopy.request(window, bottomRect, bottom, bottomCopy@{ bottomResult ->
                     barSampleBusy = false
-                    if (isFinishing || isDestroyed || bootView != null) return@request
+                    if (isFinishing || isDestroyed || bootView != null) return@bottomCopy
                     val topColor = dominantColor(pixelsOf(top))
                     val bottomColor = if (bottomResult == PixelCopy.SUCCESS) dominantColor(pixelsOf(bottom)) else null
-                    if (topColor == null && bottomColor == null) return@request
+                    if (topColor == null && bottomColor == null) return@bottomCopy
                     val t = topColor ?: pageBarColor
                     val b = bottomColor ?: t
                     if (t != pageBarColor || b != pageNavBarColor) applyBarColors(t, b)
@@ -1314,78 +1183,6 @@ class MainActivity : ComponentActivity() {
      */
     private fun injectUiPolish(webView: WebView) {
         webView.evaluateJavascript(UiPolish.buildScript(), null)
-    }
-
-    private fun showReactUI(token: String) {
-        if (isReactVisible) return
-        isReactVisible = true
-        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
-        
-        // Inject token to React WebView
-        injectTokenToReact(token)
-        
-        // Switch visibility
-        officialWebView.visibility = View.GONE
-        reactWebView.visibility = View.VISIBLE
-        
-        // Also save email if available
-        officialWebView.evaluateJavascript("""
-            (function(){
-              try {
-                const raw = localStorage.getItem('userToken');
-                if (raw) {
-                  const parsed = JSON.parse(raw);
-                  return JSON.stringify({email: parsed.email || '', mobile: parsed.mobile || ''});
-                }
-              } catch(e) {}
-              return JSON.stringify({});
-            })();
-        """.trimIndent()) { result ->
-            try {
-                val clean = result.trim().removeSurrounding("\"").replace("\\\"", "\"").replace("\\\\", "\\")
-                Log.d("SuperDeepSeek", "User info: $clean")
-            } catch (_: Exception) {}
-        }
-    }
-
-    private fun showOfficialUI() {
-        isReactVisible = false
-        reactWebView.visibility = View.GONE
-        officialWebView.visibility = View.VISIBLE
-    }
-
-    private fun injectTokenToReact(token: String) {
-        val escaped = token.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"").replace("\n", "\\n")
-        val script = """
-            (function(){
-              try {
-                const token = "$escaped";
-                console.log('[React] Injecting official token, length:', token.length);
-                // Store in our app's expected storage
-                localStorage.setItem('ds_token', token);
-                // Try to set account via store if available
-                if (window.useAppStore && window.useAppStore.getState) {
-                  const state = window.useAppStore.getState();
-                  if (state.setAccount) {
-                    state.setAccount({token: token, email: '', mobile: ''});
-                    console.log('[React] setAccount called');
-                  }
-                }
-                // Also dispatch event for app to pick up
-                window.dispatchEvent(new CustomEvent('sds:official-token', {detail: {token: token}}));
-                // Directly call setAccount if K is available (zustand)
-                if (typeof K !== 'undefined' && K.getState) {
-                  K.getState().setAccount({token: token, email: '', mobile: ''});
-                }
-              } catch(e) {
-                console.error('[React] Token inject failed', e);
-              }
-            })();
-        """.trimIndent()
-        reactWebView.post {
-            reactWebView.evaluateJavascript(script, null)
-        }
-        bridge.evaluateJs?.invoke(script)
     }
 
     @Volatile private var isForeground = false
@@ -1440,20 +1237,24 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        SandboxService.onStopRequested = null
+        // A recreated activity may already have installed its own handler.
+        if (SandboxService.onStopRequested === stopAgentInPage) SandboxService.onStopRequested = null
         // Closed for good: no page is left to run the agent loop.
         if (isFinishing) SandboxService.onAgentActiveChanged(this, false)
-        tokenPollingRunnable?.let { handler.removeCallbacks(it) }
+        handler.removeCallbacksAndMessages(null)
         closePopupWindow()
         try {
             officialWebView.removeJavascriptInterface("AndroidBridge")
             officialWebView.destroy()
         } catch (_: Exception) {}
-        try {
-            reactWebView.removeJavascriptInterface("AndroidBridge")
-            reactWebView.destroy()
-        } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    /** The notification's Stop action: ends the agent loop in the page. */
+    private val stopAgentInPage: () -> Unit = {
+        if (::officialWebView.isInitialized) {
+            officialWebView.post { officialWebView.evaluateJavascript("window.__sdAgent&&window.__sdAgent.stop(true)", null) }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1546,6 +1347,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleWebDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
         val name = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType)
+        maybeAskStoragePermission()
         when {
             url.startsWith("blob:") || url.startsWith("data:") -> {
                 // Only the page can read its own blob: URLs; it hands the bytes to
@@ -1564,7 +1366,11 @@ class MainActivity : ComponentActivity() {
                         userAgent?.let { addRequestHeader("User-Agent", it) }
                         setTitle(name)
                         setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                        if (LegacyDownloads.canWriteSharedFolder(this@MainActivity)) {
+                            setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                        } else {
+                            setDestinationInExternalFilesDir(this@MainActivity, android.os.Environment.DIRECTORY_DOWNLOADS, name)
+                        }
                     }
                     (getSystemService(DOWNLOAD_SERVICE) as android.app.DownloadManager).enqueue(request)
                     android.widget.Toast.makeText(this, getString(R.string.bds_download_started, name), android.widget.Toast.LENGTH_SHORT).show()
@@ -1674,8 +1480,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showUpdateDialog(info: UpdateInfo, installed: InstalledApp) {
-        val message = if (info.channel == UpdateChannel.BETA && info.versionName == installed.versionName) {
-            getString(R.string.bds_update_message_beta, installed.versionName ?: "?")
+        val message = if (info.versionName == installed.versionName) {
+            // Same version, newer CI build (either channel).
+            getString(R.string.bds_update_message_beta, info.versionName)
         } else {
             getString(R.string.bds_update_message, info.versionName, installed.versionName ?: "?")
         }
@@ -1688,7 +1495,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun downloadAndInstallUpdate(info: UpdateInfo) {
-        if (android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+        if (!packageManager.canRequestPackageInstalls()) {
             android.widget.Toast.makeText(this, R.string.bds_update_need_permission, android.widget.Toast.LENGTH_LONG).show()
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,

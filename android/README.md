@@ -11,17 +11,15 @@ From the repository root:
 
 ```bash
 npm ci
-npm run build:android            # Vite writes android/app/src/main/assets/ (and empties it first)
-rm -rf android/app/src/main/assets/bds
-cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds   # stage the engine
+npm run android:stage-engine     # copies bds-assets/bds into app/src/main/assets/bds
 cd android
 ./gradlew testDebugUnitTest      # JVM unit tests
 ./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease        # → signed with app/superdeepseek-release.jks
 ```
 
-Always stage the engine **after** `build:android`, because the Vite build clears the
-assets folder.
+`app/src/main/assets/` is generated (gitignored): edit the engine in
+`app/src/main/bds-assets/bds/` and stage it again.
 
 ## Signing and updates
 
@@ -36,9 +34,13 @@ an existing one. `versionCode` is `1000 + build id` and always increases in CI.
 | File | Responsibility |
 |---|---|
 | `MainActivity.kt` | WebView setup, engine injection (`onPageFinished`), boot overlay, file pickers, Back handling |
-| `WebViewBridge.kt` | The `AndroidBridge` JavaScript interface (storage, fetch, downloads, haptics, theme, login) |
+| `WebViewBridge.kt` | The `AndroidBridge` JavaScript interface (storage, pickers, fetch, downloads, haptics, theme, sandbox) |
 | `UiPolish.kt` | Mobile layout polish script injected after the engine |
-| `UpdateChecker.kt` | GitHub Releases update check, stable and beta channels |
+| `UpdateChecker.kt` | GitHub Releases update check (new version or newer CI build), size/sha256-verified download |
+| `Sandbox.kt`, `SandboxTools.kt`, `SandboxService.kt`, `TarGz.kt` | The built-in Linux sandbox (proot + Alpine), its agent tools and the foreground service |
+| `StudioActivity.kt` | Linux Studio: terminal, file browser and preview |
+| `Downloads.kt` | Where Android 8–9 downloads go (shared Downloads, or the app's own folder without the permission) |
+| `Utf8Chunker.kt` | Streams process output as UTF-8 without breaking characters split between reads |
 | `src/main/bds-assets/bds/` | The engine bundle: `injected.js`, `content.js`, `content.css`, sandbox pages |
 | `src/test/` | Unit tests: bridge, pickers, navigation and link routing, keyboard insets, user agent, polish script, updates |
 

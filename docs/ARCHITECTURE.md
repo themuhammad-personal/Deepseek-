@@ -156,6 +156,6 @@ background on the first page).
 
 ## Legacy code
 
-`src/` contains the earlier React SPA. It is still built into the APK assets by
-`npm run build:android`, but is no longer shown: the official site is the chat surface.
-`MainActivity` keeps an idle `reactWebView` for it that never loads a page.
+`src/` contains the earlier React SPA. It is type-checked and unit-tested in CI but is no
+longer part of the APK: the official site is the chat surface. The APK's only web assets
+are the engine files staged from `android/app/src/main/bds-assets/bds`.

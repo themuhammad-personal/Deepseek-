@@ -429,8 +429,8 @@ class UpdateCheckerTest {
     }
 
     @Test
-    fun `build numbers do not override a release channel version tie`() {
-        // Version still outranks build identity, and the stable channel has no rebuild problem.
+    fun `release channel offers a newer CI build of the same version`() {
+        // Every main build republishes the same version as the latest release.
         val decision =
                 decide(
                         UpdateChannel.RELEASE,
@@ -439,8 +439,32 @@ class UpdateCheckerTest {
                         installedBuildId = 120L,
                 )
 
+        assertTrue(decision.available)
+        assertEquals(REASON_NEWER_BUILD_ID, decision.reason)
+    }
+
+    @Test
+    fun `release channel stays quiet on the same or an older CI build`() {
+        assertEquals(REASON_UP_TO_DATE, decide(UpdateChannel.RELEASE, "v0.1.14", remoteBuildId = 120L, installedBuildId = 120L).reason)
+        assertEquals(REASON_UP_TO_DATE, decide(UpdateChannel.RELEASE, "v0.1.14", remoteBuildId = 119L, installedBuildId = 120L).reason)
+    }
+
+    @Test
+    fun `release channel honours Later for a newer CI build`() {
+        val decision = decide(
+                UpdateChannel.RELEASE, "v0.1.14", remoteBuildId = 121L, installedBuildId = 120L,
+                remoteDigest = "abc", declinedDigest = "abc",
+        )
+        assertEquals(REASON_DECLINED, decision.reason)
+    }
+
+    @Test
+    fun `release channel never guesses from timestamps`() {
+        val decision = decide(
+                UpdateChannel.RELEASE, "v0.1.14",
+                remoteUploadedAtMillis = 2_000L, installedLastUpdateTimeMillis = 1_000L,
+        )
         assertFalse(decision.available)
-        assertEquals(REASON_UP_TO_DATE, decision.reason)
     }
 
     // ── Build id parsing ─────────────────────────────────────────────────
@@ -470,6 +494,23 @@ class UpdateCheckerTest {
         assertEquals(0L, parseBuildId("no marker here"))
         assertEquals(0L, parseBuildId("<!-- bds-build-id: -->"))
         assertEquals(0L, parseBuildId("<!-- bds-build-id: abc -->"))
+    }
+
+    @Test
+    fun `build id parsing falls back to the visible Build line of the release notes`() {
+        val body = "### Super DeepSeek for Android\n\n**Version:** `1.8.3`\n**Build:** `412`\n**Commit:** `abc`"
+        assertEquals(412L, parseBuildId(body))
+        // The hidden marker wins when both are present.
+        assertEquals(9L, parseBuildId("<!-- bds-build-id: 9 -->\n**Build:** `412`"))
+        assertEquals(0L, parseBuildId("**Build:** `n/a`"))
+    }
+
+    @Test
+    fun `download completeness checks the size only when the asset reports one`() {
+        assertTrue(isCompleteDownload(100L, 100L))
+        assertFalse(isCompleteDownload(60L, 100L))
+        assertFalse(isCompleteDownload(120L, 100L))
+        assertTrue(isCompleteDownload(60L, 0L))
     }
 
     // ── Timestamp parsing ────────────────────────────────────────────────

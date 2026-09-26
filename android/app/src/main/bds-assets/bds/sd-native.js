@@ -82,7 +82,7 @@
     var proto = typeof HTMLElement === 'function' ? HTMLElement.prototype : null;
     if (!proto || proto.focus.__sdGuard || typeof document.addEventListener !== 'function') return;
     var nativeFocus = proto.focus;
-    var guarded = function (opts) {
+    var guarded = function (_opts) {
       try {
         if (isTextField(this) && document.activeElement !== this && Date.now() - lastGestureAt > GESTURE_MS) {
           if (!this.hasAttribute(SILENT)) {

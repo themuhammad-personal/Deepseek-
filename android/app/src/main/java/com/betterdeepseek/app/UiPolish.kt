@@ -180,14 +180,19 @@ internal object UiPolish {
               /* Svelte intro transitions can clear inline styles right after
                  mount, so every mutation gets a second, later sweep too. A
                  capture-phase pointerdown sweep covers drawers whose rows are
-                 inserted within the same frame as the tap. */
+                 inserted within the same frame as the tap.
+                 Throttled: while a reply streams, the page mutates every frame,
+                 and each sweep walks the whole document. One burst (a sweep
+                 soon, a trailing one later) covers every mutation that arrives
+                 until the trailing sweep; only mutations after it start a new
+                 burst, so a long reply costs ~2 sweeps per half second. */
               var pend=false;
               function scheduleSweep(delay){
                 setTimeout(function(){sweep(document);},delay);
               }
               var mo=new MutationObserver(function(){
                 if(pend)return;pend=true;
-                setTimeout(function(){pend=false;scheduleSweep(120);scheduleSweep(500);},0);
+                setTimeout(function(){sweep(document);setTimeout(function(){pend=false;sweep(document);},380);},120);
               });
               mo.observe(document.documentElement,{childList:true,subtree:true});
               document.addEventListener("pointerdown",function(){scheduleSweep(0);scheduleSweep(300);},true);

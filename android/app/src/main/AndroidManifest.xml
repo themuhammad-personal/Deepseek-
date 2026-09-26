@@ -55,7 +55,7 @@
         android:theme="@style/Theme.SuperDeepSeek">
         <!-- configChanges must cover every input-peripheral configuration change.
              MainActivity is a single-WebView host whose onCreate always calls
-             loadUrl(bds_target_url), so any unhandled config change destroys and
+             loads chat.deepseek.com, so any unhandled config change destroys and
              recreates the Activity, reloads the WebView and drops the user back to
              the DeepSeek home screen mid-conversation.
 
@@ -116,7 +116,7 @@
             android:name=".StudioActivity"
             android:exported="false"
             android:label="Linux Studio"
-            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|smallestScreenSize|uiMode|density|fontScale"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|touchscreen|smallestScreenSize|uiMode|density|fontScale"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.SuperDeepSeek.NoActionBar" />
 

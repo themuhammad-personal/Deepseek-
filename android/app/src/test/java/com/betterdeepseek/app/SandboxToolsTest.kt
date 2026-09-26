@@ -23,6 +23,13 @@ class SandboxToolsTest {
     }
 
     @Test
+    fun `a CRLF replacement snippet is not doubled into CR CR LF`() {
+        val r = SandboxTools.applyEdit("a\r\nb\r\n", "a\nb", "c\r\nd", all = false).getOrThrow()
+        assertEquals("c\r\nd\r\n", r.first)
+        assertEquals("x\r\ny\r\n", SandboxTools.toCrlf("x\ny\r\n"))
+    }
+
+    @Test
     fun `edit tolerates CRLF files`() {
         val r = SandboxTools.applyEdit("a\r\nb\r\n", "a\nb", "c\nd", all = false).getOrThrow()
         assertEquals("c\r\nd\r\n", r.first)
