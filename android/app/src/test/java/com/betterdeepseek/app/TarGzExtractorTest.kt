@@ -89,7 +89,8 @@ class TarGzExtractorTest {
 
         val stats = extractor.extract(tar.gz().inputStream(), root)
 
-        assertEquals(3, stats.files)
+        assertEquals(2, stats.files)
+        assertEquals(2, stats.links)
         assertEquals("ELF", File(root, "bin/busybox").readText())
         assertTrue(File(root, "bin/busybox").canExecute())
         assertEquals("/bin/busybox", Files.readSymbolicLink(File(root, "bin/sh").toPath()).toString())

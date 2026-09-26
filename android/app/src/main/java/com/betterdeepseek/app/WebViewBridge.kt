@@ -1130,10 +1130,69 @@ class WebViewBridge(
     fun fetchAsync(payloadJson: String?, callbackId: String?) {
         val id = sanitizeCallbackId(callbackId)
         if (id.isEmpty()) return
-        ioExecutor.execute {
+        // Sandbox commands can run for many minutes: give them their own
+        // threads so they never starve page fetches (and vice versa).
+        val executor = if (isSandboxPayload(payloadJson)) sandboxExecutor else ioExecutor
+        executor.execute {
             val result = fetch(payloadJson)
             postScript(buildBridgeReplyScript(id, result, blobs))
         }
+    }
+
+    // ── Linux sandbox (built-in MCP server "sandbox") ────────────────────────
+
+    private val sandboxExecutor = java.util.concurrent.Executors.newCachedThreadPool()
+    private val sandbox by lazy { Sandbox.get(context) }
+
+    /** Set by the activity: shows a URL served from inside the sandbox. */
+    @Volatile var sandboxPreview: ((String) -> Boolean)? = null
+
+    /** Set by the activity: opens Linux Studio. */
+    @Volatile var onOpenStudio: (() -> Unit)? = null
+
+    @JavascriptInterface
+    fun openStudio() {
+        onOpenStudio?.invoke()
+    }
+
+    private val sandboxTools by lazy { SandboxTools(sandbox) { url -> sandboxPreview?.invoke(url) ?: false } }
+
+    private fun isSandboxPayload(payloadJson: String?): Boolean {
+        if (payloadJson == null || !payloadJson.contains("sandbox")) return false
+        return runCatching { SandboxTools.isSandboxUrl(JSONObject(payloadJson).optString("serverUrl")) }.getOrDefault(false)
+    }
+
+    fun isSandboxEnabled(): Boolean = prefs.getString(KEY_SANDBOX_ENABLED, "1") != "0"
+
+    /** Sandbox state for the page: {supported, enabled, installed, mode, …}. Never throws. */
+    @JavascriptInterface
+    fun sandboxInfo(): String = try {
+        sandbox.status()
+                .put("enabled", isSandboxEnabled())
+                .put("mode", prefs.getString(KEY_SANDBOX_MODE, "auto") ?: "auto")
+                .toString()
+    } catch (t: Throwable) {
+        JSONObject().put("supported", false).put("enabled", false).put("reason", t.message ?: "").toString()
+    }
+
+    /** Stop button: ends every sandbox command and background job. */
+    @JavascriptInterface
+    fun sandboxStop(): Int = try { sandbox.killAll() } catch (t: Throwable) { 0 }
+
+    private fun handleSandboxListTools(response: JSONObject) {
+        when {
+            !isSandboxEnabled() -> response.put("ok", false).put("error", "The Linux sandbox is turned off.")
+            !sandbox.isSupported() -> response.put("ok", false).put("error", sandbox.unsupportedReason())
+            else -> response.put("ok", true).put("tools", sandboxTools.listTools())
+        }
+    }
+
+    private fun handleSandboxCall(toolName: String, args: JSONObject, response: JSONObject) {
+        if (!isSandboxEnabled()) {
+            response.put("ok", false).put("error", "The Linux sandbox is turned off in the app.")
+            return
+        }
+        response.put("ok", true).put("result", sandboxTools.call(toolName, args))
     }
 
     /** The page has read a `/__sd/blob/<token>` path; drop it (frees image bytes early). */
@@ -1601,6 +1660,10 @@ class WebViewBridge(
             response.put("error", "No MCP server URL provided.")
             return
         }
+        if (SandboxTools.isSandboxUrl(serverUrl)) {
+            handleSandboxListTools(response)
+            return
+        }
 
         try {
             val result = executeMcpJsonRpc(serverUrl, "tools/list", JSONObject(), apiKey)
@@ -1626,6 +1689,10 @@ class WebViewBridge(
         if (serverUrl.isEmpty() || toolName.isEmpty()) {
             response.put("ok", false)
             response.put("error", "Missing MCP server URL or tool name.")
+            return
+        }
+        if (SandboxTools.isSandboxUrl(serverUrl)) {
+            handleSandboxCall(toolName, args, response)
             return
         }
 
@@ -2294,6 +2361,10 @@ class WebViewBridge(
         // Shared with UpdateChecker, which keeps the update channel and the dismissed-build
         // digest alongside the JS storage keys.
         internal const val PREFS_NAME = "bds_storage"
+        /** "0" turns the Linux sandbox off (default on). Shared with the page via get/setStorage. */
+        internal const val KEY_SANDBOX_ENABLED = "sd_sandbox_enabled"
+        /** "auto" runs the agent's sandbox commands directly; "ask" confirms each one. */
+        internal const val KEY_SANDBOX_MODE = "sd_sandbox_mode"
         private const val DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com"
         private const val DEFAULT_GITHUB_COMMIT_COUNT = 100
         // Desktop Chrome UA for bds-fetch-url requests. Without it OkHttp sends

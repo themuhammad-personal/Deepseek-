@@ -490,6 +490,9 @@ class MainActivity : ComponentActivity() {
         // Official DeepSeek WebView - visible for official login
         officialWebView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            // Keep the chat's renderer at foreground priority even when the app
+            // is in the background, so a long agent run is not starved or killed.
+            runCatching { setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false) }
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -751,6 +754,18 @@ class MainActivity : ComponentActivity() {
                 scheduleBarRefresh(BAR_REFRESH_THEME_MS)
             }
         }
+        // Linux sandbox: the preview tool, the Studio entry points and the
+        // notification's Stop action.
+        bridge.sandboxPreview = { url ->
+            if (isForeground || StudioActivity.visible) {
+                runOnUiThread { StudioActivity.start(this, url) }
+                true
+            } else false
+        }
+        bridge.onOpenStudio = { runOnUiThread { StudioActivity.start(this) } }
+        SandboxService.onStopRequested = {
+            officialWebView.post { officialWebView.evaluateJavascript("window.__sdAgent&&window.__sdAgent.stop(true)", null) }
+        }
         showNativeBootOverlay()
 
         // New architecture: the official DeepSeek site IS the chat surface. The
@@ -834,7 +849,10 @@ class MainActivity : ComponentActivity() {
                   document.head.appendChild(s);
                 })();
             """.trimIndent()
-            return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), readAsset("sd-native.js"))
+            // Native glue, then the sandbox agent glue (it wraps sd-native's bridge fetch).
+            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"))
+                .joinToString("\n;\n").ifEmpty { null }
+            return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), native)
                 .also { engineAssets = it }
         }
     }
@@ -1296,8 +1314,11 @@ class MainActivity : ComponentActivity() {
         bridge.evaluateJs?.invoke(script)
     }
 
+    @Volatile private var isForeground = false
+
     override fun onResume() {
         super.onResume()
+        isForeground = true
         cookieManager.flush()
         // The page may have switched theme while we were in the background.
         if (bootView == null && ::rootLayout.isInitialized) scheduleBarRefresh(BAR_REFRESH_RESUME_MS)
@@ -1305,6 +1326,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        isForeground = false
         cookieManager.flush()
     }
 
@@ -1315,6 +1337,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        SandboxService.onStopRequested = null
         tokenPollingRunnable?.let { handler.removeCallbacks(it) }
         closePopupWindow()
         try {

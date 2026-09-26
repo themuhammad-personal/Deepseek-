@@ -67,6 +67,18 @@ jobs:
           cp -r android/app/src/main/bds-assets/bds android/app/src/main/assets/bds
           echo "=== Engine assets staged ==="
           ls -lh android/app/src/main/assets/bds/
+      - name: Fetch Linux sandbox runtime (proot, libtalloc, Alpine manifest)
+        # Termux proot/libtalloc .debs (SHA-256 checked, mirror fallback) become
+        # jniLibs/<abi>/lib*.so; the Alpine minirootfs is downloaded by the app on
+        # first use. A failure here only disables the sandbox, so it must not
+        # block the build — but it is surfaced loudly.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/fetch_sandbox_deps.py; then
+            echo "::warning::Linux sandbox runtime could not be fetched; this build ships without the sandbox."
+            exit 1
+          fi
+          find android/app/src/main/jniLibs -type f -exec ls -l {} +
       - name: Make Gradle Wrapper Executable
         working-directory: android
         run: chmod +x ./gradlew
@@ -158,6 +170,8 @@ jobs:
           cat "${APK_NAME}.sha256"
           echo "=== APK contents ==="
           unzip -l "$APK_NAME" | grep -E "assets/|android-spa|ds/" | head -n 20
+          echo "=== Native libraries (sandbox) ==="
+          unzip -l "$APK_NAME" | grep -E "lib/.*\.so|assets/sandbox" || echo "::warning::APK has no sandbox runtime"
       - name: Verify APK Signature
         run: |
           $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose "${{ steps.prep.outputs.apk_path }}"
