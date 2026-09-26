@@ -127,3 +127,40 @@
 #bds-drawer .bds-search-provider-move{width:30px!important;height:30px!important;border-radius:8px!important;background:var(--sd-field)!important;border:1px solid var(--bds-border)!important;color:var(--bds-text-primary)!important;font:600 14px/1 system-ui,-apple-system,Roboto,sans-serif!important}
 #bds-drawer .bds-search-provider-move:disabled{opacity:.35}
 #bds-drawer .bds-mcp-intro-box{background:transparent!important;border:none!important;padding:12px 0 4px!important;margin:0!important}
+
+/* === Super DeepSeek command help === */
+/* The help overlay had no panel of its own (transparent over the chat).
+   Phone: bottom sheet. Desktop: centred card. Theme tokens only. */
+.bds-cmd-help-overlay{background:rgba(0,0,0,.5)!important;-webkit-backdrop-filter:blur(3px)!important;backdrop-filter:blur(3px)!important;animation:sd-fade .16s ease-out}
+.bds-cmd-help-overlay .bds-help-modal{box-sizing:border-box;width:520px;max-width:calc(100vw - 32px);max-height:min(640px,82vh);display:flex;flex-direction:column;overflow:hidden;
+  background:var(--bds-bg-panel,#1e1f23);color:var(--bds-text-primary);border:1px solid var(--bds-border);border-radius:20px;box-shadow:0 24px 64px rgba(0,0,0,.35);animation:sd-pop .18s ease-out;outline:none;font-family:inherit}
+.bds-cmd-help-overlay .bds-help-modal *{box-sizing:border-box}
+.bds-cmd-help-overlay .bds-help-header{padding:18px 18px 8px 20px;border-bottom:none;gap:12px}
+.bds-cmd-help-overlay .bds-help-header h2{font-size:19px;font-weight:700;letter-spacing:-.015em;color:var(--bds-text-primary)!important}
+.bds-cmd-help-overlay .bds-help-close{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--bds-bg-elevated);color:var(--bds-text-secondary);font-size:20px;padding:0}
+.bds-cmd-help-overlay .bds-help-close:hover{color:var(--bds-text-primary)}
+.bds-cmd-help-overlay .bds-help-search{padding:6px 18px 10px}
+.bds-cmd-help-overlay .bds-help-search input{height:42px;padding:0 14px;border-radius:12px;font-size:15px;background:var(--bds-bg-elevated);border-color:var(--bds-border)}
+.bds-cmd-help-overlay .bds-help-categories{padding:0 18px 10px;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.bds-cmd-help-overlay .bds-help-categories::-webkit-scrollbar{display:none}
+.bds-cmd-help-overlay .bds-help-cat-btn{flex-shrink:0;height:32px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:500;border:1px solid var(--bds-border);color:var(--bds-text-secondary);background:transparent}
+.bds-cmd-help-overlay .bds-help-cat-btn--active{background:var(--bds-accent);border-color:var(--bds-accent);color:#fff}
+.bds-cmd-help-overlay .bds-help-list{padding:4px 10px 14px;gap:2px;border-top:1px solid var(--bds-border);padding-top:8px;overscroll-behavior:contain}
+.bds-cmd-help-overlay .bds-help-item{gap:12px;padding:10px;border-radius:12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.bds-cmd-help-overlay .bds-help-item:hover,.bds-cmd-help-overlay .bds-help-item:focus-visible{background:var(--bds-bg-elevated);outline:none}
+.bds-cmd-help-overlay .bds-help-item:active{background:var(--bds-bg-elevated);transform:scale(.99)}
+.bds-cmd-help-overlay .bds-help-icon{width:36px;height:36px;border-radius:10px;background:var(--bds-bg-elevated);border:1px solid var(--bds-border)}
+.bds-cmd-help-overlay .bds-help-info{gap:2px}
+.bds-cmd-help-overlay .bds-help-name{font-size:14.5px;color:var(--bds-text-primary)}
+.bds-cmd-help-overlay .bds-help-desc{font-size:12.5px;line-height:1.35;color:var(--bds-text-secondary)}
+.bds-cmd-help-overlay .bds-help-usage{font-size:11.5px;padding:3px 8px;border-radius:6px;background:var(--bds-bg-elevated);border:1px solid var(--bds-border);color:var(--bds-text-secondary);max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:767px){
+  .bds-cmd-help-overlay{align-items:flex-end!important}
+  .bds-cmd-help-overlay .bds-help-modal{width:100%;max-width:100%;max-height:86dvh;border-radius:24px 24px 0 0;border-bottom:none;animation:sd-rise .22s cubic-bezier(.2,.8,.2,1);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .bds-cmd-help-overlay .bds-help-modal::before{content:"";display:block;width:40px;height:4px;border-radius:999px;background:var(--bds-border-hover,var(--bds-border));margin:8px auto 0;flex-shrink:0}
+  .bds-cmd-help-overlay .bds-help-usage{display:none}
+}
+@keyframes sd-fade{from{opacity:0}to{opacity:1}}
+@keyframes sd-pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+@keyframes sd-rise{from{transform:translateY(100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.bds-cmd-help-overlay,.bds-cmd-help-overlay .bds-help-modal{animation:none!important}}
