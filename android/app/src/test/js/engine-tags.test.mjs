@@ -108,7 +108,10 @@ test('every tag means the same with SDS: as with BDS:', () => {
 test('the built-in system prompt is Super DeepSeek, SDS and sandbox-first', () => {
   const i = CONTENT.indexOf(',du=[');
   const j = CONTENT.indexOf('].join(', i);
-  const prompt = vm.runInNewContext(CONTENT.slice(i + 4, j + 1)).join('\n');
+  const lines = vm.runInNewContext(CONTENT.slice(i + 4, j + 1));
+  // One line explains the old name, so the model can map it; nothing else may use it.
+  const prompt = lines.filter((l) => !l.startsWith('Older messages, memories')).join('\n');
+  assert.equal(lines.length - prompt.split('\n').length, 1);
   assert.match(prompt, /^You are Super DeepSeek/);
   assert.match(prompt, /YOUR LINUX SANDBOX/);
   assert.match(prompt, /Never claim that you cannot run code/);
@@ -117,8 +120,58 @@ test('the built-in system prompt is Super DeepSeek, SDS and sandbox-first', () =
 });
 
 test('no Better DeepSeek branding is left in what the model or the user reads', () => {
-  for (const [name, src] of [['content.js', CONTENT], ['injected.js', INJECTED]]) {
+  // Allowed: the one-time migration of stored data and the prompt line that
+  // explains the old name.
+  const content = CONTENT
+    .replace(/async function sdsRebrandStored\(\)\{[\s\S]*?\}function fmt\(/, 'function fmt(')
+    .replace(/"Older messages, memories[^"\\]*(?:\\.[^"\\]*)*"/, '""');
+  for (const [name, src] of [['content.js', content], ['injected.js', INJECTED]]) {
     assert.doesNotMatch(src, /Better DeepSeek|BetterDeepSeek/, name);
     assert.doesNotMatch(src, /"<BDS:|`<BDS:|\[BDS:AUTO\]/, name);
   }
+});
+
+test('stored data from Better DeepSeek is renamed once, and only once', async () => {
+  const code = DECLS.get('sdsRebrandStored');
+  assert.ok(code, 'engine code moved: sdsRebrandStored');
+  const saved = [];
+  const B = {
+    skills: [{ id: 's1', name: 'BDS helper', content: 'Wrap in <BetterDeepSeek>x</BetterDeepSeek>, keep BDS_TOKEN.' }],
+    memories: [{ id: 'm1', text: 'User likes Better DeepSeek and BetterDeepSeek.' }],
+    characters: [],
+    settings: {
+      customSystemPrompts: [{ id: 'c1', name: 'Mine', content: 'You are BDS.' }],
+      systemPromptEntries: [{ id: 'e1', content: 'Use <BDS:create_file> tags.' }],
+      unrelated: 'Better DeepSeek',
+    },
+  };
+  const ctx = vm.createContext({
+    console,
+    B,
+    st: { skills: 'k_skills', memories: 'k_mem', characters: 'k_char', settings: 'k_set' },
+    chrome: { storage: { local: { set: async (o) => { saved.push(JSON.parse(JSON.stringify(o))); } } } },
+  });
+  const run = vm.runInContext(`${code};sdsRebrandStored`, ctx);
+  await run();
+  const out = JSON.parse(JSON.stringify(B));
+  assert.equal(out.skills[0].name, 'SDS helper');
+  assert.equal(out.skills[0].content, 'Wrap in <SuperDeepSeek>x</SuperDeepSeek>, keep BDS_TOKEN.');
+  assert.equal(out.memories[0].text, 'User likes Super DeepSeek and Super DeepSeek.');
+  assert.equal(out.settings.customSystemPrompts[0].content, 'You are SDS.');
+  assert.equal(out.settings.systemPromptEntries[0].content, 'Use <SDS:create_file> tags.');
+  assert.equal(out.settings.unrelated, 'Better DeepSeek', 'only the listed fields are touched');
+  assert.equal(out.settings.sdsBrandVersion, 1);
+  assert.equal(saved.length, 1);
+  await run();
+  assert.equal(saved.length, 1, 'second run is a no-op');
+});
+
+test('old default prompts are still recognised after the rename', () => {
+  const isLegacy = engineFn('fmt');
+  const N1 = Number(/\bN1=(\d+)/.exec(CONTENT)[1]);
+  assert.equal(isLegacy({ systemPrompt: 'You are Better DeepSeek inside a tool-enabled extension. More…' }), true);
+  assert.equal(isLegacy({ systemPrompt: 'You are Super DeepSeek inside a tool-enabled extension.' }), true);
+  assert.equal(isLegacy({ systemPrompt: 'You are now Better DeepSeek.\nWhen using <BDS:LONG_WORK>...</BDS:LONG_WORK>:' }), true);
+  assert.equal(isLegacy({ systemPrompt: 'My own prompt' }), false);
+  assert.equal(isLegacy({ systemPrompt: 'You are Better DeepSeek inside a tool-enabled extension.', systemPromptTemplateVersion: N1 }), false);
 });

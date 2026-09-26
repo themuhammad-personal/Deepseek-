@@ -1192,8 +1192,12 @@ class WebViewBridge(
             response.put("ok", false).put("error", "The Linux sandbox is turned off in the app.")
             return
         }
+        runCatching { onSandboxCallStarted?.invoke() }
         response.put("ok", true).put("result", sandboxTools.call(toolName, args))
     }
+
+    /** Set by the activity: a sandbox tool call is starting (used to ask for notifications once). */
+    @Volatile var onSandboxCallStarted: (() -> Unit)? = null
 
     /** The page has read a `/__sd/blob/<token>` path; drop it (frees image bytes early). */
     @JavascriptInterface
@@ -1756,7 +1760,7 @@ class WebViewBridge(
                 put("protocolVersion", "2024-11-05")
                 put("capabilities", JSONObject())
                 put("clientInfo", JSONObject().apply {
-                    put("name", "better-deepseek-android")
+                    put("name", "super-deepseek-android")
                     put("version", "1.0.0")
                 })
             })
@@ -1839,7 +1843,10 @@ class WebViewBridge(
             val bodyString = resp.body?.string().orEmpty()
             val responseSessionId = resp.header("Mcp-Session-Id")
 
-            if (code == 400 || code == 404) {
+            // 400/404 only mean "session expired" when a session was sent; on a
+            // fresh request they are real errors (wrong URL, bad request) and
+            // re-initialising would just repeat them with a misleading message.
+            if ((code == 400 || code == 404) && !sessionId.isNullOrEmpty()) {
                 throw McpSessionExpiredException("MCP session expired or invalid (HTTP $code)")
             }
             if (!resp.isSuccessful) {

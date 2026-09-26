@@ -401,6 +401,51 @@ class MainActivity : ComponentActivity() {
         NativePickKind.FILES -> buildFileChooserIntent(null, true)
     }
 
+    private var pendingWebPermission: android.webkit.PermissionRequest? = null
+
+    private val micPermissionLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val request = pendingWebPermission ?: return@registerForActivityResult
+            pendingWebPermission = null
+            runCatching {
+                if (granted) request.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny()
+            }
+        }
+
+    /** Grants the microphone to the chat page (asking the user first); denies everything else. */
+    private fun handleWebPermission(request: android.webkit.PermissionRequest) {
+        val host = request.origin?.host
+        val wantsMic = android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE in request.resources
+        if (!wantsMic || (host != DS_HOST && host != bdsAssetHost)) {
+            runCatching { request.deny() }
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            runCatching { request.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) }
+            return
+        }
+        pendingWebPermission?.let { runCatching { it.deny() } }
+        pendingWebPermission = request
+        runCatching { micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO) }
+            .onFailure { pendingWebPermission = null; runCatching { request.deny() } }
+    }
+
+    private val notificationPermissionLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    /**
+     * Android 13+: the sandbox's "running · Stop" notification needs this
+     * permission. Asked once, the first time the AI starts a sandbox command.
+     */
+    private fun maybeAskNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val prefs = getSharedPreferences(WebViewBridge.PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_ASKED_NOTIFICATIONS, false)) return
+        prefs.edit().putBoolean(KEY_ASKED_NOTIFICATIONS, true).apply()
+        runCatching { notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+    }
+
     private val fileChooserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = pendingFileChooser
@@ -579,6 +624,16 @@ class MainActivity : ComponentActivity() {
                         callback.onReceiveValue(null)
                         true
                     }
+                }
+
+                // Voice input (getUserMedia): the page only ever gets the
+                // microphone, and only after the user allowed it for the app.
+                override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+                    runOnUiThread { handleWebPermission(request) }
+                }
+
+                override fun onPermissionRequestCanceled(request: android.webkit.PermissionRequest) {
+                    if (pendingWebPermission === request) pendingWebPermission = null
                 }
 
                 // setSupportMultipleWindows(true) without this handler silently
@@ -763,6 +818,7 @@ class MainActivity : ComponentActivity() {
             } else false
         }
         bridge.onOpenStudio = { runOnUiThread { StudioActivity.start(this) } }
+        bridge.onSandboxCallStarted = { runOnUiThread { maybeAskNotificationPermission() } }
         SandboxService.onStopRequested = {
             officialWebView.post { officialWebView.evaluateJavascript("window.__sdAgent&&window.__sdAgent.stop(true)", null) }
         }
@@ -909,6 +965,7 @@ class MainActivity : ComponentActivity() {
     private var readyPollRunning = false
 
     private companion object {
+        const val KEY_ASKED_NOTIFICATIONS = "sd_asked_notifications"
         /** Hard cap on the launch screen, however slow the network is. */
         const val BOOT_FORCE_DISMISS_MS = 18_000L
         /** How often the page is probed for readiness while the launch screen is up. */

@@ -447,7 +447,7 @@ internal class UpdateChecker(
          * themselves. Sending a distinct value keeps this traffic distinguishable from the
          * browser-fingerprint UA the fetch bridge uses.
          */
-        private const val USER_AGENT = "BetterDeepSeek-Android"
+        private const val USER_AGENT = "SuperDeepSeek-Android"
 
         internal const val KEY_CHANNEL = "bds_update_channel"
         internal const val KEY_DECLINED_DIGEST = "bds_update_declined_digest"
