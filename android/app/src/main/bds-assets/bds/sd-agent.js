@@ -421,7 +421,17 @@
     return chip;
   }
 
+  var reportedActive = false;
+
+  /** Tells the app while the agent works, so it stays protected in the background. */
+  function reportActive() {
+    if (reportedActive === state.active) return;
+    reportedActive = state.active;
+    try { var b = bridge(); if (b && typeof b.sandboxAgentActive === 'function') b.sandboxAgentActive(!!state.active); } catch (_) {}
+  }
+
   function render() {
+    reportActive();
     var c = ensureChip();
     if (!c) return;
     c.hidden = !state.active;
@@ -554,6 +564,8 @@
       window.__sdBridgeFetch = wrapped;
     }
     installResumeListeners();
+    // A fresh page has no running loop (clears a flag left by a reload/crash).
+    try { var b = bridge(); if (b && typeof b.sandboxAgentActive === 'function') b.sandboxAgentActive(false); } catch (_) {}
     if (document.body) watchSheet();
     else document.addEventListener('DOMContentLoaded', watchSheet);
   }

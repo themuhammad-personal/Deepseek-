@@ -38,20 +38,44 @@ class SandboxService : Service() {
         @Volatile private var started = false
         private var pendingStop: Runnable? = null
 
+        /**
+         * True while the agent loop in the page is working (set through the
+         * bridge). The service — and with it the app's foreground priority —
+         * is kept for the whole task, not only while a command runs: between
+         * commands the model is thinking, and a later command started from the
+         * background could no longer start the service (Android 12+).
+         */
+        @Volatile var agentActive = false
+            private set
+
         /** Called from any thread by [Sandbox] whenever the number of live processes changes. */
         fun onActiveCountChanged(context: Context, active: Int) {
             val app = context.applicationContext
+            main.post { refresh(app, active) }
+        }
+
+        /** Called from any thread when the page's agent loop starts or ends. */
+        fun onAgentActiveChanged(context: Context, active: Boolean) {
+            val app = context.applicationContext
             main.post {
-                pendingStop?.let { main.removeCallbacks(it) }
-                pendingStop = null
-                if (active > 0) {
-                    send(app, ACTION_UPDATE, active)
-                } else if (started) {
-                    send(app, ACTION_UPDATE, 0)
-                    val r = Runnable { if (Sandbox.get(app).activeCount == 0) app.stopService(Intent(app, SandboxService::class.java)) }
-                    pendingStop = r
-                    main.postDelayed(r, IDLE_STOP_MS)
+                if (agentActive == active) return@post
+                agentActive = active
+                refresh(app, Sandbox.get(app).activeCount)
+            }
+        }
+
+        private fun refresh(app: Context, active: Int) {
+            pendingStop?.let { main.removeCallbacks(it) }
+            pendingStop = null
+            if (active > 0 || agentActive) {
+                send(app, ACTION_UPDATE, active)
+            } else if (started) {
+                send(app, ACTION_UPDATE, 0)
+                val r = Runnable {
+                    if (Sandbox.get(app).activeCount == 0 && !agentActive) app.stopService(Intent(app, SandboxService::class.java))
                 }
+                pendingStop = r
+                main.postDelayed(r, IDLE_STOP_MS)
             }
         }
 
@@ -74,6 +98,7 @@ class SandboxService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            agentActive = false
             Sandbox.get(this).killAll()
             main.post { runCatching { onStopRequested?.invoke() } }
         }
@@ -109,8 +134,11 @@ class SandboxService : Service() {
         val open = PendingIntent.getActivity(this, 0,
                 Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT), flags)
         val stop = PendingIntent.getService(this, 1, Intent(this, SandboxService::class.java).setAction(ACTION_STOP), flags)
-        val text = if (active > 0) resources.getQuantityString(R.plurals.sandbox_running, active, active)
-        else getString(R.string.sandbox_idle)
+        val text = when {
+            active > 0 -> resources.getQuantityString(R.plurals.sandbox_running, active, active)
+            agentActive -> getString(R.string.sandbox_agent_working)
+            else -> getString(R.string.sandbox_idle)
+        }
         return NotificationCompat.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_sandbox)
                 .setContentTitle(getString(R.string.sandbox_title))
@@ -120,7 +148,7 @@ class SandboxService : Service() {
                 .setSilent(true)
                 .setCategory(NotificationCompat.CATEGORY_PROGRESS)
                 .setContentIntent(open)
-                .apply { if (active > 0) addAction(0, getString(R.string.sandbox_stop), stop) }
+                .apply { if (active > 0 || agentActive) addAction(0, getString(R.string.sandbox_stop), stop) }
                 .build()
     }
 }

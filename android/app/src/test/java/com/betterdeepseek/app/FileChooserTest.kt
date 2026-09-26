@@ -44,10 +44,18 @@ class FileChooserTest {
     }
 
     @Test
-    fun `buildFileChooserIntent maps extension accept tokens to concrete MIME types`() {
-        val intent = buildFileChooserIntent(arrayOf(".txt", "text/plain"), allowMultiple = false)
+    fun `buildFileChooserIntent filters by MIME-only accept lists`() {
+        val intent = buildFileChooserIntent(arrayOf("image/*", "video/mp4"), allowMultiple = false)
 
-        assertArrayEquals(arrayOf("text/plain"), intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
+        assertArrayEquals(arrayOf("image/*", "video/mp4"), intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
+    }
+
+    @Test
+    fun `buildFileChooserIntent never filters extension lists (code files would be greyed out)`() {
+        val intent = buildFileChooserIntent(arrayOf(".py,.ts,.md", "text/plain"), allowMultiple = false)
+
+        assertNull(intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
+        assertEquals("*/*", intent.type)
     }
 
     @Test

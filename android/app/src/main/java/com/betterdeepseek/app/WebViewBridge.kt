@@ -1177,7 +1177,16 @@ class WebViewBridge(
 
     /** Stop button: ends every sandbox command and background job. */
     @JavascriptInterface
-    fun sandboxStop(): Int = try { sandbox.killAll() } catch (t: Throwable) { 0 }
+    fun sandboxStop(): Int = try {
+        SandboxService.onAgentActiveChanged(context, false)
+        sandbox.killAll()
+    } catch (t: Throwable) { 0 }
+
+    /** The page's agent loop started/finished: keeps the app protected for the whole task. */
+    @JavascriptInterface
+    fun sandboxAgentActive(active: Boolean) {
+        runCatching { SandboxService.onAgentActiveChanged(context, active) }
+    }
 
     private fun handleSandboxListTools(response: JSONObject) {
         when {

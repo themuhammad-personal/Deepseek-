@@ -26,6 +26,7 @@
     <string name="sandbox_channel">লিনাক্স স্যান্ডবক্স</string>
     <string name="sandbox_title">লিনাক্স স্যান্ডবক্স</string>
     <string name="sandbox_idle">নিষ্ক্রিয়</string>
+    <string name="sandbox_agent_working">এজেন্ট কাজ করছে</string>
     <string name="sandbox_stop">থামান</string>
     <plurals name="sandbox_running">
         <item quantity="one">%dটি কমান্ড চলছে</item>

@@ -15,6 +15,7 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
   const events = new EventTarget();
   const calls = [];
   const stops = [];
+  const actives = [];
   const ctx = {
     console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, JSON, Math, Object, Array, String, Date,
     Uint8Array, TextDecoder, CustomEvent,
@@ -31,6 +32,7 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
       sandboxInfo: () => JSON.stringify(info),
       sandboxStop: () => { stops.push(1); return 0; },
       setStorage: () => {},
+      sandboxAgentActive: (v) => { actives.push(v); },
     },
     addEventListener: (...a) => events.addEventListener(...a),
     removeEventListener: (...a) => events.removeEventListener(...a),
@@ -49,7 +51,7 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
   ctx.__sdBridgeFetch = async (payload) => { calls.push(payload); return { ok: true, result: { content: [] } }; };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
-  return { win: ctx, calls, stops };
+  return { win: ctx, calls, stops, actives };
 }
 
 test('parses MCP tags: body JSON, args attribute, base64Args, self-closing', () => {
@@ -157,4 +159,14 @@ test('sandbox URL detection', () => {
   assert.equal(f('Sandbox://linux'), true);
   assert.equal(f('[sandbox](sandbox://linux)'), true);
   assert.equal(f('https://sandbox.example.com'), false);
+});
+
+test('the app is told while the agent works, and when it stops', async () => {
+  const { win, actives } = load();
+  assert.deepEqual(actives, [false], 'a fresh page clears any stale flag');
+  await win.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'sandbox', toolName: 'run', args: { command: 'ls' } });
+  assert.equal(actives.at(-1), true);
+  win.__sdAgent.stop(true);
+  assert.equal(actives.at(-1), false);
+  assert.deepEqual(actives, [false, true, false], 'reported only on changes');
 });

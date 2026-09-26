@@ -24,7 +24,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
@@ -230,18 +229,21 @@ internal fun parseFileChooserResult(resultCode: Int, data: Intent?): Array<Uri>?
     return runCatching { WebChromeClient.FileChooserParams.parseResult(resultCode, data) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
+/**
+ * The picker is only filtered when the page asks for MIME types (e.g.
+ * `image/*`). File-extension lists (DeepSeek's upload button lists dozens of
+ * code/document extensions) are NOT turned into a filter: document providers
+ * label most code and text files `application/octet-stream`, so a MIME filter
+ * greyed them out and those files could not be picked at all. The page still
+ * checks what it accepts after the pick.
+ */
 private fun mapAcceptTypes(acceptTypes: Array<String>?): List<String> {
     val tokens = acceptTypes?.flatMap { it.split(',') }?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
     if (tokens.isEmpty()) return emptyList()
     val mapped = linkedSetOf<String>()
     for (token in tokens) {
-        val mimeType = when {
-            "/" in token -> token
-            token.startsWith(".") -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(token.removePrefix(".").lowercase())
-            else -> null
-        }
-        if (mimeType.isNullOrBlank()) return emptyList()
-        mapped.add(mimeType)
+        if (!Regex("^[A-Za-z0-9.+-]+/[A-Za-z0-9.+*-]+$").matches(token) || token == "*/*") return emptyList()
+        mapped.add(token.lowercase())
     }
     return mapped.toList()
 }
@@ -829,7 +831,11 @@ class MainActivity : ComponentActivity() {
         // multi-turn memory, MCP, tools, memory/skills and the skinned frame —
         // it is proven against the live protocol, unlike a hand-rolled API client.
         // The React SPA is no longer the chat surface, so we never flip to it.
-        officialWebView.loadUrl("https://chat.deepseek.com/")
+        // After a renderer crash or a process kill (long agent tasks in the
+        // background) the open conversation is reopened instead of a blank chat.
+        val restoreUrl = savedInstanceState?.getString(KEY_CHAT_URL) ?: rendererLostUrl
+        rendererLostUrl = null
+        officialWebView.loadUrl(ChatUrls.restorable(restoreUrl) ?: "https://chat.deepseek.com/")
         handleIncomingIntent(intent)
         // The session token is not ours to keep (legacy polling stored it in plain prefs).
         bridge.removeStorage("ds_official_token")
@@ -966,6 +972,10 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val KEY_ASKED_NOTIFICATIONS = "sd_asked_notifications"
+        const val KEY_CHAT_URL = "sd_chat_url"
+        const val LIVENESS_TIMEOUT_MS = 8_000L
+        /** The page URL when the renderer died; read by the recreated activity. */
+        @Volatile var rendererLostUrl: String? = null
         /** Hard cap on the launch screen, however slow the network is. */
         const val BOOT_FORCE_DISMISS_MS = 18_000L
         /** How often the page is probed for readiness while the launch screen is up. */
@@ -1379,6 +1389,34 @@ class MainActivity : ComponentActivity() {
         cookieManager.flush()
         // The page may have switched theme while we were in the background.
         if (bootView == null && ::rootLayout.isInitialized) scheduleBarRefresh(BAR_REFRESH_RESUME_MS)
+        probePageLiveness()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (::officialWebView.isInitialized) {
+            runCatching { officialWebView.url }.getOrNull()?.let { outState.putString(KEY_CHAT_URL, it) }
+        }
+    }
+
+    private var livenessToken = 0
+
+    /**
+     * Background WebView JS can freeze (seen after minutes in the background
+     * even with a foreground service). On return the page must answer a trivial
+     * script quickly; if it does not, it is reloaded — same conversation, and
+     * the engine picks up a pending tool call from the last reply.
+     */
+    private fun probePageLiveness() {
+        if (!::officialWebView.isInitialized || bootView != null) return
+        val token = ++livenessToken
+        var answered = false
+        runCatching { officialWebView.evaluateJavascript("1") { answered = true } }
+        handler.postDelayed({
+            if (token != livenessToken || answered || !isForeground || isFinishing) return@postDelayed
+            Log.w("SuperDeepSeek", "Page did not answer within ${LIVENESS_TIMEOUT_MS}ms after resume; reloading")
+            runCatching { officialWebView.reload() }
+        }, LIVENESS_TIMEOUT_MS)
     }
 
     override fun onPause() {
@@ -1395,6 +1433,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         SandboxService.onStopRequested = null
+        // Closed for good: no page is left to run the agent loop.
+        if (isFinishing) SandboxService.onAgentActiveChanged(this, false)
         tokenPollingRunnable?.let { handler.removeCallbacks(it) }
         closePopupWindow()
         try {
@@ -1539,6 +1579,7 @@ class MainActivity : ComponentActivity() {
             view.destroy()
             return
         }
+        rendererLostUrl = runCatching { view.url }.getOrNull()
         try {
             (view.parent as? ViewGroup)?.removeView(view)
             view.destroy()
