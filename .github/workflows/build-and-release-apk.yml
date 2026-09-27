@@ -236,6 +236,8 @@ jobs:
             top of chat.deepseek.com inside a native Android shell.
 
             #### Highlights
+            - An AI agent with its own Linux (Alpine) that writes, runs and tests code until the task is done; Stop is always there
+            - Linux Studio: terminal, files and live preview
             - Slash commands, snippets and a command palette
             - Memory, personas, system prompts, skills and projects
             - MCP servers, Deep Research, web fetch, code runners and file tools
@@ -244,6 +246,11 @@ jobs:
 
             Install on Android 8.0+ and sign in with your DeepSeek account.
             Builds are signed with the same key, so each one installs as an update.
+
+            > **Coming from a build before the package rename?** The app is now `com.superdeepseek.app`,
+            > so it installs next to the old `com.betterdeepseek.app` instead of over it. Export your
+            > settings in the old app (Advanced settings → Integrations & backup → Export), import them
+            > here, then uninstall the old app. Details in the README.
 
             <!-- bds-build-id: ${{ github.run_number }} -->
           files: |
