@@ -714,6 +714,7 @@ class MainActivity : ComponentActivity() {
             } else false
         }
         bridge.onOpenStudio = { runOnUiThread { StudioActivity.start(this) } }
+        StudioActivity.onAskAi = askAiInPage
         bridge.onDownloadRequested = { runOnUiThread { maybeAskStoragePermission() } }
         bridge.onSandboxCallStarted = { runOnUiThread { maybeAskNotificationPermission() } }
         SandboxService.onStopRequested = stopAgentInPage
@@ -782,8 +783,9 @@ class MainActivity : ComponentActivity() {
                   document.head.appendChild(s);
                 })();
             """.trimIndent()
-            // Native glue, then the sandbox agent glue (it wraps sd-native's bridge fetch).
-            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"))
+            // Native glue, then the sandbox agent glue (it wraps sd-native's bridge
+            // fetch), then the sheet gestures (they wrap content.js's Back handler).
+            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"))
                 .joinToString("\n;\n").ifEmpty { null }
             return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), native)
                 .also { engineAssets = it }
@@ -1239,6 +1241,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         // A recreated activity may already have installed its own handler.
         if (SandboxService.onStopRequested === stopAgentInPage) SandboxService.onStopRequested = null
+        if (StudioActivity.onAskAi === askAiInPage) StudioActivity.onAskAi = null
         // Closed for good: no page is left to run the agent loop.
         if (isFinishing) SandboxService.onAgentActiveChanged(this, false)
         handler.removeCallbacksAndMessages(null)
@@ -1254,6 +1257,21 @@ class MainActivity : ComponentActivity() {
     private val stopAgentInPage: () -> Unit = {
         if (::officialWebView.isInitialized) {
             officialWebView.post { officialWebView.evaluateJavascript("window.__sdAgent&&window.__sdAgent.stop(true)", null) }
+        }
+    }
+
+    /**
+     * Studio's "Ask the AI": the text goes into the chat's message box (after
+     * anything already typed), never sent, and the keyboard stays closed
+     * until the user taps the box.
+     */
+    private val askAiInPage: (String) -> Unit = { text ->
+        if (::officialWebView.isInitialized) {
+            val js = "(function(){try{var e=window.__sdEngine;if(!e||!e.setComposer)return false;" +
+                    "var c=document.querySelector('textarea#chat-input')||document.querySelector('.ds-textarea textarea');" +
+                    "var old=c&&c.value?c.value.replace(/\\s+$/,'')+' ':'';" +
+                    "return !!e.setComposer(old+${org.json.JSONObject.quote(text)});}catch(x){return false}})()"
+            officialWebView.post { officialWebView.evaluateJavascript(js, null) }
         }
     }
 

@@ -33,20 +33,6 @@ internal object ShellProtocol {
 
     fun stripNoise(text: String): String = if (text.contains("tty") || text.contains("job control")) NOISE.replace(text, "") else text
 
-    /** A short prompt label: /root → "~", long paths keep their last folder. */
-    fun promptLabel(cwd: String, maxChars: Int = 22): String {
-        val home = "/root"
-        val p = when {
-            cwd == home -> "~"
-            cwd.startsWith("$home/") -> "~" + cwd.substring(home.length)
-            cwd.isEmpty() -> "/"
-            else -> cwd
-        }
-        if (p.length <= maxChars) return p
-        val last = p.substringAfterLast('/')
-        return "…/" + if (last.length > maxChars - 2) last.takeLast(maxChars - 2) else last
-    }
-
     sealed class Event {
         data class Text(val text: String) : Event()
         data class Done(val exitCode: Int, val cwd: String) : Event()

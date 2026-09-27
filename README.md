@@ -69,7 +69,7 @@ DeepSeek ships them, and everything else is extra.
   `pip`, `npm`, `git`; files in `/root/workspace` persist
 - The AI uses it as a tool by itself: runs commands and long jobs, reads/writes/edits files,
   installs packages, previews web apps and exports results to *Downloads*
-- **Linux Studio**: a terminal, a file browser (import, export, share) and a web preview (open it from the **+** menu)
+- **Linux Studio**: a terminal, a file browser (import, export, share, "ask the AI about this file") and a preview for running web servers and workspace HTML, Markdown and image files (open it from the **+** menu)
 - Long tasks keep running in the background with a "Stop" notification; optional
   "ask before each command" mode
 </details>

@@ -67,13 +67,4 @@ class ShellProtocolTest {
         assertEquals("hello\n", ShellProtocol.stripNoise("sh: can't access tty; job control turned off\nhello\n"))
         assertEquals("plain text\n", ShellProtocol.stripNoise("plain text\n"))
     }
-
-    @Test
-    fun `prompt labels are short`() {
-        assertEquals("~", ShellProtocol.promptLabel("/root"))
-        assertEquals("~/workspace", ShellProtocol.promptLabel("/root/workspace"))
-        assertEquals("/tmp", ShellProtocol.promptLabel("/tmp"))
-        assertEquals("…/deep", ShellProtocol.promptLabel("/root/workspace/projects/very/deep"))
-        assertTrue(ShellProtocol.promptLabel("/root/" + "n".repeat(60)).length <= 22)
-    }
 }

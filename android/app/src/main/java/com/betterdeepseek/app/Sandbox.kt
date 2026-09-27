@@ -784,6 +784,8 @@ internal class Sandbox private constructor(private val app: Context) {
                 "mkdir -p -- \"\$(dirname -- \"\$SD_PATH\")\" && cat > \"\$SD_PATH\"",
                 extraEnv = mapOf("SD_PATH" to guestPath(path)), timeoutSec = 60, stdin = content)
         if (r.exitCode != 0) throw IOException(r.output.trim().ifEmpty { "cannot write ${guestPath(path)}" })
+        // Studio shows the write in its terminal and refreshes Files / Preview.
+        emit(JSONObject().put("type", "file").put("path", guestPath(path)).put("bytes", content.size))
     }
 
     // ── Status and maintenance ───────────────────────────────────────────────

@@ -17,7 +17,8 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
   const stops = [];
   const actives = [];
   const ctx = {
-    console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, JSON, Math, Object, Array, String, Date,
+    console, setTimeout, clearTimeout, clearInterval, Promise,
+    setInterval: (...a) => { const h = setInterval(...a); h.unref(); return h; }, JSON, Math, Object, Array, String, Date,
     Uint8Array, TextDecoder, CustomEvent,
     atob: (s) => Buffer.from(s, 'base64').toString('binary'),
     navigator: { language: 'en' },
@@ -203,4 +204,59 @@ test('tool-call spinners stop once a later message exists, or when all is idle',
     win.Date.now = realNow;
   }
   assert.ok(current.cls.has('sd-done'));
+});
+
+const mcpResult = (tool) => '<SuperDeepSeek>\n[SDS:AUTO] MCP Result for ' + tool + ' @ sandbox://linux\n[SDS:AUTO_MCP_RESULT]\n{}\n[/SDS:AUTO_MCP_RESULT]\n</SuperDeepSeek>';
+
+test('continuity: replies that announce more work are recognised', () => {
+  const { win } = load();
+  const u = win.__sdAgent._looksUnfinished;
+  assert.equal(u('Files are written. Now I will run the tests:'), true);
+  assert.equal(u("Let me check the output"), true);
+  assert.equal(u('এখন টেস্ট চালাচ্ছি।'), true);
+  assert.equal(u('Done! The app is in Downloads/app.zip.'), false);
+  assert.equal(u('Should I also add dark mode?'), false);
+  assert.equal(u('কাজ শেষ। ফাইলটি Downloads-এ আছে।'), false);
+  assert.equal(u('Summary:\n```\nnext: x\n```\nAll tests pass.'), false);
+});
+
+test('continuity: nudge only inside a tool chain', () => {
+  const { win } = load();
+  const n = win.__sdAgent._nudgeFor;
+  const chain = (reply) => [
+    { role: 'USER', content: 'build it' },
+    { role: 'ASSISTANT', content: 'x' },
+    { role: 'USER', content: mcpResult('run') },
+    { role: 'ASSISTANT', content: reply },
+  ];
+  assert.match(n(chain('Now I will install the packages:')), /without a tool call/);
+  assert.equal(n(chain('All done, tests pass.')), null);
+  assert.equal(n([{ role: 'USER', content: 'hi' }, { role: 'ASSISTANT', content: 'Let me think:' }]), null);
+  assert.equal(n(chain('<SDS:AUTO:MCP url="sandbox" tool="run">{"command":"ls"}</SDS:AUTO:MCP>')), null);
+  assert.match(n(chain('<SDS:AUTO:MCP url="sandbox" tool="run">{"command":"echo "x""}</SDS:AUTO:MCP>')), /valid JSON/);
+  assert.equal(n([...chain('ok'), { role: 'USER', content: 'thanks' }]), null);
+});
+
+test('continuity: after a reply the engine re-checks it and an unfinished chain is nudged once', async () => {
+  const history = [
+    { role: 'USER', content: 'make an app' },
+    { role: 'USER', content: mcpResult('write_file') },
+    { role: 'ASSISTANT', content: 'Written. Now I will run it:' },
+  ];
+  const { win } = load({ history });
+  let gen = true;
+  const reprocessed = [];
+  const sent = [];
+  win.__sdEngine = {
+    isGenerating: () => gen,
+    reprocess: () => reprocessed.push(Date.now()),
+    sendQuiet: (text, label) => { sent.push({ text, label }); },
+  };
+  await new Promise((r) => setTimeout(r, 700));
+  gen = false;
+  await new Promise((r) => setTimeout(r, 7600));
+  assert.ok(reprocessed.length >= 3, 'engine asked to look at the reply again');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].label, 'Agent continue');
+  assert.match(sent[0].text, /^<SuperDeepSeek>\n\[SDS:AUTO\] Agent continue\n[\s\S]*<\/SuperDeepSeek>$/);
 });

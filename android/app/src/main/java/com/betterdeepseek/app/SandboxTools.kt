@@ -145,10 +145,12 @@ internal class SandboxTools(
                     schema("packages" to JSONObject().put("type", "array").put("items", JSONObject().put("type", "string"))
                             .put("description", "Package names."), required = listOf("packages"))))
             .put(tool("preview",
-                    "Open a web server running in the sandbox (e.g. started with run background=true) in the app's preview window for the user.",
+                    "Show something to the user in the app's preview window: a web server running in the sandbox " +
+                            "(give port; start it first with run background=true), or an HTML, Markdown, image or video file " +
+                            "or a folder (give file; pages load their relative CSS/JS/images, no server needed).",
                     schema("port" to int("Port the server listens on (127.0.0.1)."),
-                            "path" to str("Optional URL path, e.g. /index.html"),
-                            required = listOf("port"))))
+                            "path" to str("Optional URL path for port, e.g. /index.html"),
+                            "file" to str("A file or folder in the sandbox to show instead of a server (relative to ${Sandbox.WORKSPACE} or absolute)."))))
             .put(tool("export_file",
                     "Save a file from the sandbox to the phone's Downloads folder so the user can open or share it (documents, images, archives, APKs, …).",
                     schema("path" to str("File path in the sandbox."),
@@ -313,8 +315,17 @@ internal class SandboxTools(
     }
 
     private fun preview(args: JSONObject): JSONObject {
+        val file = args.optString("file").trim()
+        if (file.isNotEmpty()) {
+            val guest = Sandbox.guestPath(file)
+            val host = sandbox.hostFile(guest)
+            if (host == null || !host.exists()) return text("$guest does not exist in the sandbox.", isError = true)
+            val url = StudioPreview.urlFor(guest, isDir = host.isDirectory)
+            return if (openPreview(url)) text("Opened $guest in the preview window for the user.")
+            else text("$guest exists, but the preview window could not be opened right now (the app is in the background).", isError = true)
+        }
         val port = args.optInt("port", 0)
-        if (port !in 1..65535) throw IllegalArgumentException("port must be 1-65535")
+        if (port !in 1..65535) throw IllegalArgumentException("give port (1-65535) for a server, or file for a file in the sandbox")
         val listening = runCatching {
             Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 1500) }
             true

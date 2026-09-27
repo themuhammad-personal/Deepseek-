@@ -302,6 +302,8 @@
   }
 
   function beginCall(payload) {
+    flow.calls++;
+    flow.nudges = 0;
     state.pending++;
     state.active = true;
     state.lastActivity = Date.now();
@@ -334,6 +336,7 @@
   }
 
   function resume() {
+    flow.nudges = 0;
     if (window.__sdAgentStopped) window.__sdAgentStopped = false;
   }
 
@@ -352,8 +355,112 @@
     document.addEventListener('click', function (ev) {
       if (!ev.isTrusted || !ev.target || !ev.target.closest) return;
       var btn = ev.target.closest('[role="button"], button');
-      if (btn && btn.querySelector && btn.querySelector('.ds-icon-send')) resume();
+      if (!btn || !btn.querySelector) return;
+      if (btn.querySelector('.ds-icon-send')) resume();
+      // The user stopped a reply by hand: no automatic "continue" after it.
+      else if (btn.querySelector('.ds-icon-stop-circle, .ds-icon-stop')) flow.nudges = MAX_NUDGES;
     }, true);
+  }
+
+  // ── Continuity: never leave a task half done ──────────────────────────────
+  //
+  // 1. The engine looks at a reply's tool calls only when the DOM of that reply
+  //    changes. When the last change lands while the stop button is still
+  //    showing, the calls were never run and the agent just stood still. After
+  //    every reply the engine is asked to look again (idempotent: each call is
+  //    handled once per message).
+  // 2. In the middle of a tool chain, a reply that ends without a tool call but
+  //    announces more work ("Now I'll run the tests:") or carries a tool tag the
+  //    engine could not read, gets one quiet, invisible nudge to continue.
+
+  var flow = { calls: 0, nudges: 0, was: false, timers: [] };
+  var MAX_NUDGES = 2;
+  var REPROCESS_AT = [700, 2900, 5200];
+  var NUDGE_AT = 6200;
+
+  function reprocess() {
+    try { var e = window.__sdEngine; if (e && typeof e.reprocess === 'function') e.reprocess(); } catch (_) {}
+  }
+
+  /** Last line of the prose, without code blocks. */
+  function tailLine(text) {
+    var s = String(text || '').replace(/```[\s\S]*?(```|$)/g, ' ').replace(/<[BS]DS:[\s\S]*$/i, ' ');
+    var lines = s.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    return lines.length ? lines[lines.length - 1].slice(-300) : '';
+  }
+
+  /** The reply announces more work instead of finishing or asking. */
+  function looksUnfinished(text) {
+    var l = tailLine(text).replace(/[*_`~]+/g, '').trim();
+    if (!l || /[?？]\s*$/.test(l)) return false;
+    if (/(:|：|…|\.\.\.)\s*$/.test(l)) return true;
+    if (/\b(let me|let's|i'll|i will|i am going to|i'm going to|now i|next,? i|going to)\b/i.test(l)) return true;
+    return /(করছি|করব|করবো|করা যাক|দেখি|দেখা যাক|দেখছি|চালাচ্ছি|চালাই|লিখছি|শুরু করছি|ঠিক করছি)\s*[।.:…!]*\s*$/.test(l);
+  }
+
+  function isToolResultMessage(m) {
+    var text = messageText(m);
+    return /\[[BS]DS:AUTO_MCP_(RESULT|ERROR)\]|\[[BS]DS:AUTO\] Agent continue/.test(text);
+  }
+
+  /** What to tell the model, or null when the reply is fine as it is. */
+  function nudgeFor(messages) {
+    if (!messages || messages.length < 2) return null;
+    var last = messages[messages.length - 1];
+    if (String((last && last.role) || '').toUpperCase() !== 'ASSISTANT') return null;
+    var prev = null;
+    for (var i = messages.length - 2; i >= 0; i--) {
+      if (String((messages[i] && messages[i].role) || '').toUpperCase() === 'USER') { prev = messages[i]; break; }
+    }
+    if (!prev || !isToolResultMessage(prev)) return null;
+    var text = messageText(last);
+    var tags = parseTags(text).filter(function (tag) {
+      var a = tag.attrs || {};
+      return isSandboxUrl(a.url || a.serverUrl || '');
+    });
+    if (tags.length) {
+      var bad = tags.filter(function (tag) { return !tagArgs(tag); });
+      if (!bad.length) return null;
+      return 'Your last tool call could not be read: its arguments must be one valid JSON object. ' +
+        'Send the tool call again with valid JSON (escape quotes and newlines inside strings, or use base64Args).';
+    }
+    if (!looksUnfinished(text)) return null;
+    return 'Your last reply ended without a tool call, but the task is not finished. ' +
+      'Continue now with the next tool call. If the task is really complete, give a short final summary instead.';
+  }
+
+  function sendNudge(body) {
+    var e = window.__sdEngine;
+    if (!e || typeof e.sendQuiet !== 'function') return;
+    flow.nudges++;
+    e.sendQuiet(['<SuperDeepSeek>', '[SDS:AUTO] Agent continue', body, '</SuperDeepSeek>'].join('\n'), 'Agent continue');
+  }
+
+  function maybeNudge(callsAtEnd) {
+    if (flow.calls !== callsAtEnd || flow.nudges >= MAX_NUDGES || window.__sdAgentStopped) return;
+    if (state.pending || mcpPending || generating() || !sandboxServers().length) return;
+    var sid = sessionId();
+    if (!sid) return;
+    requestHistory(sid).then(function (messages) {
+      if (flow.calls !== callsAtEnd || window.__sdAgentStopped || state.pending || mcpPending || generating()) return;
+      var body = nudgeFor(messages);
+      if (body) sendNudge(body);
+    });
+  }
+
+  function onReplyEnd() {
+    var callsAtEnd = flow.calls;
+    REPROCESS_AT.forEach(function (ms) { flow.timers.push(setTimeout(reprocess, ms)); });
+    flow.timers.push(setTimeout(function () { maybeNudge(callsAtEnd); }, NUDGE_AT));
+  }
+
+  function watchReplies() {
+    setInterval(function () {
+      var g = generating();
+      if (g && flow.timers.length) { flow.timers.forEach(clearTimeout); flow.timers = []; }
+      if (flow.was && !g) onReplyEnd();
+      flow.was = g;
+    }, 500);
   }
 
   // ── UI ─────────────────────────────────────────────────────────────────────
@@ -637,6 +744,7 @@
       window.__sdBridgeFetch = wrapped;
     }
     installResumeListeners();
+    watchReplies();
     // A fresh page has no running loop (clears a flag left by a reload/crash).
     try { var b = bridge(); if (b && typeof b.sandboxAgentActive === 'function') b.sandboxAgentActive(false); } catch (_) {}
     if (document.body) { watchSheet(); watchCards(); }
@@ -659,5 +767,7 @@
     _assistantTexts: assistantTexts,
     _isSandboxUrl: isSandboxUrl,
     _sweepCards: sweepCards,
+    _looksUnfinished: looksUnfinished,
+    _nudgeFor: nudgeFor,
   };
 })();

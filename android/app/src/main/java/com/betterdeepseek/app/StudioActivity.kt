@@ -25,6 +25,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.BaseAdapter
@@ -51,8 +52,11 @@ import org.json.JSONObject
  *
  *  - Terminal  a shell in the sandbox; the agent's commands and their output
  *              are mirrored here live, so the user can watch it work.
- *  - Files     browse /root/workspace, open, save to the phone, import, delete.
- *  - Preview   web apps served from the sandbox (http://127.0.0.1:<port>).
+ *  - Files     browse /root/workspace, open, preview, ask the AI about a
+ *              file, save to the phone, share, import, delete.
+ *  - Preview   web apps served from the sandbox (http://127.0.0.1:<port>),
+ *              found automatically, and HTML / Markdown / image files from
+ *              the workspace (see [StudioPreview]).
  *
  * Built in code (no layouts), following the chat's light/dark theme.
  */
@@ -61,8 +65,6 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     companion object {
         const val EXTRA_PREVIEW_URL = "preview_url"
         private const val MAX_TERMINAL_CHARS = 200_000
-        /** A URL, not a label: nothing to translate. */
-        private const val DEFAULT_PREVIEW_URL = "http://127.0.0.1:8000/"
 
         fun start(context: Context, previewUrl: String? = null) {
             val i = Intent(context, StudioActivity::class.java)
@@ -71,6 +73,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             if (context !is android.app.Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(i)
         }
+
+        /** Set by the chat: puts text into its message box (Studio's "Ask the AI"). */
+        @Volatile var onAskAi: ((String) -> Unit)? = null
+
+        /** Ports web dev servers usually listen on; probed for the Preview start page. */
+        private val COMMON_PORTS = intArrayOf(3000, 3001, 4000, 4173, 4200, 5000, 5173, 5500, 8000, 8001, 8080, 8081, 8088, 8888, 9000)
 
         /** True while a Studio window is visible (the preview tool reports it). */
         @Volatile var visible = false
@@ -104,7 +112,6 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     private val shellWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val history = ArrayList<String>()
     private var historyIndex = 0
-    private lateinit var promptView: TextView
     private lateinit var runButton: ImageButton
     /** A typed command is running in the shell (its input goes to that program). */
     private var running = false
@@ -121,8 +128,14 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     // Preview
     private lateinit var previewUrl: EditText
     private lateinit var previewWeb: WebView
-    private lateinit var previewHint: TextView
+    private lateinit var previewHome: ScrollView
+    private lateinit var previewHomeList: LinearLayout
+    private lateinit var previewExternal: ImageButton
     private var previewFailed = false
+    /** A page has been opened in the preview (the start page is not shown). */
+    private var previewOpened = false
+    /** Bumps on every start-page refresh, so a slow scan never overwrites a newer one. */
+    private var homeGeneration = 0
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (!uris.isNullOrEmpty()) importFiles(uris)
@@ -298,6 +311,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         }
         pages.forEachIndexed { k, v -> v.visibility = if (k == i) View.VISIBLE else View.GONE }
         if (i == 1) loadDir(cwd)
+        if (i == 2 && !previewOpened) showPreviewHome(null)
     }
 
     private fun showMenu(anchor: View) {
@@ -369,6 +383,11 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             if (isDestroyed) return@post
             when (event.optString("type")) {
                 "install" -> refreshStatus()
+                "file" -> {
+                    val path = event.optString("path")
+                    appendTerm("\n✎ AI  " + t("wrote ", "লিখেছে ") + path + " (" + humanSize(event.optLong("bytes")) + ")\n", cAgent)
+                    onFileChanged(path)
+                }
                 "exec" -> when (event.optString("phase")) {
                     "start" -> appendTerm("\n● AI  ${event.optString("cwd")} $ ${event.optString("command")}\n", cAgent)
                     "output" -> appendTerm(Sandbox.stripAnsi(event.optString("text")), cMuted)
@@ -417,19 +436,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = rounded(cSurface, 22f)
-            setPadding(dp(14), dp(2), dp(4), dp(2))
+            setPadding(dp(18), dp(2), dp(4), dp(2))
             minimumHeight = dp(48)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(dp(12), dp(6), dp(12), dp(10))
             }
         }
-        promptView = label("", 13f, cAccent).apply {
-            typeface = Typeface.create(mono, Typeface.BOLD)
-            isSingleLine = true
-            ellipsize = android.text.TextUtils.TruncateAt.START
-            maxWidth = resources.displayMetrics.widthPixels * 2 / 5
-        }
-        row.addView(promptView)
         termInput = EditText(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(cText)
@@ -443,7 +455,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             // After inputType: a password variation resets the typeface to the
             // system monospace (the typewriter serif on some phones).
             typeface = mono
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) }
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, action, ev ->
                 if (action == EditorInfo.IME_ACTION_SEND || (ev?.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)) {
                     submitCommand(); true
@@ -473,11 +485,9 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         return box
     }
 
-    /** The prompt, the Run/Stop button and the hint follow the shell's state. */
-    @SuppressLint("SetTextI18n")
+    /** The Run/Stop button and the hint follow the shell's state. */
     private fun updateRunUi() {
         if (!::runButton.isInitialized) return
-        promptView.text = if (running) "…" else ShellProtocol.promptLabel(shellCwd) + " $"
         runButton.setImageResource(if (running) R.drawable.ic_studio_stop else R.drawable.ic_studio_send)
         runButton.imageTintList = ColorStateList.valueOf(if (running) cError else cAccent)
         runButton.contentDescription = if (running) t("Stop the running command", "চলমান কমান্ড থামান") else t("Run", "চালান")
@@ -806,54 +816,124 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         filesEmpty.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
     }
 
+    private fun guestOf(f: File): String = (if (cwd == "/") "" else cwd) + "/" + f.name
+
+    private fun newSheet(): StudioSheet = StudioSheet(this, dark, cBg, cText, cMuted)
+
+    /** A round icon button for a sheet's title row. */
+    private fun sheetIcon(icon: Int, desc: String, tint: Int = cText, onClick: () -> Unit): ImageButton =
+            iconButton(icon, desc) { onClick() }.apply { imageTintList = ColorStateList.valueOf(tint) }
+
     private fun openEntry(f: File) {
-        val guest = (if (cwd == "/") "" else cwd) + "/" + f.name
+        val guest = guestOf(f)
         if (f.isDirectory) { loadDir(guest); return }
-        val bytes = runCatching { f.inputStream().use { s -> val b = ByteArray(minOf(f.length(), 256 * 1024L).toInt()); var r = 0; while (r < b.size) { val n = s.read(b, r, b.size - r); if (n < 0) break; r += n }; b.copyOf(r) } }.getOrNull()
-        val body: View = if (bytes == null || bytes.take(4096).any { it.toInt() == 0 }) {
-            label(t("Binary file · ${humanSize(f.length())}", "বাইনারি ফাইল · ${humanSize(f.length())}"), 14f, cMuted).apply { setPadding(dp(20), dp(16), dp(20), dp(8)) }
-        } else {
-            val text = String(bytes, Charsets.UTF_8) + if (f.length() > bytes.size) "\n\n[… ${t("truncated", "কাটা হয়েছে")} …]" else ""
-            ScrollView(this).apply {
-                addView(TextView(this@StudioActivity).apply {
-                    this.text = text
-                    typeface = mono
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                    setTextColor(cText)
-                    setTextIsSelectable(true)
-                    setPadding(dp(16), dp(12), dp(16), dp(12))
-                })
+        val sheet = newSheet()
+        val actions = ArrayList<View>()
+        if (StudioPreview.isPreviewable(f.name)) {
+            actions.add(sheetIcon(R.drawable.ic_studio_preview, t("Preview", "প্রিভিউ"), cAccent) { sheet.dismiss(then = { previewFile(guest) }) })
+        }
+        actions.add(sheetIcon(R.drawable.ic_studio_ai, t("Ask the AI about this file", "এই ফাইল নিয়ে AI-কে জিজ্ঞেস করুন")) { sheet.dismiss(then = { askAi(guest) }) })
+        actions.add(sheetIcon(R.drawable.ic_studio_share, t("Share", "শেয়ার")) { sheet.dismiss(then = { shareFile(guest) }) })
+        actions.add(sheetIcon(R.drawable.ic_studio_download, t("Save to phone", "ফোনে সেভ")) { sheet.dismiss(then = { exportFile(guest) }) })
+        sheet.header(f.name, humanSize(f.length()) + " · " + cwd, actions)
+
+        val kind = StudioPreview.kind(f.name)
+        val image = if (kind == StudioPreview.Kind.IMAGE) decodeImage(f) else null
+        val bytes = if (image == null) readHead(f, 256 * 1024) else null
+        val body: View = when {
+            image != null -> android.widget.ImageView(this).apply {
+                setImageBitmap(image)
+                adjustViewBounds = true
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                setPadding(dp(16), dp(4), dp(16), dp(16))
+                setOnClickListener { sheet.dismiss(then = { previewFile(guest) }) }
+            }
+            bytes == null || bytes.take(4096).any { it.toInt() == 0 } -> label(
+                    t("Binary file · ${humanSize(f.length())}", "বাইনারি ফাইল · ${humanSize(f.length())}") +
+                            if (StudioPreview.isPreviewable(f.name)) t("\nTap Preview to open it.", "\nখুলতে প্রিভিউ চাপুন।") else "",
+                    14f, cMuted).apply { setPadding(dp(20), dp(12), dp(20), dp(24)) }
+            else -> {
+                val text = String(bytes, Charsets.UTF_8) + if (f.length() > bytes.size) "\n\n[… ${t("truncated", "কাটা হয়েছে")} …]" else ""
+                ScrollView(this).apply {
+                    isVerticalScrollBarEnabled = true
+                    addView(TextView(this@StudioActivity).apply {
+                        this.text = text
+                        typeface = mono
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                        setTextColor(cText)
+                        setTextIsSelectable(true)
+                        setLineSpacing(0f, 1.15f)
+                        setPadding(dp(16), dp(10), dp(16), dp(16))
+                    })
+                    background = rounded(cSurface, 14f)
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        setMargins(dp(12), 0, dp(12), dp(12))
+                    }
+                }.also { sheet.scrollable = it }
             }
         }
-        AlertDialog.Builder(this)
-                .setTitle(f.name)
-                .setView(body)
-                .setNegativeButton(t("Close", "বন্ধ"), null)
-                .setNeutralButton(t("Share", "শেয়ার")) { _, _ -> shareFile(guest) }
-                .setPositiveButton(t("Save to phone", "ফোনে সেভ")) { _, _ -> exportFile(guest) }
-                .show()
+        sheet.content.addView(body)
+        sheet.show()
     }
 
+    private fun readHead(f: File, max: Int): ByteArray? = runCatching {
+        f.inputStream().use { s ->
+            val b = ByteArray(minOf(f.length(), max.toLong()).toInt())
+            var r = 0
+            while (r < b.size) { val n = s.read(b, r, b.size - r); if (n < 0) break; r += n }
+            b.copyOf(r)
+        }
+    }.getOrNull()
+
+    /** A picture scaled down to the screen (SVG and unknown formats: null). */
+    private fun decodeImage(f: File): android.graphics.Bitmap? = runCatching {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(f.path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+        val target = resources.displayMetrics.widthPixels.coerceAtLeast(720)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= target || bounds.outHeight / (sample * 2) >= target * 2) sample *= 2
+        android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+    }.getOrNull()
+
     private fun entryMenu(f: File) {
-        val guest = (if (cwd == "/") "" else cwd) + "/" + f.name
-        val items = if (f.isDirectory) arrayOf(t("Delete", "মুছুন")) else arrayOf(t("Save to phone", "ফোনে সেভ"), t("Share", "শেয়ার"), t("Delete", "মুছুন"))
-        AlertDialog.Builder(this).setTitle(f.name).setItems(items) { _, which ->
-            when (items[which]) {
-                t("Save to phone", "ফোনে সেভ") -> exportFile(guest)
-                t("Share", "শেয়ার") -> shareFile(guest)
-                else -> AlertDialog.Builder(this)
-                        .setMessage(t("Delete ${f.name}?", "${f.name} মুছে ফেলবেন?"))
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(t("Delete", "মুছুন")) { _, _ ->
-                            // A big folder (node_modules) takes seconds: never on the main thread.
-                            Thread {
-                                val isLink = runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)
-                                if (f.isDirectory && !isLink) deleteTreeNoFollow(f) else f.delete()
-                                main.post { if (!isDestroyed) loadDir(cwd) }
-                            }.start()
-                        }.show()
-            }
-        }.show()
+        val guest = guestOf(f)
+        val dir = f.isDirectory
+        val sheet = newSheet().header(f.name, if (dir) cwd else humanSize(f.length()) + " · " + cwd)
+        if (dir || StudioPreview.isPreviewable(f.name)) sheet.action(R.drawable.ic_studio_preview, t("Preview", "প্রিভিউ")) { previewFile(guest) }
+        sheet.action(R.drawable.ic_studio_ai, t("Ask the AI about it", "এটি নিয়ে AI-কে জিজ্ঞেস করুন")) { askAi(guest) }
+        if (!dir) {
+            sheet.action(R.drawable.ic_studio_share, t("Share", "শেয়ার")) { shareFile(guest) }
+            sheet.action(R.drawable.ic_studio_download, t("Save to phone", "ফোনে সেভ")) { exportFile(guest) }
+        }
+        sheet.action(R.drawable.ic_studio_delete, t("Delete", "মুছুন"), cError) { confirmDelete(f) }
+        sheet.space(8f).show()
+    }
+
+    private fun confirmDelete(f: File) {
+        AlertDialog.Builder(this)
+                .setMessage(t("Delete ${f.name}?", "${f.name} মুছে ফেলবেন?"))
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(t("Delete", "মুছুন")) { _, _ ->
+                    // A big folder (node_modules) takes seconds: never on the main thread.
+                    Thread {
+                        val isLink = runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)
+                        if (f.isDirectory && !isLink) deleteTreeNoFollow(f) else f.delete()
+                        main.post { if (!isDestroyed) loadDir(cwd) }
+                    }.start()
+                }.show()
+    }
+
+    /** Back to the chat with the path in the message box, ready for the question. */
+    private fun askAi(guest: String) {
+        val cb = onAskAi ?: return toast(t("Open the chat first", "আগে চ্যাট খুলুন"))
+        cb(t("In the sandbox, look at `$guest`: ", "স্যান্ডবক্সে `$guest` দেখো: "))
+        finish()
+    }
+
+    private fun previewFile(guest: String) {
+        selectTab(2)
+        openPreview(guest)
     }
 
     private fun exportFile(guest: String) {
@@ -923,16 +1003,18 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = rounded(cSurface, 22f)
-            setPadding(dp(14), 0, dp(4), 0)
+            setPadding(dp(2), 0, dp(2), 0)
             minimumHeight = dp(48)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(dp(12), 0, dp(12), dp(8))
             }
         }
+        row.addView(iconButton(R.drawable.ic_studio_home, t("Start page: servers and pages", "শুরুর পাতা: সার্ভার ও পেজ")) { showPreviewHome(null) })
         previewUrl = EditText(this).apply {
-            setText(DEFAULT_PREVIEW_URL)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(cText)
+            setHintTextColor(cMuted)
+            hint = t("port, URL or file path", "পোর্ট, URL বা ফাইলের পাথ")
             background = null
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_GO or EditorInfo.IME_FLAG_NO_EXTRACT_UI
@@ -942,10 +1024,14 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             setOnEditorActionListener { _, _, _ -> openPreview(text.toString()); true }
         }
         row.addView(previewUrl)
-        row.addView(iconButton(R.drawable.ic_studio_refresh, t("Reload", "রিলোড")) { previewWeb.reload() })
-        row.addView(iconButton(R.drawable.ic_studio_open, t("Open in browser", "ব্রাউজারে খুলুন")) {
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(previewWeb.url ?: previewUrl.text.toString()))) }
+        row.addView(iconButton(R.drawable.ic_studio_refresh, t("Reload", "রিলোড")) {
+            if (previewOpened) previewWeb.reload() else showPreviewHome(null)
         })
+        previewExternal = iconButton(R.drawable.ic_studio_open, t("Open in browser", "ব্রাউজারে খুলুন")) {
+            val url = previewWeb.url ?: return@iconButton
+            if (!StudioPreview.isPreviewUrl(url)) runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        }.apply { visibility = View.GONE }
+        row.addView(previewExternal)
         box.addView(row)
         previewWeb = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -954,23 +1040,29 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             settings.useWideViewPort = true
             settings.builtInZoomControls = true
             settings.displayZoomControls = false
+            settings.mediaPlaybackRequiresUserGesture = true
             setBackgroundColor(cBg)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val host = request.url.host ?: return false
-                    if (host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0") return false
+                    if (host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0" || host == StudioPreview.HOST) return false
                     runCatching { startActivity(Intent(Intent.ACTION_VIEW, request.url)) }
                     return true
                 }
 
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                        if (request.url.host == StudioPreview.HOST) serveWorkspace(request) else null
+
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                     previewFailed = false
+                    previewExternal.visibility = if (StudioPreview.isPreviewUrl(url)) View.GONE else View.VISIBLE
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (!previewUrl.hasFocus()) previewUrl.setText(url)
-                    showPreviewHint(if (previewFailed) url else null)
+                    if (url == "about:blank") return
+                    if (!previewUrl.hasFocus()) previewUrl.setText(StudioPreview.displayOf(url))
+                    if (previewFailed) showPreviewHome(url) else previewHome.visibility = View.GONE
                 }
 
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
@@ -979,50 +1071,212 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             }
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        previewHint = label("", 14f, cMuted).apply {
-            gravity = Gravity.CENTER
-            setLineSpacing(0f, 1.25f)
-            setPadding(dp(32), dp(24), dp(32), dp(24))
+        previewHomeList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(4), dp(12), dp(24))
+        }
+        previewHome = ScrollView(this).apply {
             setBackgroundColor(cBg)
+            isFillViewport = true
+            addView(previewHomeList)
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         val stage = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             addView(previewWeb)
-            addView(previewHint)
+            addView(previewHome)
         }
         box.addView(stage)
-        showPreviewHint(null, initial = true)
         return box
     }
 
-    /** The empty/failed state over the preview; hidden once a page is up. */
-    @SuppressLint("SetTextI18n")
-    private fun showPreviewHint(failedUrl: String?, initial: Boolean = false) {
-        if (!::previewHint.isInitialized) return
-        val how = t("Start a web server in the Terminal, e.g.\npython3 -m http.server 8000\nthen open its port here.",
-                "টার্মিনালে একটি ওয়েব সার্ভার চালু করুন, যেমন\npython3 -m http.server 8000\nতারপর এখানে তার পোর্ট খুলুন।")
+    // Workspace files for the preview (a background thread of the WebView).
+
+    private val noStore = mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*")
+
+    private fun htmlResponse(html: String, status: Int = 200, reason: String = "OK"): WebResourceResponse =
+            WebResourceResponse("text/html", "utf-8", status, reason, noStore, html.toByteArray(Charsets.UTF_8).inputStream())
+
+    private fun fileResponse(f: File): WebResourceResponse {
+        val mime = StudioPreview.mimeOf(f.name)
+        return WebResourceResponse(mime, if (StudioPreview.isText(mime)) "utf-8" else null, 200, "OK",
+                noStore + ("Content-Length" to f.length().toString()), java.io.FileInputStream(f))
+    }
+
+    private fun notFound(guest: String): WebResourceResponse = htmlResponse(
+            StudioPreview.listingPage(guest, emptyList(), dark, t("Not found in the sandbox.", "স্যান্ডবক্সে পাওয়া যায়নি।")),
+            404, "Not Found")
+
+    private fun serveWorkspace(request: WebResourceRequest): WebResourceResponse = try {
+        val uri = request.url
+        val guest = StudioPreview.guestPathOf(uri.encodedPath)
+        val f = guest?.let { sandbox.hostFile(it) }
         when {
-            failedUrl != null -> {
-                previewHint.text = t("Nothing is answering at $failedUrl\n\n", "$failedUrl-এ কিছু চলছে না\n\n") + how
-                previewHint.visibility = View.VISIBLE
+            request.method != "GET" && request.method != "HEAD" -> htmlResponse("", 405, "Method Not Allowed")
+            guest == null -> htmlResponse("", 400, "Bad Request")
+            f == null || !f.exists() -> notFound(guest)
+            f.isDirectory -> {
+                val index = listOf("index.html", "index.htm").firstNotNullOfOrNull { n ->
+                    sandbox.hostFile("$guest/$n")?.takeIf { it.isFile }
+                }
+                when {
+                    // Relative links need the folder's trailing slash.
+                    !(uri.encodedPath ?: "/").endsWith("/") -> htmlResponse(StudioPreview.redirectPage(StudioPreview.urlFor(guest, isDir = true)))
+                    index != null -> fileResponse(index)
+                    else -> htmlResponse(StudioPreview.listingPage(guest,
+                            (f.listFiles()?.toList() ?: emptyList()).map { it.name to it.isDirectory }, dark))
+                }
             }
-            initial -> {
-                previewHint.text = how
-                previewHint.visibility = View.VISIBLE
+            !f.isFile -> notFound(guest)
+            request.isForMainFrame && uri.getQueryParameter(StudioPreview.RAW) == null -> when (val kind = StudioPreview.kind(f.name)) {
+                StudioPreview.Kind.MARKDOWN -> htmlResponse(StudioPreview.markdownPage(f.name,
+                        String(readHead(f, 2 * 1024 * 1024) ?: ByteArray(0), Charsets.UTF_8), dark))
+                StudioPreview.Kind.IMAGE, StudioPreview.Kind.VIDEO, StudioPreview.Kind.AUDIO ->
+                    htmlResponse(StudioPreview.mediaPage(f.name, kind, dark))
+                else -> fileResponse(f)
             }
-            else -> previewHint.visibility = View.GONE
+            else -> fileResponse(f)
         }
+    } catch (e: Exception) {
+        htmlResponse(StudioPreview.escapeHtml(e.message ?: "error"), 500, "Error")
+    }
+
+    // The start page: running servers and pages in the workspace, one tap away.
+
+    /** Shows the start page; [failedUrl] is a page that did not answer. */
+    private fun showPreviewHome(failedUrl: String?) {
+        if (!::previewHome.isInitialized) return
+        val gen = ++homeGeneration
+        previewHome.visibility = View.VISIBLE
+        previewHome.scrollTo(0, 0)
+        val list = previewHomeList
+        list.removeAllViews()
+        if (failedUrl != null) {
+            list.addView(label(t("Nothing is answering at ", "এখানে কিছু চলছে না: ") + StudioPreview.displayOf(failedUrl), 14f, cError).apply {
+                setPadding(dp(8), dp(12), dp(8), dp(4))
+            })
+        }
+        list.addView(homeSection(t("Running servers", "চলমান সার্ভার")))
+        val servers = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(cSurface, 16f) }
+        servers.addView(homeNote(t("Looking for servers…", "সার্ভার খোঁজা হচ্ছে…")))
+        list.addView(servers)
+        list.addView(homeSection(t("Pages in the workspace", "ওয়ার্কস্পেসের পেজ")))
+        val pages = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = rounded(cSurface, 16f) }
+        pages.addView(homeNote(t("Looking for pages…", "পেজ খোঁজা হচ্ছে…")))
+        list.addView(pages)
+        list.addView(label(t("Tip: web servers must listen on 0.0.0.0 or 127.0.0.1. Any HTML, Markdown or image file can be opened from Files → Preview, or by typing its path above.",
+                "টিপ: ওয়েব সার্ভারকে 0.0.0.0 বা 127.0.0.1-এ চালু করতে হবে। যেকোনো HTML, Markdown বা ছবি ফাইল Files → প্রিভিউ থেকে, বা ওপরে তার পাথ লিখে খোলা যায়।"),
+                12.5f, cMuted).apply {
+            setLineSpacing(0f, 1.2f)
+            setPadding(dp(8), dp(16), dp(8), dp(8))
+        })
+        Thread {
+            val ports = COMMON_PORTS.filter { port ->
+                runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress("127.0.0.1", port), 200) }; true }.getOrDefault(false)
+            }
+            val found = findPages()
+            main.post {
+                if (isDestroyed || gen != homeGeneration) return@post
+                servers.removeAllViews()
+                if (ports.isEmpty()) {
+                    servers.addView(homeNote(t("No web server is running. Ask the AI to start one, or run e.g.\npython3 -m http.server 8000",
+                            "কোনো ওয়েব সার্ভার চলছে না। AI-কে একটি চালু করতে বলুন, অথবা চালান যেমন\npython3 -m http.server 8000")))
+                } else ports.forEach { port ->
+                    servers.addView(homeRow(R.drawable.ic_studio_globe, "127.0.0.1:$port", "http://127.0.0.1:$port/") { openPreview("$port") })
+                }
+                pages.removeAllViews()
+                if (found.isEmpty()) {
+                    pages.addView(homeNote(if (sandbox.isInstalled()) t("No HTML or Markdown files in ${Sandbox.WORKSPACE} yet.", "${Sandbox.WORKSPACE}-এ এখনও কোনো HTML বা Markdown ফাইল নেই।")
+                    else t("Linux is not set up yet.", "লিনাক্স এখনও প্রস্তুত নয়।")))
+                } else found.forEach { guest ->
+                    val rel = guest.removePrefix(Sandbox.WORKSPACE + "/")
+                    pages.addView(homeRow(R.drawable.ic_studio_file, rel.substringAfterLast('/'), rel.substringBeforeLast('/', "").ifEmpty { "~/workspace" }) { openPreview(guest) })
+                }
+            }
+        }.start()
+    }
+
+    /** HTML and Markdown files in the workspace: index pages first, then the newest. */
+    private fun findPages(): List<String> {
+        val root = sandbox.hostFile(Sandbox.WORKSPACE)?.takeIf { it.isDirectory } ?: return emptyList()
+        val skip = setOf("node_modules", "__pycache__", "venv", "dist-packages", "site-packages")
+        val out = ArrayList<Pair<String, File>>()
+        fun walk(dir: File, guest: String, depth: Int) {
+            if (out.size >= 200) return
+            val kids = dir.listFiles() ?: return
+            for (k in kids) {
+                if (k.name.startsWith(".")) continue
+                val link = runCatching { java.nio.file.Files.isSymbolicLink(k.toPath()) }.getOrDefault(true)
+                if (link) continue
+                val g = "$guest/${k.name}"
+                if (k.isDirectory) { if (depth < 4 && k.name !in skip) walk(k, g, depth + 1) }
+                else if (StudioPreview.kind(k.name).let { it == StudioPreview.Kind.PAGE || it == StudioPreview.Kind.MARKDOWN }) out.add(g to k)
+            }
+        }
+        runCatching { walk(root, Sandbox.WORKSPACE, 0) }
+        return out.sortedWith(compareBy<Pair<String, File>>(
+                { if (it.second.name.startsWith("index.", ignoreCase = true)) 0 else 1 },
+                { -it.second.lastModified() })).take(12).map { it.first }
+    }
+
+    private fun homeSection(text: String): TextView = label(text.uppercase(java.util.Locale.getDefault()), 11.5f, cMuted, bold = true).apply {
+        letterSpacing = 0.06f
+        setPadding(dp(8), dp(18), dp(8), dp(8))
+    }
+
+    private fun homeNote(text: String): TextView = label(text, 13.5f, cMuted).apply {
+        setLineSpacing(0f, 1.2f)
+        setPadding(dp(16), dp(14), dp(16), dp(14))
+    }
+
+    private fun homeRow(icon: Int, title: String, sub: String, onClick: () -> Unit): View = newFileRow().apply {
+        (getChildAt(0) as android.widget.ImageView).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(cAccent)
+            background = rounded(cBg, 10f)
+        }
+        val texts = getChildAt(1) as LinearLayout
+        (texts.getChildAt(0) as TextView).text = title
+        (texts.getChildAt(1) as TextView).text = sub
+        setOnClickListener { onClick() }
     }
 
     private fun openPreview(raw: String) {
         var url = raw.trim()
         if (url.isEmpty()) return
-        if (url.matches(Regex("^\\d{2,5}(/.*)?$"))) url = "http://127.0.0.1:$url"
-        if (!url.contains("://")) url = "http://$url"
-        url = url.replace("://0.0.0.0", "://127.0.0.1").replace("://localhost", "://127.0.0.1")
-        previewUrl.setText(url)
+        if (url.startsWith("/") || url.startsWith("~")) {
+            // A file or folder in the sandbox.
+            val guest = Sandbox.guestPath(url)
+            val f = sandbox.hostFile(guest)
+            url = StudioPreview.urlFor(guest, isDir = f?.isDirectory == true)
+        } else {
+            if (url.matches(Regex("^\\d{2,5}(/.*)?$"))) url = "http://127.0.0.1:$url"
+            if (!url.contains("://")) url = "http://$url"
+            url = url.replace("://0.0.0.0", "://127.0.0.1").replace("://localhost", "://127.0.0.1")
+        }
+        previewUrl.setText(StudioPreview.displayOf(url))
         previewUrl.clearFocus()
+        hideKeyboard(previewUrl)
+        previewOpened = true
+        previewHome.visibility = View.GONE
         previewWeb.loadUrl(url)
+    }
+
+    private fun hideKeyboard(v: View) {
+        runCatching {
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)
+        }
+    }
+
+    /** The AI changed a file: refresh what shows it. */
+    private fun onFileChanged(guest: String) {
+        if (currentTab == 1) loadDir(cwd)
+        val shown = previewWeb.url ?: return
+        if (currentTab == 2 && previewOpened && StudioPreview.isPreviewUrl(shown)) {
+            val showing = StudioPreview.displayOf(shown)
+            val dir = if (shown.substringBefore('?').endsWith("/")) showing else showing.substringBeforeLast('/')
+            // The page itself, or anything in its folder (its CSS, JS, images).
+            if (guest == showing || guest.startsWith("$dir/")) previewWeb.reload()
+        }
     }
 }

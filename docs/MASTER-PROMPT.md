@@ -49,14 +49,15 @@ release-ready. Work carefully; understand code before changing it.
     `shouldInterceptRequest`, see `NativeBlobStore.kt`), downloads, CORS-free fetch,
     MCP client (Streamable HTTP + SSE), sandbox tool calls, update checks.
   - `Sandbox.kt`, `SandboxTools.kt`, `SandboxService.kt`, `TarGz.kt`,
-    `StudioActivity.kt` — the Linux sandbox (Termux proot from `jniLibs/<abi>/libproot.so`
+    `StudioActivity.kt`, `StudioPreview.kt`, `StudioSheet.kt` — the Linux sandbox (Termux proot from `jniLibs/<abi>/libproot.so`
     + Alpine minirootfs installed on first use), its tools, the foreground service with
     Stop, and Linux Studio (terminal / files / preview).
   - `UiPolish.kt`, `PageActions.kt`, `BootScreenView.kt`, `UpdateChecker.kt`.
 - `android/app/src/main/bds-assets/bds/` — engine: `content.js` (UI + logic; default
   system prompt `du`, template version `N1`, parser `pxe`, settings loader, one-time
   rename `sdsRebrandStored`), `injected.js` (prompt injection `O()`, MCP block `me()`),
-  `sd-native.js` (native glue), `sd-agent.js` (sandbox agent glue, Stop chip, ask mode),
+  `sd-native.js` (native glue), `sd-agent.js` (sandbox agent glue, Stop chip, ask mode,
+  continuity), `sd-sheets.js` (drag-to-dismiss sheets),
   `content.css`, `our-skin.css`.
 - `scripts/fetch_sandbox_deps.py` — CI step that downloads proot + library closure and
   Alpine metadata (SHA-verified). `docs/licenses/SANDBOX-NOTICE.md` — GPL/LGPL notices.
@@ -92,7 +93,7 @@ release-ready. Work carefully; understand code before changing it.
    memory). Test DeepSeek's own paperclip and the engine's + sheet. Show clear messages
    for skipped files (too large / unreadable).
 4. **Full bug sweep**: read every Kotlin file and the glue JS (`sd-native.js`,
-   `sd-agent.js`, `injected.js`) for leaks, races (main vs. background threads, WebView
+   `sd-agent.js`, `sd-sheets.js`, `injected.js`) for leaks, races (main vs. background threads, WebView
    callbacks after `onDestroy`), unhandled exceptions, wrong thread UI access, missing
    `runCatching` around WebView calls, and dead code from the old React-SPA era
    (`reactWebView`, legacy token polling / `dsLoginNative`) that can be removed safely.

@@ -62,9 +62,12 @@ Things inside the bundle that deliberately keep their original names:
 | `Sandbox.kt` | native | Alpine minirootfs under `noBackupFilesDir/sandbox`, run through `libproot.so` from `nativeLibraryDir` (Termux proot + its libraries, fetched and SHA-checked by `scripts/fetch_sandbox_deps.py` in CI) |
 | `SandboxTools.kt` | native | The MCP-shaped tools: `run`, `job`, `read_file`, `write_file`, `edit_file`, `list_dir`, `install_packages`, `preview`, `export_file`, `status` |
 | `SandboxService.kt` | native | Foreground service (`specialUse`) with a Stop action, kept while a command runs **or** the agent loop is active (`AndroidBridge.sandboxAgentActive`) |
-| `StudioActivity.kt` | native | Linux Studio: terminal, files, settings |
+| `StudioActivity.kt` | native | Linux Studio: terminal, files (viewer with Preview / Ask the AI / Share / Save), preview, settings; shows the AI's commands and file writes live |
+| `StudioPreview.kt` | native | Preview of workspace files at `https://workspace.invalid/<guest path>` (served by `shouldInterceptRequest`, never a real host): folders, HTML with relative assets, Markdown (safe renderer), images, video, audio |
+| `StudioSheet.kt` | native | Studio's bottom sheets: slide up, drag down (or fling, tap outside, Back) to dismiss |
 | `ShellProtocol.kt` | native | Studio terminal ↔ shell: end-of-command markers (exit code, folder), Run/Stop state |
-| `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip and the "ask" mode |
+| `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip, the "ask" mode, and continuity (re-scans a finished reply for missed tool calls and nudges a reply that stopped mid-task, at most twice) |
+| `sd-sheets.js` | engine | The engine's bottom sheets (+ menu, projects, settings drawer) follow the finger: drag down or fling to dismiss |
 
 The engine does the agent loop itself: the model writes
 `<SDS:AUTO:MCP url="sandbox" tool="run">{…}</SDS:AUTO:MCP>`, the engine calls the tool and
