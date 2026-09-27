@@ -11,14 +11,22 @@ const SRC = fs.readFileSync(path.join(here, '../../main/bds-assets/bds/sd-agent.
 
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
-function load({ info = { supported: true, enabled: true, mode: 'auto' }, history = null, href = 'https://chat.deepseek.com/a/chat/s/abc' } = {}) {
+/**
+ * sd-agent in a vm context. `speed` divides every timer delay (the agent's
+ * 700 ms…6 s continuity timers then take a few ms); `listeners` collects what
+ * the agent registers on `document` so tests can fire (trusted) events.
+ */
+function load({ info = { supported: true, enabled: true, mode: 'auto' }, history = null, href = 'https://chat.deepseek.com/a/chat/s/abc', speed = 1 } = {}) {
   const events = new EventTarget();
   const calls = [];
   const stops = [];
   const actives = [];
+  const listeners = {};
   const ctx = {
-    console, setTimeout, clearTimeout, clearInterval, Promise,
-    setInterval: (...a) => { const h = setInterval(...a); h.unref(); return h; }, JSON, Math, Object, Array, String, Date,
+    console, clearTimeout, clearInterval, Promise,
+    setTimeout: (fn, ms, ...a) => setTimeout(fn, (ms || 0) / speed, ...a),
+    setInterval: (fn, ms, ...a) => { const h = setInterval(fn, (ms || 0) / speed, ...a); h.unref(); return h; },
+    JSON, Math, Object, Array, String, Date, WeakMap,
     Uint8Array, TextDecoder, CustomEvent,
     atob: (s) => Buffer.from(s, 'base64').toString('binary'),
     navigator: { language: 'en' },
@@ -27,7 +35,7 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
       documentElement: { lang: 'en' },
       body: null,
       querySelector: () => null,
-      addEventListener: () => {},
+      addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
     },
     AndroidBridge: {
       sandboxInfo: () => JSON.stringify(info),
@@ -52,7 +60,8 @@ function load({ info = { supported: true, enabled: true, mode: 'auto' }, history
   ctx.__sdBridgeFetch = async (payload) => { calls.push(payload); return { ok: true, result: { content: [] } }; };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
-  return { win: ctx, calls, stops, actives };
+  const fire = (type, ev) => (listeners[type] || []).forEach((fn) => fn(ev));
+  return { win: ctx, calls, stops, actives, fire };
 }
 
 test('parses MCP tags: body JSON, args attribute, base64Args, self-closing', () => {
@@ -244,6 +253,8 @@ test('continuity: after a reply the engine re-checks it and an unfinished chain 
     { role: 'ASSISTANT', content: 'Written. Now I will run it:' },
   ];
   const { win } = load({ history });
+  // The agent has worked on this instruction (one sandbox call went through).
+  await win.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'sandbox', toolName: 'write_file', args: { path: 'a', content: '' } });
   let gen = true;
   const reprocessed = [];
   const sent = [];
@@ -296,10 +307,205 @@ test('settings status line follows the sandbox state', () => {
   assert.match(s({ supported: true, installed: false }), /sets itself up on first use/);
 });
 
+test('settings overview value and page API', () => {
+  const { win } = load();
+  const s = win.__sdAgent._statusShort;
+  assert.equal(s({ supported: false }), '');
+  assert.equal(s({ supported: true, enabled: false }), 'Off');
+  assert.equal(s({ supported: true, active: 1 }), 'Working');
+  assert.equal(s({ supported: true, installed: true }), 'On');
+  for (const k of ['supported', 'statusShort', 'mountSettings']) assert.equal(typeof win.__sdAgent[k], 'function', k);
+});
+
 test('the engine locale decides the language of the agent UI', () => {
   const { win } = load();
   win.__sdEngine = { locale: () => 'bn' };
   assert.match(win.__sdAgent._statusText({ supported: true, enabled: false }), /^বন্ধ/);
   win.__sdEngine = { locale: () => 'en' };
   assert.match(win.__sdAgent._statusText({ supported: true, enabled: false }), /^Off/);
+});
+
+// ── The agent loop must end: no nudge loops, no re-done work ───────────────
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const unfinishedChain = [
+  { role: 'USER', content: 'make an app' },
+  { role: 'USER', content: mcpResult('run') },
+  { role: 'ASSISTANT', content: 'Written. Now I will run it:' },
+];
+
+/** One agent turn: a sandbox call, then a reply that streams and ends. */
+async function agentTurn(win, engine) {
+  await win.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'sandbox', toolName: 'run', args: { command: 'ls' } });
+  engine.gen = true;
+  await wait(90);
+  engine.gen = false;
+  await wait(650);
+}
+
+function fakeEngine(win) {
+  const engine = { gen: false, sent: [] };
+  win.__sdEngine = {
+    isGenerating: () => engine.gen,
+    reprocess() {},
+    sendQuiet: (text, label) => { engine.sent.push({ text, label }); },
+  };
+  return engine;
+}
+
+test('continuity: nudges are counted per instruction; tool calls in between never refill them', async () => {
+  const { win, fire } = load({ history: unfinishedChain, speed: 20 });
+  const engine = fakeEngine(win);
+  await agentTurn(win, engine);
+  assert.equal(engine.sent.length, 1);
+  // The model answered the nudge by working again and stalled again.
+  await agentTurn(win, engine);
+  assert.equal(engine.sent.length, 2);
+  // Before, every tool call reset the budget: an endless redo loop.
+  await agentTurn(win, engine);
+  await agentTurn(win, engine);
+  assert.equal(engine.sent.length, 2, 'at most two nudges per instruction');
+  // Automatic (untrusted) typing does not count as a new instruction …
+  const composer = { closest: (sel) => (sel.startsWith('textarea') ? {} : null) };
+  fire('input', { isTrusted: false, target: composer });
+  await agentTurn(win, engine);
+  assert.equal(engine.sent.length, 2);
+  // … the user's own typing does.
+  fire('input', { isTrusted: true, target: composer });
+  await agentTurn(win, engine);
+  assert.equal(engine.sent.length, 3);
+});
+
+test('continuity: no nudge when the agent did no work for the current instruction', async () => {
+  const { win } = load({ history: unfinishedChain, speed: 20 });
+  const engine = fakeEngine(win);
+  engine.gen = true;
+  await wait(90);
+  engine.gen = false;
+  await wait(650);
+  assert.equal(engine.sent.length, 0);
+});
+
+test('continuity: finished replies are never taken for unfinished ones', () => {
+  const { win } = load();
+  const u = win.__sdAgent._looksUnfinished;
+  // Closings that used to trigger a nudge ("let me", a trailing ":" before a code block).
+  assert.equal(u('The app is ready. Let me know if you want any changes.'), false);
+  assert.equal(u('Feel free to ask if anything is unclear.'), false);
+  assert.equal(u('Run it with:\n```bash\npython3 app.py\n```'), false);
+  assert.equal(u('Everything works:\n```\n$ npm test\n3 passing\n```\n'), false);
+  assert.equal(u('আর কিছু লাগলে জানাবেন।'), false);
+  assert.equal(u('কাজ সম্পন্ন হয়েছে, নিচে সারসংক্ষেপ:'), false);
+  assert.equal(u('All tests pass ✅ You can now open the preview:'), false);
+  assert.equal(u('If you want, I can also add a dark mode…'), false);
+  // Real stalls are still recognised.
+  assert.equal(u('Files are written. Now I will run the tests:'), true);
+  assert.equal(u("Next, I'll install Flask…"), true);
+  assert.equal(u('এখন টেস্ট চালাচ্ছি।'), true);
+});
+
+test('continuity: the nudge never claims the task is unfinished', () => {
+  const { win } = load();
+  const body = win.__sdAgent._nudgeFor([
+    { role: 'USER', content: 'x' }, { role: 'USER', content: mcpResult('run') },
+    { role: 'ASSISTANT', content: 'Now I will run the tests:' },
+  ]);
+  assert.doesNotMatch(body, /not finished/);
+  assert.match(body, /If the task is complete, reply with one short line/);
+  assert.match(body, /Never repeat work that is already done/);
+});
+
+// ── Scroll guard ──────────────────────────────────────────────────────────
+
+function scrollSetup() {
+  const env = load();
+  let clock = 1_000_000;
+  env.win.Date = { now: () => clock };
+  const el = {
+    nodeType: 1, clientHeight: 600, scrollHeight: 6000, top: 5400, writes: 0,
+    closest: () => null,
+    get scrollTop() { return this.top; },
+    set scrollTop(v) { this.top = v; this.writes++; },
+  };
+  const scroll = () => env.fire('scroll', { target: el });
+  const later = (ms) => { clock += ms; };
+  const userScroll = (to) => {
+    env.fire('touchstart', { isTrusted: true });
+    el.top = to; scroll();
+    env.fire('touchend', { isTrusted: true, touches: [] });
+  };
+  return { ...env, el, scroll, later, userScroll };
+}
+
+test('scroll guard: an automatic jump to the bottom never pulls a reading user down', () => {
+  const { el, scroll, later, userScroll } = scrollSetup();
+  scroll();                                   // at the bottom
+  el.top = 5400; later(2000); scroll();
+  assert.equal(el.writes, 0, 'at the bottom the chat follows freely');
+  userScroll(3000);
+  later(2000);
+  el.top = 5400; scroll();                    // DeepSeek scrolls down after an automatic send
+  assert.equal(el.top, 3000, 'the jump is undone');
+  scroll();                                   // the scroll event of our own correction
+  assert.equal(el.top, 3000);
+  later(500);
+  el.top = 4900; scroll();                    // a big jump short of the bottom (> 60% of the view)
+  assert.equal(el.top, 3000);
+  scroll();
+  later(500);
+  el.top = 3060; scroll();                    // content above grew a little
+  assert.equal(el.top, 3060, 'small shifts are kept');
+  later(500);
+  el.top = 1000; scroll();                    // content removed: moves up are kept
+  assert.equal(el.top, 1000);
+});
+
+test('scroll guard: the user always wins (own scrolls, taps, sends, other chats)', () => {
+  const { win, el, scroll, later, userScroll, fire } = scrollSetup();
+  scroll();
+  userScroll(3000);
+  later(2000);
+  // A tap (e.g. the scroll-down arrow) lets the following jump through.
+  fire('pointerdown', { isTrusted: true, type: 'pointerdown' });
+  el.top = 5400; scroll();
+  assert.equal(el.top, 5400);
+  // Back at the bottom: the chat follows again.
+  later(2000);
+  el.top = 5400; scroll();
+  assert.equal(el.top, 5400);
+  // Reading higher up, the user sends a message: the late jump to the reply goes through.
+  userScroll(2000);
+  later(2000);
+  const send = { querySelector: (sel) => (sel === '.ds-icon-send' ? {} : null) };
+  fire('click', { isTrusted: true, target: { closest: () => send } });
+  later(3000);
+  el.top = 5400; scroll();
+  assert.equal(el.top, 5400);
+  // Typing is not a scroll of the user.
+  userScroll(2500);
+  later(2000);
+  fire('keydown', { isTrusted: true, type: 'keydown', key: 'a', target: { closest: () => null } });
+  el.top = 5400; scroll();
+  assert.equal(el.top, 2500);
+  // Another chat starts at its own bottom.
+  win.location.href = 'https://chat.deepseek.com/a/chat/s/other';
+  later(2000);
+  el.top = 5400; scroll();
+  assert.equal(el.top, 5400);
+});
+
+test('scroll guard: the agent UI and small or editable scrollers are left alone', () => {
+  const { win, fire } = scrollSetup();
+  const g = win.__sdAgent._scrollGuard;
+  assert.ok(g.states, 'installed');
+  const inside = { nodeType: 1, clientHeight: 600, scrollHeight: 6000, top: 0, closest: (sel) => (sel.includes('#bds-root') ? {} : null),
+    get scrollTop() { return this.top; }, set scrollTop(v) { throw new Error('must not write ' + v); } };
+  fire('scroll', { target: inside });
+  inside.top = 5400;
+  fire('scroll', { target: inside });
+  const tiny = { nodeType: 1, clientHeight: 80, scrollHeight: 900, top: 0, closest: () => null,
+    get scrollTop() { return this.top; }, set scrollTop(v) { throw new Error('must not write ' + v); } };
+  fire('scroll', { target: tiny });
+  tiny.top = 820;
+  fire('scroll', { target: tiny });
 });

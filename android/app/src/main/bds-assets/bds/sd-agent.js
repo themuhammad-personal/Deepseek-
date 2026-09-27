@@ -306,8 +306,9 @@
   }
 
   function beginCall(payload) {
+    // Nudges are counted per instruction of the user, not per tool call: a
+    // model that answers a nudge by redoing work must not earn new nudges.
     flow.calls++;
-    flow.nudges = 0;
     state.pending++;
     state.active = true;
     state.lastActivity = Date.now();
@@ -341,6 +342,7 @@
 
   function resume() {
     flow.nudges = 0;
+    flow.base = flow.calls;
     if (window.__sdAgentStopped) window.__sdAgentStopped = false;
   }
 
@@ -354,16 +356,141 @@
     // automatic messages dispatch untrusted events.
     document.addEventListener('input', function (ev) { if (ev.isTrusted && isComposer(ev.target)) resume(); }, true);
     document.addEventListener('keydown', function (ev) {
-      if (ev.isTrusted && ev.key === 'Enter' && isComposer(ev.target)) resume();
+      if (!ev.isTrusted || ev.key !== 'Enter' || !isComposer(ev.target)) return;
+      resume();
+      if (!ev.shiftKey) userSent();
     }, true);
     document.addEventListener('click', function (ev) {
       if (!ev.isTrusted || !ev.target || !ev.target.closest) return;
       var btn = ev.target.closest('[role="button"], button');
       if (!btn || !btn.querySelector) return;
-      if (btn.querySelector('.ds-icon-send')) resume();
+      if (btn.querySelector('.ds-icon-send')) { resume(); userSent(); }
       // The user stopped a reply by hand: no automatic "continue" after it.
       else if (btn.querySelector('.ds-icon-stop-circle, .ds-icon-stop')) flow.nudges = MAX_NUDGES;
     }, true);
+  }
+
+  // ── Scroll: the reader's position wins ───────────────────────────────────
+  //
+  // DeepSeek jumps to the bottom of the chat whenever a message is sent,
+  // including the agent's automatic ones, so a user reading further up was
+  // pulled down again and again. Once the user has scrolled away from the
+  // bottom, a jump that no touch, wheel, click or key of the user caused is
+  // undone. The user's own actions (sending, the scroll-down arrow, flinging
+  // down) always go through, and following the reply resumes as soon as the
+  // user is back at the bottom.
+
+  var USER_WINDOW_MS = 1200;
+  var MOMENTUM_GAP_MS = 150;
+  var NEAR_BOTTOM_PX = 96;
+  var guard = { touching: false, moved: false, dragged: false, lastInput: 0, states: null, fix: null, epoch: 0 };
+
+  /** The user sent a message: they want to follow the reply, wherever they were. */
+  function userSent() { guard.epoch++; }
+
+  function guardScroller(ev) {
+    var tg = ev && ev.target;
+    if (!tg || tg === document || tg === window) return document.scrollingElement || document.documentElement || null;
+    return tg.nodeType === 1 ? tg : null;
+  }
+
+  function guardSkips(el) {
+    if (!el || !el.closest || el.clientHeight < 160) return true;
+    return !!el.closest('#bds-root, #bds-drawer, .bds-attach-dropdown, .bds-project-panel, #sd-agent-confirm, ' +
+      '#sd-agent-chip, textarea, [contenteditable="true"], pre, [role="dialog"]');
+  }
+
+  function guardUserActive() {
+    var idle = Date.now() - guard.lastInput;
+    if (guard.touching && idle > 8000) guard.touching = false;   // a lost touchend
+    return guard.touching || idle < USER_WINDOW_MS;
+  }
+
+  function onGuardScroll(ev) {
+    var el = guardScroller(ev);
+    if (!guard.states || guardSkips(el)) return;
+    var now = Date.now();
+    var top = el.scrollTop;
+    var nearBottom = el.scrollHeight - el.clientHeight - top <= NEAR_BOTTOM_PX;
+    var st = guard.states.get(el);
+    // A new chat starts at its own bottom: nothing carries over.
+    if (!st || st.url !== location.href || st.epoch !== guard.epoch) {
+      st = { url: location.href, epoch: guard.epoch, away: false, top: top, last: 0, user: false };
+      guard.states.set(el, st);
+    }
+    var gap = now - st.last;
+    st.last = now;
+    if (guard.fix && guard.fix.el === el) {
+      var ours = Math.abs(top - guard.fix.top) < 2;
+      guard.fix = null;
+      if (ours) return;
+    }
+    // Touch, wheel, click or key of the user, and the fling that follows it.
+    // A drag or a fling moves the view a little per frame: one big jump down
+    // during or right after it is still somebody else's.
+    var byUser = guardUserActive() || (st.user && gap < MOMENTUM_GAP_MS);
+    if (byUser && (guard.touching || guard.dragged) && top - st.top > el.clientHeight * 0.75) byUser = false;
+    if (byUser) {
+      st.user = true;
+      st.away = !nearBottom;
+      st.top = top;
+      return;
+    }
+    st.user = false;
+    if (!st.away) { st.top = top; return; }
+    var jump = top - st.top;
+    if (jump > 0 && (nearBottom || jump > el.clientHeight * 0.6)) {
+      guard.fix = { el: el, top: st.top };
+      el.scrollTop = st.top;
+      return;
+    }
+    // Small moves (content above changing size) and moves up are kept; the
+    // frames of one animated jump are measured from where it started.
+    if (jump < 0 || gap >= MOMENTUM_GAP_MS) st.top = top;
+  }
+
+  function touchY(ev) {
+    var t = ev && ev.touches && ev.touches[0];
+    return t && typeof t.clientY === 'number' ? t.clientY : 0;
+  }
+
+  function installScrollGuard() {
+    if (typeof WeakMap !== 'function' || guard.states) return;
+    guard.states = new WeakMap();
+    var mark = function (ev) {
+      if (!ev.isTrusted) return;
+      if (ev.type === 'wheel') guard.dragged = true;
+      else if (ev.type === 'keydown' || ((ev.type === 'mousedown' || ev.type === 'pointerdown') && !guard.touching)) guard.dragged = false;
+      // Typing a character is not a scroll of the user; Enter, arrows and pages are.
+      if (ev.type === 'keydown' && typeof ev.key === 'string' && ev.key.length === 1) return;
+      guard.lastInput = Date.now();
+    };
+    document.addEventListener('touchstart', function (ev) {
+      if (!ev.isTrusted) return;
+      guard.touching = true;
+      guard.moved = false;
+      guard.dragged = false;
+      guard.startY = touchY(ev);
+      guard.lastInput = Date.now();
+    }, { capture: true, passive: true });
+    document.addEventListener('touchmove', function (ev) {
+      if (!ev.isTrusted || guard.moved) return;
+      // Beyond the touch slop: a drag, not a shaky tap.
+      if (Math.abs(touchY(ev) - guard.startY) > 10) guard.moved = guard.dragged = true;
+    }, { capture: true, passive: true });
+    var release = function (ev) {
+      if (!ev.isTrusted) return;
+      guard.touching = !!(ev.touches && ev.touches.length);
+      // A tap (the scroll-down arrow, a link) may jump anywhere; a drag may not.
+      guard.dragged = guard.moved;
+      guard.lastInput = Date.now();
+    };
+    document.addEventListener('touchend', release, { capture: true, passive: true });
+    document.addEventListener('touchcancel', release, { capture: true, passive: true });
+    ['touchmove', 'wheel', 'pointerdown', 'mousedown', 'keydown'].forEach(function (type) {
+      document.addEventListener(type, mark, { capture: true, passive: true });
+    });
+    document.addEventListener('scroll', onGuardScroll, { capture: true, passive: true });
   }
 
   // ── Continuity: never leave a task half done ──────────────────────────────
@@ -377,7 +504,7 @@
   //    announces more work ("Now I'll run the tests:") or carries a tool tag the
   //    engine could not read, gets one quiet, invisible nudge to continue.
 
-  var flow = { calls: 0, nudges: 0, was: false, timers: [] };
+  var flow = { calls: 0, base: 0, nudges: 0, was: false, timers: [] };
   var MAX_NUDGES = 2;
   var REPROCESS_AT = [700, 2900, 5200];
   var NUDGE_AT = 6200;
@@ -393,10 +520,25 @@
     return lines.length ? lines[lines.length - 1].slice(-300) : '';
   }
 
+  // Closings and success lines: the reply is a finished answer. Missing a
+  // stalled reply costs one "continue" from the user; nudging a finished one
+  // makes the model redo the work, so every doubt means "finished".
+  var CLOSING = /\b(let me know|feel free|if you(?:'d| would)? (?:like|need|want|have)|hope (?:this|that|it) helps|happy coding|enjoy|anything else|all set|you can now|summary)\b/i;
+  var CLOSING_BN = /(জানাবেন|জানান|বলবেন|বলুন|আশা করি|প্রয়োজনে|দরকার হলে|সম্পন্ন|শেষ হয়েছে|তৈরি হয়েছে|সারসংক্ষেপ)/;
+  var DONE = /(✅|✔|🎉|\b(?:done|finished|complete|completed|succeeded|successfully|all tests pass(?:ed)?)\b)/i;
+
+  /** The reply (before any tool tag) ends with a code block. */
+  function endsWithBlock(text) {
+    var s = String(text || '').replace(/<[BS]DS:[\s\S]*$/i, '').trim();
+    return /```\s*$/.test(s);
+  }
+
   /** The reply announces more work instead of finishing or asking. */
   function looksUnfinished(text) {
+    if (endsWithBlock(text)) return false;
     var l = tailLine(text).replace(/[*_`~]+/g, '').trim();
     if (!l || /[?？]\s*$/.test(l)) return false;
+    if (CLOSING.test(l) || CLOSING_BN.test(l) || DONE.test(l)) return false;
     if (/(:|：|…|\.\.\.)\s*$/.test(l)) return true;
     if (/\b(let me|let's|i'll|i will|i am going to|i'm going to|now i|next,? i|going to)\b/i.test(l)) return true;
     return /(করছি|করব|করবো|করা যাক|দেখি|দেখা যাক|দেখছি|চালাচ্ছি|চালাই|লিখছি|শুরু করছি|ঠিক করছি)\s*[।.:…!]*\s*$/.test(l);
@@ -429,8 +571,8 @@
         'Send the tool call again with valid JSON (escape quotes and newlines inside strings, or use base64Args).';
     }
     if (!looksUnfinished(text)) return null;
-    return 'Your last reply ended without a tool call, but the task is not finished. ' +
-      'Continue now with the next tool call. If the task is really complete, give a short final summary instead.';
+    return 'Your last reply ended without a tool call. If steps of the task remain, continue now with the next tool call. ' +
+      'If the task is complete, reply with one short line saying so and no tool call. Never repeat work that is already done.';
   }
 
   function sendNudge(body) {
@@ -442,6 +584,8 @@
 
   function maybeNudge(callsAtEnd) {
     if (flow.calls !== callsAtEnd || flow.nudges >= MAX_NUDGES || window.__sdAgentStopped || !autoContinue()) return;
+    // Only inside a task the agent works on for the current instruction.
+    if (flow.calls === flow.base) return;
     if (state.pending || mcpPending || generating() || !sandboxServers().length) return;
     var sid = sessionId();
     if (!sid) return;
@@ -642,7 +786,7 @@
     new MutationObserver(function () {
       if (queued) return;
       queued = true;
-      setTimeout(function () { queued = false; addStudioItem(); addLinuxCard(); }, 50);
+      setTimeout(function () { queued = false; addStudioItem(); adoptLinuxPage(); }, 50);
     }).observe(document.body, { childList: true, subtree: true });
   }
 
@@ -718,55 +862,81 @@
 
   // ── Settings → "Linux & Agent" ─────────────────────────────────────────────
   //
-  // A card in the engine's own settings (same markup and styles as its other
-  // cards), so the sandbox and the agent are settings of the app like any other.
-  // Switches apply at once; they are native preferences, not engine settings.
+  // Its own entry on the settings overview: content.js adds the row and an
+  // empty page (sdLinuxPg → mountSettings), this fills the page in the same
+  // grouped style as the overview. Before, the controls were a card pushed
+  // into whatever settings page was open, between unrelated cards.
+  // Switches apply at once; they are native preferences shared with Linux
+  // Studio's ⋮ menu.
 
-  var SV = 'svelte-1f1t8j1';
-  var CARD_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-    'stroke-linecap="round" stroke-linejoin="round" class="' + SV + '"><rect x="2" y="4" width="20" height="16" rx="2"></rect>' +
-    '<polyline points="6 9 10 12 6 15"></polyline><line x1="12" y1="15" x2="17" y2="15"></line></svg>';
-  var CHEVRON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" class="' + SV + '"><path d="M4 6L8 10L12 6" ' +
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  var SVG_HEAD = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round">';
+  var ICONS = {
+    linux: '<rect x="2" y="4" width="20" height="16" rx="2"></rect><polyline points="6 9 10 12 6 15"></polyline>' +
+      '<line x1="12" y1="15" x2="17" y2="15"></line>',
+    power: '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>',
+    ask: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>',
+    loop: '<polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>',
+    studio: '<polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"></rect>',
+    reset: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
+      '<path d="M10 11v6"></path><path d="M14 11v6"></path>',
+    chev: '<polyline points="9 18 15 12 9 6"></polyline>'
+  };
 
-  var card = { el: null, open: false, timer: null, resetArmed: 0 };
+  var page = { el: null, timer: null, resetArmed: 0 };
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
-    if (cls) e.className = cls + ' ' + SV;
+    if (cls) e.className = cls;
     if (text !== undefined) e.textContent = text;
     return e;
   }
 
-  function switchRow(label, hint, key, isOn, onChange) {
-    var row = el('div', 'bds-toggle-row');
-    row.setAttribute('data-sd-key', key);
-    var texts = el('div', '');
-    texts.style.minWidth = '0';
-    texts.appendChild(el('span', 'bds-toggle-label', label));
-    if (hint) {
-      var p = el('p', 'sd-hint', hint);
-      texts.appendChild(p);
-    }
-    var sw = el('label', 'bds-switch');
-    var input = el('input', '');
-    input.type = 'checkbox';
-    input.checked = !!isOn;
-    input.setAttribute('aria-label', label);
-    input.addEventListener('change', function () { onChange(input.checked); updateCard(); });
-    sw.appendChild(input);
-    sw.appendChild(document.createTextNode(' '));
-    sw.appendChild(el('span', 'bds-switch-track'));
-    row.appendChild(texts);
-    row.appendChild(sw);
-    return row;
+  function icon(name, cls) {
+    var s = el('span', cls || 'bds-set-ico');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = SVG_HEAD + (ICONS[name] || '') + '</svg>';
+    return s;
   }
 
-  function button(text, cls, onClick) {
-    var b = el('button', cls, text);
-    b.type = 'button';
-    b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); onClick(b); });
-    return b;
+  function section(root, title) {
+    var g = el('div', 'bds-set-group');
+    if (title) g.appendChild(el('div', 'bds-set-sec', title));
+    var list = el('div', 'bds-set-list');
+    g.appendChild(list);
+    root.appendChild(g);
+    return list;
+  }
+
+  /** A row like the overview's: icon, title, hint, then a switch or a chevron. */
+  function row(list, o) {
+    var r = el(o.onClick ? 'button' : 'div', 'bds-set-row' + (o.danger ? ' sd-danger' : ''));
+    if (o.onClick) r.type = 'button';
+    if (o.key) r.setAttribute('data-sd-key', o.key);
+    r.appendChild(icon(o.icon));
+    var tx = el('span', 'bds-set-txt');
+    tx.appendChild(el('span', 'bds-set-title', o.title));
+    if (o.sub) tx.appendChild(el('span', 'bds-set-sub', o.sub));
+    r.appendChild(tx);
+    if (typeof o.isOn === 'boolean') {
+      var sw = el('span', 'bds-set-switch' + (o.isOn ? ' bds-on' : ''));
+      sw.setAttribute('role', 'switch');
+      sw.setAttribute('aria-checked', String(o.isOn));
+      sw.setAttribute('aria-label', o.title);
+      r.appendChild(sw);
+    } else if (o.chevron) {
+      r.appendChild(icon('chev', 'bds-set-chev'));
+    } else if (o.dot) {
+      var dot = el('span', 'sd-dot');
+      dot.setAttribute('data-state', o.dot);
+      r.appendChild(dot);
+    }
+    if (o.onClick) {
+      r.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); o.onClick(r); });
+    }
+    list.appendChild(r);
+    return r;
   }
 
   function statusText(i) {
@@ -783,155 +953,159 @@
     return bits.join(' · ');
   }
 
-  function buildCard() {
-    var c = el('div', 'bds-card');
-    c.id = 'sd-linux-card';
-    var head = el('button', 'bds-card-header bds-sub-toggle');
-    head.type = 'button';
-    head.setAttribute('aria-expanded', 'false');
-    head.innerHTML = '<div class="bds-card-header-left ' + SV + '"><span class="bds-card-icon-badge bds-icon--green ' + SV + '">' +
-      CARD_ICON + '</span> <div class="bds-card-title-group ' + SV + '"><span class="bds-card-title ' + SV + '"></span> ' +
-      '<span class="bds-card-subtitle ' + SV + '"></span></div></div> <div class="bds-card-header-right ' + SV + '">' +
-      '<span class="bds-chevron ' + SV + '">' + CHEVRON + '</span></div>';
-    head.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      card.open = !card.open;
-      updateCard();
-    });
-    var body = el('div', 'bds-card-body bds-sub-content');
-    var inner = el('div', 'bds-sub-inner');
-    body.appendChild(inner);
-    c.appendChild(head);
-    c.appendChild(document.createTextNode(' '));
-    c.appendChild(body);
-    return c;
+  /** The value shown on the overview row. */
+  function statusShort(i) {
+    i = i || info();
+    if (!i.supported) return '';
+    if (i.enabled === false) return t('Off', 'বন্ধ');
+    if (i.active > 0 || state.active) return t('Working', 'কাজ চলছে');
+    return t('On', 'চালু');
   }
 
-  function fillCard(c, i) {
-    var inner = c.querySelector('.bds-sub-inner');
-    if (!inner) return;
-    inner.textContent = '';
+  function dotState(i) {
+    return !i.supported || i.enabled === false ? 'off'
+      : i.installing || !i.installed ? 'wait' : (i.active > 0 || state.active) ? 'busy' : 'on';
+  }
+
+  function openStudio() {
+    try { var b = bridge(); if (b && typeof b.openStudio === 'function') b.openStudio(); } catch (_) {}
+  }
+
+  function fillPage(host, i) {
+    host.textContent = '';
     var on = i.enabled !== false;
-    // In the drawer the card header is only a section label: the state goes first in the list.
-    var status = el('div', 'bds-toggle-row sd-status');
-    status.appendChild(el('span', 'sd-dot'));
-    status.appendChild(el('span', 'bds-toggle-label sd-status-text'));
-    inner.appendChild(status);
-    inner.appendChild(switchRow(
-      t('Linux sandbox for the AI', 'AI-এর জন্য লিনাক্স স্যান্ডবক্স'),
-      t('The AI can run code, install packages and build whole projects in its own Linux on this phone.',
+    var head = section(host, '');
+    var status = row(head, { icon: 'linux', title: t('Linux on this phone', 'এই ফোনে লিনাক্স'), sub: statusText(i), dot: dotState(i) });
+    status.classList.add('sd-status');
+
+    var box = section(host, t('Sandbox', 'স্যান্ডবক্স'));
+    row(box, {
+      key: PREF_ENABLED, icon: 'power', isOn: on,
+      title: t('Linux sandbox for the AI', 'AI-এর জন্য লিনাক্স স্যান্ডবক্স'),
+      sub: t('The AI can run code, install packages and build whole projects in its own Linux on this phone.',
         'AI এই ফোনে নিজের লিনাক্সে কোড চালাতে, প্যাকেজ ইনস্টল করতে ও পুরো প্রজেক্ট বানাতে পারবে।'),
-      PREF_ENABLED, on, function (v) { setPref(PREF_ENABLED, v ? '1' : '0'); }));
+      onClick: function () { setPref(PREF_ENABLED, on ? '0' : '1'); updateCard(); }
+    });
+
     if (on) {
-      inner.appendChild(switchRow(
-        t('Ask before each command', 'প্রতিটি কমান্ডের আগে জিজ্ঞেস করুন'),
-        t('Off: the agent works on its own and Stop is always there.', 'বন্ধ থাকলে এজেন্ট নিজেই কাজ করে, আর থামানোর বোতাম সবসময় থাকে।'),
-        PREF_MODE, i.mode === 'ask', function (v) { setPref(PREF_MODE, v ? 'ask' : 'auto'); }));
-      inner.appendChild(switchRow(
-        t('Keep going until the task is done', 'কাজ শেষ না হওয়া পর্যন্ত চালিয়ে যাক'),
-        t('When a reply stops in the middle of a task, the app quietly asks the AI to continue (at most twice in a row).',
-          'কাজের মাঝপথে উত্তর থেমে গেলে অ্যাপ চুপচাপ AI-কে চালিয়ে যেতে বলে (পরপর সর্বোচ্চ দুবার)।'),
-        PREF_CONTINUE, autoContinue(), function (v) { setPref(PREF_CONTINUE, v ? '1' : '0'); }));
+      var agent = section(host, t('Agent', 'এজেন্ট'));
+      var ask = i.mode === 'ask';
+      row(agent, {
+        key: PREF_MODE, icon: 'ask', isOn: ask,
+        title: t('Ask before each command', 'প্রতিটি কমান্ডের আগে জিজ্ঞেস করুন'),
+        sub: t('Off: the agent works on its own and Stop is always there.', 'বন্ধ থাকলে এজেন্ট নিজেই কাজ করে, আর থামানোর বোতাম সবসময় থাকে।'),
+        onClick: function () { setPref(PREF_MODE, ask ? 'auto' : 'ask'); updateCard(); }
+      });
+      var cont = autoContinue();
+      row(agent, {
+        key: PREF_CONTINUE, icon: 'loop', isOn: cont,
+        title: t('Keep going until the task is done', 'কাজ শেষ না হওয়া পর্যন্ত চালিয়ে যাক'),
+        sub: t('When a reply stops in the middle of a task, the app quietly asks the AI to continue (at most twice per message you send).',
+          'কাজের মাঝপথে উত্তর থেমে গেলে অ্যাপ চুপচাপ AI-কে চালিয়ে যেতে বলে (আপনার প্রতিটি মেসেজে সর্বোচ্চ দুবার)।'),
+        onClick: function () { setPref(PREF_CONTINUE, cont ? '0' : '1'); updateCard(); }
+      });
     }
-    var row = el('div', 'bds-export-buttons');
-    row.classList.add('sd-actions');
-    row.appendChild(button(t('Open Linux Studio', 'লিনাক্স স্টুডিও খুলুন'), 'bds-btn-outlined', function () {
-      try { var b = bridge(); if (b && typeof b.openStudio === 'function') b.openStudio(); } catch (_) {}
-    }));
+
+    var tools = section(host, t('Tools', 'টুলস'));
+    row(tools, {
+      icon: 'studio', chevron: true,
+      title: t('Open Linux Studio', 'লিনাক্স স্টুডিও খুলুন'),
+      sub: t('Terminal, files and preview', 'টার্মিনাল, ফাইল ও প্রিভিউ'),
+      onClick: openStudio
+    });
     if (i.active > 0 || state.active) {
-      row.appendChild(button(t('Stop everything', 'সব থামান'), 'bds-btn-outlined', function () { stopAgent(false); updateCard(); }));
+      row(tools, {
+        icon: 'stop', title: t('Stop everything', 'সব থামান'),
+        sub: t('Stops the agent and every running command', 'এজেন্ট ও চলমান সব কমান্ড থামায়'),
+        onClick: function () { stopAgent(false); updateCard(); }
+      });
     }
     if (i.installed && !i.installing) {
-      var armed = Date.now() - card.resetArmed < 4000;
-      row.appendChild(button(armed ? t('Tap again: delete all', 'আবার চাপুন: সব মুছবে') : t('Reset Linux…', 'লিনাক্স রিসেট…'),
-        'bds-btn-danger', function () {
-          if (Date.now() - card.resetArmed >= 4000) {
-            card.resetArmed = Date.now();
+      var armed = Date.now() - page.resetArmed < 4000;
+      row(tools, {
+        icon: 'reset', danger: true,
+        title: armed ? t('Tap again: delete all', 'আবার চাপুন: সব মুছবে') : t('Reset Linux…', 'লিনাক্স রিসেট…'),
+        sub: t('Deletes Linux and every file in /root/workspace', 'লিনাক্স ও /root/workspace-এর সব ফাইল মুছে যাবে'),
+        onClick: function () {
+          if (Date.now() - page.resetArmed >= 4000) {
+            page.resetArmed = Date.now();
             updateCard();
             setTimeout(updateCard, 4100);
             return;
           }
-          card.resetArmed = 0;
+          page.resetArmed = 0;
           try { var b = bridge(); if (b && typeof b.sandboxReset === 'function') b.sandboxReset(); } catch (_) {}
           toast(t('Resetting Linux… your workspace files are being deleted.', 'লিনাক্স রিসেট হচ্ছে… ওয়ার্কস্পেসের ফাইল মুছে ফেলা হচ্ছে।'));
           infoCache = null;
+          updateCard();
           setTimeout(updateCard, 1500);
-        }));
+        }
+      });
     }
-    inner.appendChild(row);
+
     var foot = [];
     if (i.installed) foot.push(t('Files: ', 'ফাইল: ') + (i.workspace || '/root/workspace'));
     if (typeof i.freeBytes === 'number' && i.freeBytes >= 0) foot.push(t('Free: ', 'খালি: ') + Math.round(i.freeBytes / 1048576) + ' MB');
     if (!i.supported && i.reason) foot.push(String(i.reason));
-    if (foot.length) inner.appendChild(el('p', 'sd-hint sd-foot', foot.join(' · ')));
+    if (foot.length) host.appendChild(el('p', 'sd-foot', foot.join(' · ')));
   }
 
-  function updateCard() {
-    var c = card.el;
-    if (!c || !c.isConnected) return;
+  /** Refreshes the page (and the overview row) with the current state. */
+  function updateCard(fresh) {
+    var ovr = document.querySelector && document.querySelector('#bds-drawer .bds-set-row[data-bds-page="linux"] .bds-set-val');
+    // A freshly mounted page is filled before the engine attaches it.
+    var host = page.el && (fresh === true || page.el.isConnected) ? page.el : null;
+    if (!ovr && !host) return;
     infoCache = null;
     var i = info();
-    c.classList.toggle('open', card.open);
-    var head = c.querySelector('.bds-sub-toggle');
-    var body = c.querySelector('.bds-sub-content');
-    if (head) { head.classList.toggle('open', card.open); head.setAttribute('aria-expanded', String(card.open)); }
-    if (body) body.classList.toggle('open', card.open);
-    var title = c.querySelector('.bds-card-title');
-    if (title) title.textContent = t('Linux & Agent', 'লিনাক্স ও এজেন্ট');
-    var sub = c.querySelector('.bds-card-subtitle');
-    var line = statusText(i);
-    if (sub) sub.textContent = line;
-    // Rebuilding the rows while a switch is being pressed would eat the tap.
-    var inner = c.querySelector('.bds-sub-inner');
+    if (ovr && ovr.textContent !== statusShort(i)) ovr.textContent = statusShort(i);
+    if (!host) return;
+    // Rebuilding the rows while one is being pressed would eat the tap.
     var sig = JSON.stringify([i.enabled, i.mode, i.installed, i.installing, i.active > 0 || state.active, autoContinue(),
-      Date.now() - card.resetArmed < 4000, isBn(), i.supported]);
-    if (inner && inner.getAttribute('data-sig') !== sig) { fillCard(c, i); inner.setAttribute('data-sig', sig); }
-    var st = c.querySelector('.sd-status-text');
-    if (st && st.textContent !== line) st.textContent = line;
-    var dot = c.querySelector('.sd-dot');
-    if (dot) {
-      dot.setAttribute('data-state', !i.supported || i.enabled === false ? 'off'
-        : i.installing || !i.installed ? 'wait' : (i.active > 0 || state.active) ? 'busy' : 'on');
-    }
+      Date.now() - page.resetArmed < 4000, isBn(), i.supported]);
+    if (host.getAttribute('data-sig') !== sig) { fillPage(host, i); host.setAttribute('data-sig', sig); return; }
+    var line = statusText(i);
+    var sub = host.querySelector('.sd-status .bds-set-sub');
+    if (sub && sub.textContent !== line) sub.textContent = line;
+    var dot = host.querySelector('.sd-status .sd-dot');
+    if (dot) dot.setAttribute('data-state', dotState(i));
   }
 
-  var CARD_STYLE = '#sd-linux-card .sd-hint{font-size:11px;line-height:1.4;opacity:.62;margin:3px 0 0}' +
-    '#sd-linux-card .sd-status{justify-content:flex-start!important;gap:10px!important}' +
-    '#sd-linux-card .sd-status-text{font-size:12.5px;opacity:.85;min-width:0}' +
-    '#sd-linux-card .sd-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#8e8ea0}' +
-    '#sd-linux-card .sd-dot[data-state="on"]{background:#22c55e}' +
-    '#sd-linux-card .sd-dot[data-state="busy"]{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:sd-pulse 1.6s infinite}' +
-    '#sd-linux-card .sd-dot[data-state="wait"]{background:#f59e0b}' +
+  var PAGE_STYLE = '#sd-linux-page .bds-set-sub,#sd-linux-page .bds-set-title{white-space:normal;overflow:visible}' +
+    '#sd-linux-page .sd-status{cursor:default}' +
+    '#sd-linux-page .sd-status .bds-set-ico{color:#22c55e}' +
+    '#sd-linux-page .sd-danger .bds-set-title,#sd-linux-page .sd-danger .bds-set-ico{color:#ef4444}' +
+    '#sd-linux-page .sd-dot{flex:none;width:9px;height:9px;margin-right:4px;border-radius:50%;background:#8e8ea0}' +
+    '#sd-linux-page .sd-dot[data-state="on"]{background:#22c55e}' +
+    '#sd-linux-page .sd-dot[data-state="busy"]{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:sd-pulse 1.6s infinite}' +
+    '#sd-linux-page .sd-dot[data-state="wait"]{background:#f59e0b}' +
     '@keyframes sd-pulse{70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}' +
-    '#sd-linux-card .sd-actions{flex-wrap:wrap;padding:12px 0 4px}' +
-    '#sd-linux-card .sd-actions button{flex:1 1 auto;min-height:36px;font-size:12px;border-radius:10px}' +
-    '#sd-linux-card .sd-foot{padding:4px 0 8px;word-break:break-all}';
+    '#sd-linux-page .sd-foot{margin:-8px 0 0;padding:0 6px;font-size:11.5px;line-height:1.4;color:var(--bds-text-tertiary);word-break:break-all}';
 
-  /** Puts the card above "Advanced settings" whenever the settings page is showing. */
-  function addLinuxCard() {
-    var inner = document.querySelector('#bds-drawer .bds-advanced-inner, #bds-root .bds-advanced-inner, .bds-advanced-inner');
-    if (!inner) { if (card.timer) { clearInterval(card.timer); card.timer = null; } return; }
-    if (!info().supported) return;
-    if (card.el && card.el.isConnected) return;
+  /** Fills the "Linux & Agent" settings page the engine created. */
+  function mountSettings(host) {
+    if (!host || !document.createElement) return;
     if (!document.getElementById('sd-linux-style')) {
       var st = document.createElement('style');
       st.id = 'sd-linux-style';
-      st.textContent = CARD_STYLE;
+      st.textContent = PAGE_STYLE;
       (document.head || document.documentElement).appendChild(st);
     }
-    var wrap = inner.parentElement;
-    var toggle = wrap && wrap.previousElementSibling && wrap.previousElementSibling.classList &&
-      wrap.previousElementSibling.classList.contains('bds-advanced-toggle') ? wrap.previousElementSibling : null;
-    var anchor = toggle || wrap;
-    card.el = card.el || buildCard();
-    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(card.el, anchor);
-    else inner.insertBefore(card.el, inner.firstChild);
-    updateCard();
+    host.id = 'sd-linux-page';
+    host.removeAttribute('data-sig');
+    page.el = host;
+    updateCard(true);
     // Live status (setup progress, running jobs) while the page is open.
-    if (!card.timer) card.timer = setInterval(function () {
-      if (!card.el || !card.el.isConnected) { clearInterval(card.timer); card.timer = null; return; }
+    if (!page.timer) page.timer = setInterval(function () {
+      if (!page.el || !page.el.isConnected) { clearInterval(page.timer); page.timer = null; return; }
       updateCard();
     }, 2500);
+  }
+
+  /** A page the engine rendered before this script was ready. */
+  function adoptLinuxPage() {
+    var host = document.querySelector && document.querySelector('#bds-drawer .sd-linux-page');
+    if (host && host !== page.el) mountSettings(host);
   }
 
   // ── The sandbox call path ──────────────────────────────────────────────────
@@ -1040,6 +1214,7 @@
       window.__sdBridgeFetch = wrapped;
     }
     installResumeListeners();
+    installScrollGuard();
     watchReplies();
     // A fresh page has no running loop (clears a flag left by a reload/crash).
     try { var b = bridge(); if (b && typeof b.sandboxAgentActive === 'function') b.sandboxAgentActive(false); } catch (_) {}
@@ -1058,6 +1233,11 @@
     refresh: function () { infoCache = null; updateCard(); },
     /** For the tool instructions (injected.js): the sandbox's live state. */
     promptContext: function () { try { return promptContext(); } catch (_) { return []; } },
+    /** For the settings overview: whether this phone can run the sandbox, and a one-word state. */
+    supported: function () { try { return !!info().supported; } catch (_) { return false; } },
+    statusShort: function () { try { return statusShort(); } catch (_) { return ''; } },
+    /** Fills the "Linux & Agent" settings page (content.js sdLinuxPg). */
+    mountSettings: mountSettings,
     // Exposed for tests.
     _parseTags: parseTags,
     _tagArgs: tagArgs,
@@ -1069,5 +1249,7 @@
     _nudgeFor: nudgeFor,
     _promptContext: promptContext,
     _statusText: statusText,
+    _statusShort: statusShort,
+    _scrollGuard: guard,
   };
 })();
