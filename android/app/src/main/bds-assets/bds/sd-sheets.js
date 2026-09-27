@@ -296,11 +296,16 @@
     if (typeof inner !== 'function' || inner.__sdSheets) return;
     var wrapped = function () {
       try {
+        var top = openSheets()[0];
+        // The agent's "Allow?" sheet is ours, the engine knows nothing about
+        // it: Back answers "Skip" (and never leaves the chat behind it).
+        if (top && top.kind.sel === '#sd-agent-confirm .sd-card') {
+          closeSheet(top, 0);
+          return true;
+        }
         if (!reducedMotion()) {
-          var top = openSheets()[0];
           var dd = document.querySelector('.bds-cmd-dropdown');
-          if (top && !(dd && shown(dd)) && !(top.kind.backStaysInside && top.kind.backStaysInside(top.el)) &&
-              top.kind.sel !== '#sd-agent-confirm .sd-card') {
+          if (top && !(dd && shown(dd)) && !(top.kind.backStaysInside && top.kind.backStaysInside(top.el))) {
             slideOut(top, 0, function () { inner(); });
             return true;
           }
@@ -322,7 +327,7 @@
     '#sd-agent-confirm .sd-card{animation:sd-sheet-rise .3s cubic-bezier(.16,1,.3,1)}',
     // A visible grab handle on our confirm sheet, like the engine's sheets.
     '#sd-agent-confirm .sd-card::before{content:"";display:block;width:40px;height:4px;border-radius:999px;',
-    'background:rgba(255,255,255,.22);margin:-6px auto 12px}',
+    'background:var(--bds-border-hover,rgba(255,255,255,.22));margin:-6px auto 12px}',
     '@media (prefers-reduced-motion:reduce){#bds-drawer.sd-sheet-in,#sd-agent-confirm,#sd-agent-confirm .sd-card{animation:none!important}}',
   ].join('\n');
 

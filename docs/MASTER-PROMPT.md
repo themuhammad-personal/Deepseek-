@@ -57,7 +57,8 @@ release-ready. Work carefully; understand code before changing it.
   system prompt `du`, template version `N1`, parser `pxe`, settings loader, one-time
   rename `sdsRebrandStored`), `injected.js` (prompt injection `O()`, MCP block `me()`),
   `sd-native.js` (native glue), `sd-agent.js` (sandbox agent glue, Stop chip, ask mode,
-  continuity), `sd-sheets.js` (drag-to-dismiss sheets),
+  continuity, live sandbox context for the prompt, the Settings → Linux & Agent card),
+  `sd-sheets.js` (drag-to-dismiss sheets, Back for our own sheets),
   `content.css`, `our-skin.css`.
 - `scripts/fetch_sandbox_deps.py` — CI step that downloads proot + library closure and
   Alpine metadata (SHA-verified). `docs/licenses/SANDBOX-NOTICE.md` — GPL/LGPL notices.

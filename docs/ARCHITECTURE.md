@@ -66,7 +66,7 @@ Things inside the bundle that deliberately keep their original names:
 | `StudioPreview.kt` | native | Preview of workspace files at `https://workspace.invalid/<guest path>` (served by `shouldInterceptRequest`, never a real host): folders, HTML with relative assets, Markdown (safe renderer), images, video, audio |
 | `StudioSheet.kt` | native | Studio's bottom sheets: slide up, drag down (or fling, tap outside, Back) to dismiss |
 | `ShellProtocol.kt` | native | Studio terminal ↔ shell: end-of-command markers (exit code, folder), Run/Stop state |
-| `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip, the "ask" mode, and continuity (re-scans a finished reply for missed tool calls and nudges a reply that stopped mid-task, at most twice) |
+| `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip, the "ask" mode, continuity (re-scans a finished reply for missed tool calls and nudges a reply that stopped mid-task, at most twice; switchable), the live sandbox state line in the MCP prompt (`promptContext()` ← `AndroidBridge.sandboxContext()`), and the **Linux & Agent** card in Settings (`#sd-linux-card`, prefs `sd_sandbox_enabled` / `sd_sandbox_mode` / `sd_agent_autocontinue`, shared with Linux Studio; the engine language is mirrored to `sd_ui_locale` so Studio follows it) |
 | `sd-sheets.js` | engine | The engine's bottom sheets (+ menu, projects, settings drawer) follow the finger: drag down or fling to dismiss |
 
 The engine does the agent loop itself: the model writes

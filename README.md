@@ -72,6 +72,10 @@ DeepSeek ships them, and everything else is extra.
 - **Linux Studio**: a terminal, a file browser (import, export, share, "ask the AI about this file") and a preview for running web servers and workspace HTML, Markdown and image files (open it from the **+** menu)
 - Long tasks keep running in the background with a "Stop" notification; optional
   "ask before each command" mode
+- The agent keeps going until the task is done: a reply that stops mid-task is quietly
+  continued, and the AI always knows the sandbox's current state (running jobs, files)
+- **Settings → Linux & Agent**: sandbox on/off, ask before each command, keep going,
+  open Studio, stop everything or reset Linux — shared with Linux Studio's own menu
 </details>
 
 <details>

@@ -489,13 +489,16 @@
     '#sd-agent-confirm{position:fixed;inset:0;z-index:2147483001;display:flex;align-items:flex-end;justify-content:center;',
     'background:rgba(0,0,0,.45)}',
     '#sd-agent-confirm .sd-card{width:100%;max-width:560px;box-sizing:border-box;margin:0 8px calc(env(safe-area-inset-bottom,0px) + 8px);',
-    'padding:16px;border-radius:18px;background:#1c1c20;color:#f1f1f3;font:14px/1.4 system-ui,sans-serif}',
+    'padding:16px;border-radius:18px;background:var(--bds-bg-panel,#1e1f23);color:var(--bds-text-primary,#ececec);',
+    'border:1px solid var(--bds-border,#3a3b3f);box-shadow:var(--bds-shadow,0 12px 40px rgba(0,0,0,.4));',
+    'font:14px/1.4 system-ui,sans-serif}',
     '#sd-agent-confirm h3{margin:0 0 8px;font-size:15px;font-weight:600}',
     '#sd-agent-confirm pre{margin:0 0 14px;max-height:40vh;overflow:auto;padding:10px;border-radius:10px;',
-    'background:#0f0f12;color:#d7e3ff;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}',
+    'background:var(--bds-bg-elevated,#2a2b30);color:var(--bds-text-primary,#ececec);',
+    'font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}',
     '#sd-agent-confirm .sd-row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}',
     '#sd-agent-confirm button{border:0;border-radius:12px;padding:10px 14px;font:600 13px/1 system-ui,sans-serif;',
-    'background:rgba(255,255,255,.1);color:#fff}',
+    'background:var(--bds-bg-hover,rgba(255,255,255,.08));color:var(--bds-text-primary,#ececec)}',
     '#sd-agent-confirm button.sd-primary{background:#4d6bfe;color:#fff}',
     // Tool cards in the chat: the spinner stops once the call is over.
     '.bds-mcp-loading.sd-done,.bds-mcp-loading.sd-stopped{animation:none!important}',
@@ -948,8 +951,8 @@
         return confirmCall(p).then(function (choice) {
           if (choice === 'skip') return null;
           if (choice === 'always') {
-            try { bridge().setStorage('sd_sandbox_mode', 'auto'); } catch (_) {}
-            infoCache = null;
+            setPref(PREF_MODE, 'auto');
+            updateCard();
           }
           return p;
         });
