@@ -65,7 +65,7 @@ export function LoginScreen() {
     }
   }
 
-  async function doLogin(attempt = 0): Promise<{ token: string; email: string; mobile: string }> {
+  async function doLogin(_attempt = 0): Promise<{ token: string; email: string; mobile: string }> {
     return dsLoginDirect(
       tab === "email"
         ? { email: email.trim(), password }

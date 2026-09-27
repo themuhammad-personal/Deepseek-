@@ -13,3 +13,16 @@ dist-android/
 design-preview/content.css
 design-preview/our-skin.css
 design-preview/runtime-styles.css
+
+# CI failure reports are uploaded as workflow artifacts, never committed
+android/ci-debug/
+
+# Linux sandbox runtime, fetched by scripts/fetch_sandbox_deps.py (CI)
+android/app/src/main/jniLibs/
+android/app/src/main/assets/sandbox/
+
+# Staged at build time from android/app/src/main/bds-assets (CI does this)
+android/app/src/main/assets/bds/
+
+# Python bytecode
+__pycache__/

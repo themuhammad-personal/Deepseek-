@@ -11,7 +11,7 @@ plugins {
 val bdsBuildId: Long = (project.findProperty("bdsBuildId") as String?)?.toLongOrNull() ?: 0L
 
 android {
-    namespace = "com.betterdeepseek.app"
+    namespace = "com.superdeepseek.app"
     compileSdk = 34
 
     buildFeatures {
@@ -19,7 +19,7 @@ android {
     }
     
     defaultConfig {
-        applicationId = "com.betterdeepseek.app"
+        applicationId = "com.superdeepseek.app"
         minSdk = 26
         targetSdk = 34
         // Monotonically increasing versionCode ensures updates install smoothly over older versions
@@ -81,6 +81,15 @@ android {
     packaging {
         resources {
             excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1")
+        }
+        jniLibs {
+            // The Linux sandbox execs proot from nativeLibraryDir (the only app
+            // location Android allows exec() from), so the libraries must be
+            // extracted at install time rather than mapped from the APK.
+            useLegacyPackaging = true
+            // proot and its loader are executables, not ordinary libraries: ship
+            // them exactly as fetched.
+            keepDebugSymbols += setOf("**/libproot.so", "**/libproot-loader.so", "**/libproot-loader32.so", "**/libtalloc.so")
         }
     }
 

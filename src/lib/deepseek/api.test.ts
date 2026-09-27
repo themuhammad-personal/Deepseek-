@@ -191,7 +191,7 @@ test("completeStream re-solves once when DeepSeek rejects the proof-of-work", as
   const challenge = await mintChallenge(11);
   let completionCalls = 0;
   const calls: string[] = [];
-  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+  globalThis.fetch = (async (input: unknown, _init?: RequestInit) => {
     const url = String(input);
     calls.push(url);
     if (url.includes("sha3_wasm_bg.wasm")) return wasmResponse();

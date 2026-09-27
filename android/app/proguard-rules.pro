@@ -2,4 +2,4 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
--keep class com.betterdeepseek.app.WebViewBridge { *; }
+-keep class com.superdeepseek.app.WebViewBridge { *; }
