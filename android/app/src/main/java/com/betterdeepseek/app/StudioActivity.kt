@@ -997,6 +997,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     }
 
     /** The empty/failed state over the preview; hidden once a page is up. */
+    @SuppressLint("SetTextI18n")
     private fun showPreviewHint(failedUrl: String?, initial: Boolean = false) {
         if (!::previewHint.isInitialized) return
         val how = t("Start a web server in the Terminal, e.g.\npython3 -m http.server 8000\nthen open its port here.",
