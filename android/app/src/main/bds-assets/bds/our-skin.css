@@ -14,14 +14,24 @@
 
 /* ==========================================================================
    Mixed-script text (Arabic + Bengali/English in one reply)
-   Each paragraph takes its direction from its own text, so an Arabic verse
-   reads right-to-left and the Bengali around it stays left-to-right —
-   instead of the whole reply being flipped because it contains Arabic.
+   sd-native.js gives each paragraph the direction of the script it is mostly
+   written in (dir + data-sd-bidi): an Arabic verse reads right-to-left, the
+   Bengali sentence around it stays left-to-right, and brackets stay with the
+   words they enclose. Paragraphs made of several lines decide line by line.
    ========================================================================== */
-.ds-markdown :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd),
-.bds-message-overlay :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd) {
-  unicode-bidi: plaintext;
+[data-sd-bidi] {
   text-align: start;
+}
+[data-sd-bidi="lines"] {
+  unicode-bidi: plaintext;
+}
+li[data-sd-bidi="rtl"] {
+  list-style-position: inside;
+}
+/* A bold/italic/link run keeps its own direction and its brackets. */
+.ds-markdown :is(strong, b, em, i, a, del, s, u, mark),
+.bds-message-overlay :is(strong, b, em, i, a, del, s, u, mark) {
+  unicode-bidi: plaintext;
 }
 .ds-markdown :is(pre, code, .md-code-block),
 .bds-message-overlay :is(pre, code, .md-code-block) {

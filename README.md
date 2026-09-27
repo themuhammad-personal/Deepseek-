@@ -164,8 +164,10 @@ screenshots, and new commands or tools.
 [MIT](LICENSE). Super DeepSeek is an independent project and is not affiliated with
 DeepSeek.
 
-The launch screen uses the [Sora](https://github.com/sora-xor/sora-font) typeface under the
-[SIL Open Font License 1.1](docs/licenses/Sora-OFL.txt).
+The launch screen uses the [Sora](https://github.com/sora-xor/sora-font) typeface and the Linux
+Studio terminal uses [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), both under the
+SIL Open Font License 1.1 ([Sora](docs/licenses/Sora-OFL.txt),
+[JetBrains Mono](docs/licenses/JetBrainsMono-OFL.txt)).
 
 ---
 

@@ -683,16 +683,23 @@ internal class Sandbox private constructor(private val app: Context) {
      * An interactive login shell for the Studio terminal (pipes, no PTY:
      * line-based programs work, full-screen ones like vim do not).
      */
-    fun startShell(): Process {
+    /**
+     * The Studio terminal's shell, started in [cwd] (the folder the previous
+     * one was in, after a Stop). No prompt: the terminal draws its own and
+     * learns when a command ends from [ShellProtocol] markers.
+     */
+    fun startShell(cwd: String = WORKSPACE): Process {
         ensureInstalled()
         val env = guestEnv(agent = false).apply {
             put("TERM", "dumb")
             put("PAGER", "cat")
             put("GIT_PAGER", "cat")
             put("PYTHONUNBUFFERED", "1")
-            put("SD_CWD", WORKSPACE)
+            put("SD_CWD", guestPath(cwd))
         }
-        val argv = listOf("/bin/sh", "-lc", "mkdir -p -- \"\$SD_CWD\"; cd -- \"\$SD_CWD\"; unset SD_CWD; exec /bin/sh -i 2>&1")
+        val argv = listOf("/bin/sh", "-lc",
+                "mkdir -p -- \"\$SD_CWD\" 2>/dev/null; cd -- \"\$SD_CWD\" 2>/dev/null || cd -- $WORKSPACE; unset SD_CWD; " +
+                        "PS1=''; PS2=''; export PS1 PS2; exec /bin/sh -i 2>&1")
         return buildProcess(argv, env).start()
     }
 

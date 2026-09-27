@@ -239,7 +239,110 @@ test('a reply with Arabic in it no longer forces the whole message right-to-left
 
 test('each paragraph takes its own direction (skin CSS)', () => {
   const skin = fs.readFileSync(path.join(bds, 'our-skin.css'), 'utf8');
-  assert.match(skin, /unicode-bidi:\s*plaintext/);
+  assert.match(skin, /\[data-sd-bidi="lines"\]\s*\{\s*unicode-bidi:\s*plaintext/);
+  // Whole paragraphs are no longer first-letter plaintext (that swapped
+  // brackets in Bengali sentences opening with an Arabic phrase).
+  assert.doesNotMatch(skin, /:is\(p, li[^)]*\)\s*\{\s*unicode-bidi:\s*plaintext/);
+});
+
+// ── The send loop only reports a send that really happened ───────────────────
+
+/**
+ * OW from the bundle, run against a scripted composer: `page` decides what
+ * the composer holds, whether an upload is showing and what a click does.
+ */
+function sendLoop(page) {
+  const clock = { now: 0, timers: [] };
+  const ctx = vm.createContext({
+    console: { error: () => {}, log: () => {} },
+    Promise,
+    Date: { now: () => clock.now },
+    setTimeout: (fn, ms) => { clock.timers.push({ at: clock.now + ms, fn }); },
+    KeyboardEvent: class { constructor(type, o) { this.type = type; Object.assign(this, o); } },
+    dt: () => {},
+    _v: () => page.composer,
+    NW: () => false,
+    bCe: () => page.button,
+    yCe: (b) => !!b.disabled,
+    sdUploadBusy: () => page.uploading,
+  });
+  const consts = ['aCe', 'oCe', 'lCe', 'cCe', 'uCe', 'sdVerifyMs', 'sdBusyMaxMs'];
+  const src = consts.map((n) => `var ${n}=${/=(.*)/.exec(DECLS.get(n).replace(/;$/, ''))[1]};`).join('')
+    + DECLS.get('sdComposerValue') + DECLS.get('OW') + ';this.OW=OW;';
+  vm.runInContext(src, ctx);
+  const run = async (maxMs = 130000) => {
+    let result;
+    ctx.OW('test').then((r) => { result = r; });
+    while (result === undefined && clock.now < maxMs) {
+      clock.timers.sort((x, y) => x.at - y.at);
+      const t = clock.timers.shift();
+      if (!t) break;
+      clock.now = t.at;
+      t.fn();
+      await Promise.resolve();
+    }
+    await Promise.resolve();
+    return { result, at: clock.now };
+  };
+  return { run, clock };
+}
+
+function composer(text) {
+  return { tagName: 'TEXTAREA', value: text, dispatchEvent: () => {} };
+}
+
+test('a click that does not empty the composer is not a send', async () => {
+  // DeepSeek ignores the send button while an attachment uploads (it only
+  // shows a toast): the old loop called that a success and left the engine
+  // text sitting in the composer.
+  const page = { composer: composer('[SDS:AUTO] Search Result'), uploading: false, clicks: 0 };
+  let uploadedAt = 4000;
+  page.button = { disabled: false, querySelector: () => null, click() {
+    page.clicks++;
+    if (loop.clock.now >= uploadedAt) page.composer.value = '';
+  } };
+  const loop = sendLoop(page);
+  const { result, at } = await loop.run();
+  assert.equal(result.ok, true);
+  assert.ok(at >= uploadedAt, 'reported only once the text left the composer');
+  assert.equal(page.composer.value, '');
+  assert.ok(page.clicks >= 2 && page.clicks <= 4, `retried at a calm pace (${page.clicks} clicks)`);
+});
+
+test('no click while an upload is showing, then one click', async () => {
+  const page = { composer: composer('result'), uploading: true, clicks: 0 };
+  page.button = { disabled: false, querySelector: () => null, click() { page.clicks++; page.composer.value = ''; } };
+  const loop = sendLoop(page);
+  const done = loop.run();
+  // Let the loop spin a few seconds "uploading", then finish the upload.
+  const origShift = loop.clock.timers.shift;
+  loop.clock.timers.shift = function () {
+    if (loop.clock.now >= 3000) page.uploading = false;
+    return origShift.call(this);
+  };
+  const { result, at } = await done;
+  assert.equal(result.ok, true);
+  assert.equal(page.clicks, 1);
+  assert.ok(at >= 3000);
+});
+
+test('the stop button is never pressed', async () => {
+  const page = { composer: composer('result'), uploading: false, clicks: 0 };
+  page.button = { disabled: false, querySelector: (sel) => (sel.includes('ds-icon-stop') ? {} : null), click() { page.clicks++; } };
+  const { result } = await sendLoop(page).run();
+  assert.equal(page.clicks, 0);
+  assert.equal(result.ok, false);
+});
+
+test('a message sent some other way (Enter) still counts', async () => {
+  const page = { composer: composer('result'), uploading: false, button: null };
+  page.composer.dispatchEvent = (ev) => { if (ev.type === 'keydown' && ev.key === 'Enter') page.composer.value = ''; };
+  const { result } = await sendLoop(page).run();
+  assert.equal(result.ok, true);
+});
+
+test('every automatic send path is quiet', () => {
+  assert.match(DECLS.get('eSe'), /sdQuiet\(\(\)=>\$D\(/);
 });
 
 test('the prompt keeps tool work out of LONG_WORK', () => {

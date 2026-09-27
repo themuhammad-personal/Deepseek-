@@ -211,7 +211,7 @@ function loadWithDom() {
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
-  const fire = (type, target, trusted = true) => (listeners[type] || []).forEach((fn) => fn({ type, target, isTrusted: trusted }));
+  const fire = (type, target, trusted = true, extra = {}) => (listeners[type] || []).forEach((fn) => fn({ type, target, isTrusted: trusted, ...extra }));
   return { win: ctx, HTMLElement, doc, fire };
 }
 
@@ -293,4 +293,92 @@ test('typing in the composer shows the text again even while an engine send retr
   assert.equal(doc.documentElement.classList.contains('sd-auto-send'), true, 'scripted keys do not count');
   fire('keydown', box);
   assert.equal(doc.documentElement.classList.contains('sd-auto-send'), false);
+});
+
+// ── Keyboard hides after every send ──────────────────────────────────────────
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('sending (tap on send, composer empties) closes the keyboard, every time', async () => {
+  const { HTMLElement, fire, doc } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  const send = new HTMLElement('DIV');
+  box.contains = (n) => n === box;
+  for (let round = 1; round <= 3; round++) {
+    fire('pointerdown', box);
+    box.focus();
+    box.value = 'message ' + round;
+    assert.equal(box.getAttribute('inputmode'), null, 'the tapped field has its keyboard');
+    fire('pointerdown', send);
+    box.value = ''; // the page sent it
+    await wait(120);
+    assert.equal(doc.activeElement, null, `round ${round}: field blurred, keyboard gone`);
+    // The page focuses the composer again after sending: silently.
+    box.focus();
+    assert.equal(box.getAttribute('inputmode'), 'none', `round ${round}: refocus keeps the keyboard closed`);
+    fire('focusout', box);
+    doc.activeElement = null;
+  }
+});
+
+test('a tap elsewhere that sends nothing leaves the keyboard alone', async () => {
+  const { HTMLElement, fire, doc } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  const other = new HTMLElement('DIV');
+  box.contains = (n) => n === box;
+  fire('pointerdown', box);
+  box.focus();
+  box.value = 'draft';
+  fire('pointerdown', other);
+  await wait(120);
+  assert.equal(doc.activeElement, box);
+});
+
+test('going straight back into the field after sending keeps its keyboard', async () => {
+  const { HTMLElement, fire, doc } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  const send = new HTMLElement('DIV');
+  box.contains = (n) => n === box;
+  fire('pointerdown', box);
+  box.focus();
+  box.value = 'hi';
+  fire('pointerdown', send);
+  fire('pointerdown', box); // before the poll noticed the send
+  box.value = '';
+  await wait(120);
+  assert.equal(doc.activeElement, box);
+});
+
+test('Enter that sends closes the keyboard; Shift+Enter does not', async () => {
+  const { HTMLElement, fire, doc } = loadWithDom();
+  const box = new HTMLElement('TEXTAREA');
+  box.contains = (n) => n === box;
+  fire('pointerdown', box);
+  box.focus();
+  box.value = 'line';
+  fire('keydown', box, true, { key: 'Enter', shiftKey: true });
+  box.value = 'line\n';
+  await wait(120);
+  assert.equal(doc.activeElement, box, 'a new line, not a send');
+  fire('keydown', box, true, { key: 'Enter' });
+  box.value = '';
+  await wait(120);
+  assert.equal(doc.activeElement, null);
+});
+
+// ── Mixed Arabic + Bengali direction ─────────────────────────────────────────
+
+test('a paragraph is right-to-left only when it starts in Arabic and is mostly Arabic', () => {
+  const { win } = load();
+  const dir = win.__sdNative._scriptDir;
+  assert.equal(dir('hello world'), '');
+  assert.equal(dir('আমি ভাত খাই'), '');
+  assert.equal(dir('قُلْ هُوَ اللَّهُ أَحَدٌ'), 'rtl');
+  assert.equal(dir('الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ (সূরা ফাতিহা, আয়াত ২)'), 'rtl');
+  // Opens with an Arabic phrase, goes on in Bengali: a Bengali sentence.
+  assert.equal(dir('بِسْمِ اللَّهِ — এর অর্থ হলো (পরম করুণাময় আল্লাহর নামে) শুরু করছি।'), 'ltr');
+  // Bengali label before an Arabic verse.
+  assert.equal(dir('আয়াত: (قُلْ هُوَ اللَّهُ أَحَدٌ) — [১১২:১]'), 'ltr');
+  // Bengali vowel signs are marks: words are counted, not letters.
+  assert.equal(dir('দোয়াটি কী (رَبِّ زِدْنِي عِلْمًا) এর অর্থ?'), 'ltr');
 });

@@ -63,6 +63,7 @@ Things inside the bundle that deliberately keep their original names:
 | `SandboxTools.kt` | native | The MCP-shaped tools: `run`, `job`, `read_file`, `write_file`, `edit_file`, `list_dir`, `install_packages`, `preview`, `export_file`, `status` |
 | `SandboxService.kt` | native | Foreground service (`specialUse`) with a Stop action, kept while a command runs **or** the agent loop is active (`AndroidBridge.sandboxAgentActive`) |
 | `StudioActivity.kt` | native | Linux Studio: terminal, files, settings |
+| `ShellProtocol.kt` | native | Studio terminal ↔ shell: end-of-command markers (exit code, folder), Run/Stop state |
 | `sd-agent.js` | engine | Exposes the sandbox to the engine as MCP server `sandbox`, re-reads exact tool arguments from the chat history, the Stop chip and the "ask" mode |
 
 The engine does the agent loop itself: the model writes

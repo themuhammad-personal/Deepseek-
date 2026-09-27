@@ -104,6 +104,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     private val shellWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val history = ArrayList<String>()
     private var historyIndex = 0
+    private lateinit var promptView: TextView
+    private lateinit var runButton: ImageButton
+    /** A typed command is running in the shell (its input goes to that program). */
+    private var running = false
+    /** Where the shell is (from the last finished command): a restarted shell opens here. */
+    private var shellCwd = Sandbox.WORKSPACE
 
     // Files
     private lateinit var filesPath: TextView
@@ -115,6 +121,8 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     // Preview
     private lateinit var previewUrl: EditText
     private lateinit var previewWeb: WebView
+    private lateinit var previewHint: TextView
+    private var previewFailed = false
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (!uris.isNullOrEmpty()) importFiles(uris)
@@ -318,7 +326,9 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                         "এতে লিনাক্স সিস্টেম, ইনস্টল করা প্যাকেজ এবং ওয়ার্কস্পেসের সব ফাইল মুছে যাবে। পরের বার ব্যবহারের সময় আবার ডাউনলোড হবে।"))
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(t("Reset", "রিসেট")) { _, _ ->
-                    shell?.destroy(); shell = null
+                    interruptShell()
+                    shellCwd = Sandbox.WORKSPACE
+                    updateRunUi()
                     Thread {
                         sandbox.reset()
                         main.post {
@@ -378,53 +388,68 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
 
     // ── Terminal ─────────────────────────────────────────────────────────────
 
-    @SuppressLint("SetTextI18n")
+    /** JetBrains Mono (OFL, bundled): some phones map "monospace" to a typewriter serif. */
+    private val mono: Typeface by lazy {
+        runCatching { androidx.core.content.res.ResourcesCompat.getFont(this, R.font.sd_mono) }.getOrNull() ?: Typeface.MONOSPACE
+    }
+
     private fun buildTerminal(): View {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         termText = TextView(this).apply {
-            typeface = Typeface.MONOSPACE
+            typeface = mono
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             setTextColor(cText)
             setTextIsSelectable(true)
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            setLineSpacing(0f, 1.12f)
+            setPadding(dp(16), dp(8), dp(16), dp(12))
+            setLineSpacing(0f, 1.18f)
         }
         termScroll = ScrollView(this).apply {
             isFillViewport = true
+            isVerticalScrollBarEnabled = false
             addView(termText)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
         }
         box.addView(termScroll)
-        appendTerm(t("Linux sandbox terminal. The AI's commands appear here too.\nType a command below (e.g. ls, python3, apk add nodejs).\n",
-                "লিনাক্স স্যান্ডবক্স টার্মিনাল। AI-এর কমান্ডও এখানে দেখা যাবে।\nনিচে কমান্ড লিখুন (যেমন ls, python3, apk add nodejs)।\n"), cMuted)
+        appendTerm(t("Linux sandbox terminal. The AI's commands appear here too.\nType a command below — e.g. ls, python3 app.py, apk add nodejs.\n\n",
+                "লিনাক্স স্যান্ডবক্স টার্মিনাল। AI-এর কমান্ডও এখানে দেখা যাবে।\nনিচে কমান্ড লিখুন — যেমন ls, python3 app.py, apk add nodejs।\n\n"), cMuted)
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(cSurface, 14f)
-            setPadding(dp(12), dp(2), dp(2), dp(2))
+            background = rounded(cSurface, 22f)
+            setPadding(dp(14), dp(2), dp(4), dp(2))
+            minimumHeight = dp(48)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(dp(10), dp(6), dp(10), dp(10))
+                setMargins(dp(12), dp(6), dp(12), dp(10))
             }
         }
-        row.addView(label("$", 15f, cAccent, bold = true))
+        promptView = label("", 13f, cAccent).apply {
+            typeface = Typeface.create(mono, Typeface.BOLD)
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.START
+            maxWidth = resources.displayMetrics.widthPixels * 2 / 5
+        }
+        row.addView(promptView)
         termInput = EditText(this).apply {
-            typeface = Typeface.MONOSPACE
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setTextColor(cText)
             setHintTextColor(cMuted)
-            hint = t("command", "কমান্ড")
             background = null
             isSingleLine = true
-            imeOptions = EditorInfo.IME_ACTION_SEND
+            setPadding(0, dp(10), 0, dp(10))
+            imeOptions = EditorInfo.IME_ACTION_SEND or EditorInfo.IME_FLAG_NO_EXTRACT_UI
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
                     android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            // After inputType: a password variation resets the typeface to the
+            // system monospace (the typewriter serif on some phones).
+            typeface = mono
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) }
             setOnEditorActionListener { _, action, ev ->
                 if (action == EditorInfo.IME_ACTION_SEND || (ev?.keyCode == KeyEvent.KEYCODE_ENTER && ev.action == KeyEvent.ACTION_DOWN)) {
                     submitCommand(); true
                 } else false
             }
+            // A hardware keyboard's arrows walk the history.
             setOnKeyListener { _, code, ev ->
                 if (ev.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (code) {
@@ -435,21 +460,43 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             }
         }
         row.addView(termInput)
-        row.addView(label("↑", 18f, cMuted).apply {
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            contentDescription = t("Previous command", "আগের কমান্ড")
-            setOnClickListener { recall(-1) }
-        })
-        row.addView(label("^C", 14f, cMuted, bold = true).apply {
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            contentDescription = t("Interrupt (restart the shell)", "থামান (শেল রিস্টার্ট)")
-            setOnClickListener { interruptShell() }
-        })
-        row.addView(iconButton(R.drawable.ic_studio_send, t("Run", "চালান")) { submitCommand() }.apply {
-            imageTintList = ColorStateList.valueOf(cAccent)
-        })
+        // One button that does what makes sense now: Run, or Stop while a
+        // command is running. A long press lists recent commands.
+        runButton = iconButton(R.drawable.ic_studio_send, t("Run", "চালান")) {
+            if (running) stopCommand() else submitCommand()
+        }.apply {
+            setOnLongClickListener { showHistory(it); true }
+        }
+        row.addView(runButton)
         box.addView(row)
+        updateRunUi()
         return box
+    }
+
+    /** The prompt, the Run/Stop button and the hint follow the shell's state. */
+    @SuppressLint("SetTextI18n")
+    private fun updateRunUi() {
+        if (!::runButton.isInitialized) return
+        promptView.text = if (running) "…" else ShellProtocol.promptLabel(shellCwd) + " $"
+        runButton.setImageResource(if (running) R.drawable.ic_studio_stop else R.drawable.ic_studio_send)
+        runButton.imageTintList = ColorStateList.valueOf(if (running) cError else cAccent)
+        runButton.contentDescription = if (running) t("Stop the running command", "চলমান কমান্ড থামান") else t("Run", "চালান")
+        termInput.hint = if (running) t("input for the running program", "চলমান প্রোগ্রামের ইনপুট") else t("command", "কমান্ড")
+    }
+
+    private fun showHistory(anchor: View) {
+        val recent = history.asReversed().distinct().take(12)
+        if (recent.isEmpty()) { toast(t("No commands yet", "এখনও কোনো কমান্ড নেই")); return }
+        val menu = PopupMenu(this, anchor)
+        recent.forEachIndexed { i, c -> menu.menu.add(0, i, i, c) }
+        menu.setOnMenuItemClickListener { item ->
+            val v = recent[item.itemId]
+            termInput.setText(v)
+            termInput.setSelection(v.length)
+            termInput.requestFocus()
+            true
+        }
+        menu.show()
     }
 
     private fun recall(dir: Int) {
@@ -465,29 +512,80 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         val start = termBuffer.length
         termBuffer.append(text)
         if (color != cText) termBuffer.setSpan(ForegroundColorSpan(color), start, termBuffer.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        trimAndShow(color == cAgent)
+    }
+
+    /** "$ command" with the prompt sign in the accent colour. */
+    private fun appendCommandEcho(cmd: String) {
+        if (termBuffer.isNotEmpty() && termBuffer[termBuffer.length - 1] != '\n') termBuffer.append('\n')
+        val start = termBuffer.length
+        termBuffer.append("$ ")
+        termBuffer.setSpan(ForegroundColorSpan(cAccent), start, start + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        termBuffer.setSpan(android.text.style.StyleSpan(Typeface.BOLD), start, termBuffer.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val cmdStart = termBuffer.length
+        termBuffer.append(cmd).append('\n')
+        termBuffer.setSpan(android.text.style.StyleSpan(Typeface.BOLD), cmdStart, termBuffer.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        trimAndShow(true)
+    }
+
+    private fun trimAndShow(forceScroll: Boolean) {
         if (termBuffer.length > MAX_TERMINAL_CHARS) termBuffer.delete(0, termBuffer.length - MAX_TERMINAL_CHARS * 3 / 4)
         val atBottom = !termScroll.canScrollVertically(1)
         termText.text = termBuffer
-        if (atBottom || color == cAgent) termScroll.post { termScroll.fullScroll(View.FOCUS_DOWN) }
+        if (atBottom || forceScroll) termScroll.post { termScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun submitCommand() {
         val cmd = termInput.text.toString()
         termInput.setText("")
-        if (cmd.isNotBlank() && history.lastOrNull() != cmd) history.add(cmd)
+        if (running) {
+            // The running program's input (e.g. answering a y/n question).
+            appendTerm(cmd + "\n", cMuted)
+            val line = cmd + "\n"
+            if (shellStarting) waitingForShell.add { writeToShell(it, line) }
+            else shell?.let { p -> runOnShellWriter(p) { writeToShell(it, line) } }
+            return
+        }
+        if (cmd.isBlank()) return
+        if (history.lastOrNull() != cmd) history.add(cmd)
         historyIndex = history.size
         when (cmd.trim()) {
             "clear" -> { termBuffer.clear(); termText.text = ""; return }
             "exit" -> { interruptShell(); return }
         }
-        appendTerm("$ $cmd\n", cText)
-        ensureShell { p ->
-            runCatching {
-                p.outputStream.write((cmd + "\n").toByteArray())
-                p.outputStream.flush()
-            }.onFailure {
-                main.post { appendTerm("[shell closed — restarting]\n", cError) }
-                shell = null
+        appendCommandEcho(cmd)
+        running = true
+        updateRunUi()
+        ensureShell { p -> writeToShell(p, ShellProtocol.wrap(cmd)) }
+    }
+
+    private fun writeToShell(p: Process, text: String) {
+        runCatching {
+            p.outputStream.write(text.toByteArray())
+            p.outputStream.flush()
+        }.onFailure {
+            if (shell === p) shell = null
+            main.post {
+                if (isDestroyed) return@post
+                appendTerm(t("[shell closed — run the command again]\n", "[শেল বন্ধ হয়ে গেছে — কমান্ডটি আবার চালান]\n"), cError)
+                running = false
+                updateRunUi()
+            }
+        }
+    }
+
+    private fun onShellEvent(ev: ShellProtocol.Event) {
+        when (ev) {
+            is ShellProtocol.Event.Text -> {
+                val s = ShellProtocol.stripNoise(Sandbox.stripAnsi(ev.text))
+                appendTerm(s, cText)
+            }
+            is ShellProtocol.Event.Done -> {
+                if (termBuffer.isNotEmpty() && termBuffer[termBuffer.length - 1] != '\n') appendTerm("\n", cText)
+                if (ev.exitCode != 0) appendTerm(t("exit ${ev.exitCode}\n", "এক্সিট ${ev.exitCode}\n"), cError)
+                shellCwd = ev.cwd
+                running = false
+                updateRunUi()
             }
         }
     }
@@ -502,33 +600,42 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         if (shellStarting) { waitingForShell.add(then); return }
         if (!sandbox.isSupported()) {
             appendTerm(sandbox.unsupportedReason() + "\n", cError)
+            running = false
+            updateRunUi()
             return
         }
         if (!sandbox.isInstalled()) appendTerm(t("Setting up Linux (one-time download, about 4 MB)…\n", "লিনাক্স প্রস্তুত হচ্ছে (একবারের ডাউনলোড, প্রায় ৪ MB)…\n"), cMuted)
         shellStarting = true
         waitingForShell.add(then)
+        val startIn = shellCwd
         Thread {
             try {
-                val p = sandbox.startShell()
+                val p = sandbox.startShell(startIn)
                 shell = p
                 Thread({
                     val buf = ByteArray(8192)
                     val decoder = Utf8Chunker()
+                    val parser = ShellProtocol.Parser()
                     try {
                         p.inputStream.use { input ->
                             while (true) {
                                 val n = input.read(buf)
                                 if (n < 0) break
-                                val s = Sandbox.stripAnsi(decoder.decode(buf, n))
-                                if (s.isNotEmpty()) main.post { if (!isDestroyed) appendTerm(s, cText) }
+                                val events = parser.feed(decoder.decode(buf, n))
+                                if (events.isNotEmpty()) main.post { if (!isDestroyed && shell === p) events.forEach { onShellEvent(it) } }
                             }
                         }
                     } catch (_: Exception) {}
                     if (shell === p) {
-                        // Ended by itself (not ^C): say so, so a failure is never silent.
+                        // Ended by itself (not Stop): say so, so a failure is never silent.
                         shell = null
                         val code = runCatching { p.waitFor() }.getOrNull()
-                        main.post { if (!isDestroyed) appendTerm(t("[shell exited", "[শেল বন্ধ হয়েছে") + (code?.let { " · $it" } ?: "") + "]\n", cMuted) }
+                        main.post {
+                            if (isDestroyed) return@post
+                            appendTerm(t("[shell exited", "[শেল বন্ধ হয়েছে") + (code?.let { " · $it" } ?: "") + "]\n", cMuted)
+                            running = false
+                            updateRunUi()
+                        }
                     }
                 }, "studio-shell").start()
                 main.post {
@@ -543,6 +650,8 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                     shellStarting = false
                     waitingForShell.clear()
                     appendTerm((e.message ?: "Could not start the shell") + "\n", cError)
+                    running = false
+                    updateRunUi()
                     refreshStatus()
                 }
             }
@@ -551,17 +660,25 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
 
     private fun Process.isAliveCompat(): Boolean = runCatching { exitValue(); false }.getOrDefault(true)
 
+    /** Stop: ends the shell and whatever runs in it; the next command starts a fresh one in the same folder. */
+    private fun stopCommand() {
+        interruptShell()
+        appendTerm(t("stopped\n", "থামানো হয়েছে\n"), cMuted)
+    }
+
     private fun interruptShell() {
         val p = shell
         shell = null
-        if (p != null) {
-            Thread { runCatching { p.destroy() } }.start()
-            appendTerm("^C\n", cMuted)
+        waitingForShell.clear()
+        if (p != null) Thread { runCatching { p.destroy() } }.start()
+        if (running) {
+            running = false
+            updateRunUi()
         }
     }
 
     private fun restartShellSoon() {
-        if (shell != null) interruptShell()
+        if (shell != null || running) interruptShell()
     }
 
     // ── Files ────────────────────────────────────────────────────────────────
@@ -571,13 +688,18 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), 0, dp(6), 0)
+            background = rounded(cSurface, 22f)
+            setPadding(dp(2), 0, dp(2), 0)
+            minimumHeight = dp(48)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(dp(12), 0, dp(12), dp(4))
+            }
         }
         bar.addView(iconButton(R.drawable.ic_studio_up, t("Up", "উপরে")) {
             if (cwd != "/") loadDir(cwd.substringBeforeLast('/').ifEmpty { "/" })
         })
         filesPath = label(cwd, 13f, cMuted).apply {
-            typeface = Typeface.MONOSPACE
+            typeface = mono
             isSingleLine = true
             ellipsize = android.text.TextUtils.TruncateAt.START
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -612,24 +734,45 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val f = entries[position]
-            val row = (convertView as? LinearLayout) ?: LinearLayout(this@StudioActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), dp(11), dp(16), dp(11))
-                addView(label("", 18f, cText).apply { layoutParams = LinearLayout.LayoutParams(dp(34), ViewGroup.LayoutParams.WRAP_CONTENT) })
-                addView(label("", 14.5f, cText).apply {
-                    isSingleLine = true
-                    ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                })
-                addView(label("", 12f, cMuted))
-            }
+            val row = (convertView as? LinearLayout) ?: newFileRow()
             val link = runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)
-            (row.getChildAt(0) as TextView).text = when { link -> "↪"; f.isDirectory -> "📁"; else -> "📄" }
-            (row.getChildAt(1) as TextView).text = f.name
-            (row.getChildAt(2) as TextView).text = if (f.isDirectory) "" else humanSize(f.length())
+            val dir = f.isDirectory
+            (row.getChildAt(0) as android.widget.ImageView).apply {
+                setImageResource(when { link -> R.drawable.ic_studio_link; dir -> R.drawable.ic_studio_folder; else -> R.drawable.ic_studio_file })
+                imageTintList = ColorStateList.valueOf(if (dir && !link) cAccent else cMuted)
+            }
+            val texts = row.getChildAt(1) as LinearLayout
+            (texts.getChildAt(0) as TextView).text = f.name
+            val modified = f.lastModified()
+            val ago = if (modified > 0) android.text.format.DateUtils.getRelativeTimeSpanString(
+                    modified, System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                    android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE).toString() else ""
+            (texts.getChildAt(1) as TextView).text = if (dir) ago else listOf(humanSize(f.length()), ago).filter { it.isNotEmpty() }.joinToString(" · ")
             return row
         }
+    }
+
+    private fun newFileRow(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(56)
+        setPadding(dp(16), dp(8), dp(16), dp(8))
+        val v = TypedValue()
+        if (theme.resolveAttribute(android.R.attr.selectableItemBackground, v, true)) setBackgroundResource(v.resourceId)
+        addView(android.widget.ImageView(this@StudioActivity).apply {
+            background = rounded(cSurface, 10f)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            layoutParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        })
+        addView(LinearLayout(this@StudioActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(14) }
+            addView(label("", 14.5f, cText).apply {
+                isSingleLine = true
+                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            })
+            addView(label("", 12f, cMuted).apply { isSingleLine = true })
+        })
     }
 
     private fun humanSize(n: Long): String = when {
@@ -674,7 +817,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             ScrollView(this).apply {
                 addView(TextView(this@StudioActivity).apply {
                     this.text = text
-                    typeface = Typeface.MONOSPACE
+                    typeface = mono
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                     setTextColor(cText)
                     setTextIsSelectable(true)
@@ -779,21 +922,22 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(cSurface, 14f)
-            setPadding(dp(12), 0, dp(2), 0)
+            background = rounded(cSurface, 22f)
+            setPadding(dp(14), 0, dp(4), 0)
+            minimumHeight = dp(48)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(dp(10), 0, dp(10), dp(8))
+                setMargins(dp(12), 0, dp(12), dp(8))
             }
         }
         previewUrl = EditText(this).apply {
             setText(DEFAULT_PREVIEW_URL)
-            typeface = Typeface.MONOSPACE
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(cText)
             background = null
             isSingleLine = true
-            imeOptions = EditorInfo.IME_ACTION_GO
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            imeOptions = EditorInfo.IME_ACTION_GO or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            typeface = mono
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             setOnEditorActionListener { _, _, _ -> openPreview(text.toString()); true }
         }
@@ -820,14 +964,54 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                     return true
                 }
 
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    previewFailed = false
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     if (!previewUrl.hasFocus()) previewUrl.setText(url)
+                    showPreviewHint(if (previewFailed) url else null)
+                }
+
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                    if (request.isForMainFrame) previewFailed = true
                 }
             }
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        box.addView(previewWeb)
+        previewHint = label("", 14f, cMuted).apply {
+            gravity = Gravity.CENTER
+            setLineSpacing(0f, 1.25f)
+            setPadding(dp(32), dp(24), dp(32), dp(24))
+            setBackgroundColor(cBg)
+            layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        val stage = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            addView(previewWeb)
+            addView(previewHint)
+        }
+        box.addView(stage)
+        showPreviewHint(null, initial = true)
         return box
+    }
+
+    /** The empty/failed state over the preview; hidden once a page is up. */
+    private fun showPreviewHint(failedUrl: String?, initial: Boolean = false) {
+        if (!::previewHint.isInitialized) return
+        val how = t("Start a web server in the Terminal, e.g.\npython3 -m http.server 8000\nthen open its port here.",
+                "টার্মিনালে একটি ওয়েব সার্ভার চালু করুন, যেমন\npython3 -m http.server 8000\nতারপর এখানে তার পোর্ট খুলুন।")
+        when {
+            failedUrl != null -> {
+                previewHint.text = t("Nothing is answering at $failedUrl\n\n", "$failedUrl-এ কিছু চলছে না\n\n") + how
+                previewHint.visibility = View.VISIBLE
+            }
+            initial -> {
+                previewHint.text = how
+                previewHint.visibility = View.VISIBLE
+            }
+            else -> previewHint.visibility = View.GONE
+        }
     }
 
     private fun openPreview(raw: String) {
