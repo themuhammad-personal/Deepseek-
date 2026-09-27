@@ -17,7 +17,7 @@ Linux Studio · AI agent · slash commands · memory · MCP tools · Deep Resear
 ![Languages](https://img.shields.io/badge/UI-6%20languages-8a63d2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<img src="docs/assets/showcase.jpg" alt="Super DeepSeek screens: advanced settings, slash commands, command palette in light mode, Bengali interface" width="100%" />
+<img src="docs/assets/showcase.jpg" alt="Super DeepSeek screens: advanced settings, the Linux &amp; Agent page, slash commands, Bengali interface in light mode" width="100%" />
 
 </div>
 
