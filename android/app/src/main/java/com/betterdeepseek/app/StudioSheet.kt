@@ -101,7 +101,7 @@ internal class StudioSheet(
             @Suppress("DEPRECATION")
             val top = insets.systemWindowInsetTop
             panel.setPadding(0, 0, 0, bottom)
-            panel.maxHeight = root.height - top - dp(24f)
+            panel.topInset = top
             insets
         }
         dialog.setContentView(root)
@@ -246,7 +246,8 @@ internal class StudioSheet(
     // ── The panel: measured to a maximum height, draggable ───────────────────
 
     private inner class Panel : LinearLayout(activity) {
-        var maxHeight = Int.MAX_VALUE
+        /** The status bar's height: the sheet stops a little below it. */
+        var topInset = 0
             set(v) { if (field != v) { field = v; requestLayout() } }
 
         private val slop = ViewConfiguration.get(activity).scaledTouchSlop
@@ -259,9 +260,9 @@ internal class StudioSheet(
         private var tracker: VelocityTracker? = null
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val cap = if (maxHeight in 1 until Int.MAX_VALUE) maxHeight else MeasureSpec.getSize(heightMeasureSpec)
-            val size = minOf(MeasureSpec.getSize(heightMeasureSpec).takeIf { it > 0 } ?: cap, cap)
-            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(size, MeasureSpec.AT_MOST))
+            val avail = MeasureSpec.getSize(heightMeasureSpec)
+            val size = if (avail > 0) (avail - topInset - dp(24f)).coerceAtLeast(avail / 2) else avail
+            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(size, if (avail > 0) MeasureSpec.AT_MOST else MeasureSpec.UNSPECIFIED))
         }
 
         private fun inside(v: View, x: Float, y: Float): Boolean {

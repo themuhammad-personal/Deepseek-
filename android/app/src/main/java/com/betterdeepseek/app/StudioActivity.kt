@@ -179,6 +179,7 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     }
 
     override fun onDestroy() {
+        activeSheet?.dismiss(animated = false)
         sandbox.removeListener(this)
         shell?.let { p -> Thread { runCatching { p.destroy() } }.start() }
         shell = null
@@ -818,7 +819,15 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
 
     private fun guestOf(f: File): String = (if (cwd == "/") "" else cwd) + "/" + f.name
 
-    private fun newSheet(): StudioSheet = StudioSheet(this, dark, cBg, cText, cMuted)
+    private var activeSheet: StudioSheet? = null
+
+    private fun newSheet(): StudioSheet {
+        activeSheet?.dismiss(animated = false)
+        return StudioSheet(this, dark, cBg, cText, cMuted).also { sh ->
+            activeSheet = sh
+            sh.onDismissed = { if (activeSheet === sh) activeSheet = null }
+        }
+    }
 
     /** A round icon button for a sheet's title row. */
     private fun sheetIcon(icon: Int, desc: String, tint: Int = cText, onClick: () -> Unit): ImageButton =
