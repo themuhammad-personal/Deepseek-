@@ -28,15 +28,18 @@ what DeepSeek ships.
 
 | Layer | Where | Responsibility |
 |---|---|---|
-| Native shell | `android/app/src/main/java/com/betterdeepseek/app/` | WebView setup, splash/boot overlay, insets, back handling, file chooser, external links |
+| Native shell | `android/app/src/main/java/com/superdeepseek/app/` | WebView setup, splash/boot overlay, insets, back handling, file chooser, external links |
 | Bridge | `WebViewBridge.kt` | `window.AndroidBridge`: persistent storage, native pickers, blob downloads, haptics, CORS-free fetch for MCP/web tools |
 | Engine | `android/app/src/main/bds-assets/bds/` | `content.js` (UI + features), `content.css`, `injected.js` (network layer), `sandbox.*` (isolated code runners) |
 | Polish | `UiPolish.kt` | Small, unit-tested DOM sweep: hides voice / Deep Code entries and repairs raw labels |
 | Updates | `UpdateChecker.kt` | Polls this repository's GitHub Releases (stable or beta channel) and installs the signed APK |
 
-The package name `com.betterdeepseek.app` is historical and intentionally unchanged:
-it is the Android application id, and changing it would break updates for every
-installed copy.
+The application id and Kotlin package are `com.superdeepseek.app`. Earlier builds
+used `com.betterdeepseek.app`; Android treats the new
+id as a different app, so it installs next to the old one and cannot read its data. On first
+start `MainActivity` offers to uninstall the old copy and explains how to carry settings over
+(engine Export → Import); see `LegacyApp.kt`. Keep the new id and the keystore unchanged from
+now on, or updates break again.
 
 ## The engine bundle
 

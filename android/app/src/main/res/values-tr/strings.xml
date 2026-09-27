@@ -25,4 +25,8 @@
         <item quantity="one">%d komut çalışıyor</item>
         <item quantity="other">%d komut çalışıyor</item>
     </plurals>
+    <string name="sd_legacy_title">Eski sürüm kaldırılsın mı?</string>
+    <string name="sd_legacy_message">Super DeepSeek\'in eski sürümü hâlâ bu telefonda. Uygulamanın artık kendi paket adı var, bu yüzden bu sürüm ayrı bir uygulama olarak yüklendi.\n\nBurada DeepSeek\'e bir kez daha giriş yapın; sohbetleriniz DeepSeek hesabınızda duruyor. Ayarları, istemleri ve anıları taşımak için eski uygulamada Advanced settings → Integrations &amp; backup → Export yapın, ardından burada Import edin. Linux dosyaları taşınmaz; gerekenleri önce eski Linux Studio\'dan dışa aktarın.</string>
+    <string name="sd_legacy_uninstall">Eski sürümü kaldır</string>
+    <string name="sd_legacy_never">Bir daha sorma</string>
 </resources>

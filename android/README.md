@@ -25,9 +25,10 @@ cd android
 
 Every release is signed with the same keystore (`app/superdeepseek-release.jks`). The
 `BDS_KEYSTORE_PASSWORD`, `BDS_KEY_ALIAS` and `BDS_KEY_PASSWORD` environment variables
-override the defaults. Keep the keystore, `applicationId` (`com.betterdeepseek.app`)
-and signing config unchanged. They are what let a new APK install as an update over
-an existing one. `versionCode` is `1000 + build id` and always increases in CI.
+override the defaults. Keep the keystore, `applicationId` (`com.superdeepseek.app`)
+and signing config unchanged from now on. They are what let a new APK install as an update over
+an existing one. (Earlier builds used `com.betterdeepseek.app`. The new id installs as a
+separate app, and on first start it offers to uninstall the old copy: see `LegacyApp.kt`.) `versionCode` is `1000 + build id` and always increases in CI.
 
 ## Source map
 
@@ -40,9 +41,10 @@ an existing one. `versionCode` is `1000 + build id` and always increases in CI.
 | `Sandbox.kt`, `SandboxTools.kt`, `SandboxService.kt`, `TarGz.kt` | The built-in Linux sandbox (proot + Alpine), its agent tools and the foreground service |
 | `StudioActivity.kt` | Linux Studio: terminal, file browser and preview |
 | `Downloads.kt` | Where Android 8–9 downloads go (shared Downloads, or the app's own folder without the permission) |
+| `LegacyApp.kt` | Detects the old `com.betterdeepseek.app` install and offers to remove it |
 | `Utf8Chunker.kt` | Streams process output as UTF-8 without breaking characters split between reads |
 | `src/main/bds-assets/bds/` | The engine bundle: `injected.js`, `content.js`, `content.css`, sandbox pages |
 | `src/test/` | Unit tests: bridge, pickers, navigation and link routing, keyboard insets, user agent, polish script, updates |
 
-The Kotlin package is still `com.betterdeepseek.app` on purpose (see above). The
+The Kotlin package and the application id are `com.superdeepseek.app`. The
 app name, theme (`Theme.SuperDeepSeek`) and all user-facing text say Super DeepSeek.

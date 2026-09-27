@@ -18,9 +18,10 @@ release-ready. Work carefully; understand code before changing it.
 1. Work only on the branch you were given. **Never merge into `main`, never open a PR**
    unless the owner explicitly asks.
 2. **Signing and identity are frozen**: do not touch the keystore, signing config, CI
-   signing secrets, `applicationId` / package `com.betterdeepseek.app`, or
-   `versionName` handling. New builds must install as updates over the old app.
-3. The package name, storage keys (`bds_*`), CSS classes (`bds-*`) and internal event
+   signing secrets, `applicationId` / package `com.superdeepseek.app` (renamed once, from
+   `com.betterdeepseek.app`, at the owner's request), or `versionName` handling. New builds
+   must install as updates over the previous one.
+3. Storage keys (`bds_*`), CSS classes (`bds-*`) and internal event
    names (`bds:*`, `bds-mcp-call`…) are historical and stay. Everything the **user or the
    model reads** must say *Super DeepSeek* / *SDS* — never "Better DeepSeek" / "BDS".
    The only allowed mention is the credit at the end of `README.md`.
@@ -40,7 +41,7 @@ release-ready. Work carefully; understand code before changing it.
 
 ## Map of the code
 
-- `android/app/src/main/java/com/betterdeepseek/app/`
+- `android/app/src/main/java/com/superdeepseek/app/`
   - `MainActivity.kt` — WebView setup, launch screen, bars (PixelCopy sampling), file
     chooser, permissions (mic for voice, notifications), renderer-crash recovery,
     liveness probe on resume, restoring the open chat (`ChatUrls.kt`).

@@ -33,4 +33,8 @@
         <item quantity="one">Running %d command</item>
         <item quantity="other">Running %d commands</item>
     </plurals>
+    <string name="sd_legacy_title">Remove the old version?</string>
+    <string name="sd_legacy_message">The old version of Super DeepSeek is still on this phone. The app now has its own package name, so this version was installed as a separate app.\n\nSign in to DeepSeek here once more; your chats are kept in your DeepSeek account. To bring over settings, prompts and memories: in the old app open Advanced settings → Integrations &amp; backup → Export, then Import here. Linux files are not carried over, so export anything you need from the old Linux Studio first.</string>
+    <string name="sd_legacy_uninstall">Uninstall old version</string>
+    <string name="sd_legacy_never">Don\'t ask again</string>
 </resources>

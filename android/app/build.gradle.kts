@@ -11,7 +11,7 @@ plugins {
 val bdsBuildId: Long = (project.findProperty("bdsBuildId") as String?)?.toLongOrNull() ?: 0L
 
 android {
-    namespace = "com.betterdeepseek.app"
+    namespace = "com.superdeepseek.app"
     compileSdk = 34
 
     buildFeatures {
@@ -19,7 +19,7 @@ android {
     }
     
     defaultConfig {
-        applicationId = "com.betterdeepseek.app"
+        applicationId = "com.superdeepseek.app"
         minSdk = 26
         targetSdk = 34
         // Monotonically increasing versionCode ensures updates install smoothly over older versions

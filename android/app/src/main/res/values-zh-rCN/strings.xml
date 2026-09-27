@@ -24,4 +24,8 @@
     <plurals name="sandbox_running">
         <item quantity="other">正在运行 %d 条命令</item>
     </plurals>
+    <string name="sd_legacy_title">移除旧版本？</string>
+    <string name="sd_legacy_message">旧版 Super DeepSeek 仍安装在这部手机上。应用现在使用自己的包名，所以此版本作为单独的应用安装。\n\n请在这里重新登录 DeepSeek，您的聊天保存在 DeepSeek 账号中。如需迁移设置、提示词和记忆：在旧应用中打开 Advanced settings → Integrations &amp; backup → Export，然后在这里 Import。Linux 文件不会迁移，请先从旧版 Linux Studio 导出需要的文件。</string>
+    <string name="sd_legacy_uninstall">卸载旧版本</string>
+    <string name="sd_legacy_never">不再询问</string>
 </resources>

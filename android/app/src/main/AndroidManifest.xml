@@ -15,6 +15,10 @@
          "install unknown apps" in Settings, and MainActivity routes them there when the grant is
          missing. Without the declaration the installer intent is refused outright. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Earlier builds were installed as com.betterdeepseek.app. The new package installs next
+         to it, so MainActivity offers to uninstall the old copy (LegacyApp.kt): the system
+         uninstaller refuses ACTION_DELETE from apps without this (normal) permission. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Mic button uses SpeechRecognition (browser API). The permission is
          declared so future native fallbacks remain possible. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -27,6 +31,8 @@
     <!-- Android 11+ package visibility: required to launch ACTION_VIEW
          intents (file viewers for downloads, external browsers). -->
     <queries>
+        <!-- The old package, to tell whether it is still installed (LegacyApp.kt). -->
+        <package android:name="com.betterdeepseek.app" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />

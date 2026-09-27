@@ -110,6 +110,12 @@ DeepSeek ships them, and everything else is extra.
 Requires Android 8.0 (API 26) or newer. The app checks for updates itself; you can
 switch between stable and beta builds in the update dialog.
 
+> **Coming from an older build?** The app now has its own package name
+> (`com.superdeepseek.app`), so this version installs next to the old one instead of over it.
+> To keep your settings, prompts and memories, export them in the old app (*Advanced settings →
+> Integrations & backup → Export*) and import them in the new one. Your chats stay in your
+> DeepSeek account. The new app then offers to uninstall the old one.
+
 ## How it works
 
 ```
