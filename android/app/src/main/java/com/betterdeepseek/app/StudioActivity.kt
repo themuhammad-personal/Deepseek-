@@ -240,7 +240,13 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         if (bold) typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
 
-    private fun bn(): Boolean = resources.configuration.locales[0].language == "bn"
+    /** The app's language (the chat's own setting, shared by the page), else the phone's. */
+    private val bnUi: Boolean by lazy {
+        val app = prefs.getString(WebViewBridge.KEY_UI_LOCALE, null).orEmpty()
+        if (app.isNotEmpty()) app.lowercase(java.util.Locale.ROOT).startsWith("bn")
+        else resources.configuration.locales[0].language == "bn"
+    }
+    private fun bn(): Boolean = bnUi
     private fun t(en: String, bnText: String) = if (bn()) bnText else en
 
     // ── Layout ───────────────────────────────────────────────────────────────
@@ -321,12 +327,15 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         val ask = prefs.getString(WebViewBridge.KEY_SANDBOX_MODE, "auto") == "ask"
         menu.menu.add(0, 1, 0, t("Sandbox for the AI", "AI-এর জন্য স্যান্ডবক্স")).apply { isCheckable = true; isChecked = enabled }
         menu.menu.add(0, 2, 1, t("Ask before each command", "প্রতিটি কমান্ডের আগে জিজ্ঞেস করুন")).apply { isCheckable = true; isChecked = ask }
-        menu.menu.add(0, 3, 2, t("Reset Linux (deletes all files)…", "লিনাক্স রিসেট (সব ফাইল মুছে যাবে)…"))
+        val keepGoing = prefs.getString(WebViewBridge.KEY_AGENT_CONTINUE, "1") != "0"
+        menu.menu.add(0, 4, 2, t("Keep going until the task is done", "কাজ শেষ না হওয়া পর্যন্ত চালিয়ে যাক")).apply { isCheckable = true; isChecked = keepGoing }
+        menu.menu.add(0, 3, 3, t("Reset Linux (deletes all files)…", "লিনাক্স রিসেট (সব ফাইল মুছে যাবে)…"))
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> prefs.edit().putString(WebViewBridge.KEY_SANDBOX_ENABLED, if (enabled) "0" else "1").apply()
                 2 -> prefs.edit().putString(WebViewBridge.KEY_SANDBOX_MODE, if (ask) "auto" else "ask").apply()
                 3 -> confirmReset()
+                4 -> prefs.edit().putString(WebViewBridge.KEY_AGENT_CONTINUE, if (keepGoing) "0" else "1").apply()
             }
             refreshStatus()
             true

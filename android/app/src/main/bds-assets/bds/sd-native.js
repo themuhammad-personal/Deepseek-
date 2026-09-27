@@ -36,9 +36,13 @@
     console.info('[SD]', message);
   }
 
+  /** The app's language: the engine's own setting first, then the page / phone. */
   function isBn() {
-    try { return String(document.documentElement.lang || navigator.language || '').toLowerCase().indexOf('bn') === 0; }
-    catch (_) { return false; }
+    try {
+      var e = window.__sdEngine;
+      var l = e && typeof e.locale === 'function' ? String(e.locale() || '') : '';
+      return String(l || document.documentElement.lang || navigator.language || '').toLowerCase().indexOf('bn') === 0;
+    } catch (_) { return false; }
   }
 
   function t(en, bn) { return isBn() ? bn : en; }

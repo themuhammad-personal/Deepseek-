@@ -1150,6 +1150,46 @@ class WebViewBridge(
         JSONObject().put("supported", false).put("enabled", false).put("reason", t.message ?: "").toString()
     }
 
+    /**
+     * What the AI should know about its Linux right now (added to the tool
+     * instructions): set up or not, approval mode, running background jobs and
+     * the top of /root/workspace. Small and cheap: no process is started.
+     */
+    @JavascriptInterface
+    fun sandboxContext(): String = if (!trustedPage) "{}" else try {
+        val s = sandbox.status()
+        val o = JSONObject()
+                .put("supported", s.optBoolean("supported"))
+                .put("installed", s.optBoolean("installed"))
+                .put("enabled", isSandboxEnabled())
+                .put("mode", prefs.getString(KEY_SANDBOX_MODE, "auto") ?: "auto")
+        val jobs = JSONArray()
+        sandbox.listJobs().filter { it.isRunning }.takeLast(6).forEach {
+            jobs.put(JSONObject().put("id", it.id).put("command", it.command.replace('\n', ' ').take(120)))
+        }
+        o.put("jobs", jobs)
+        val ws = if (s.optBoolean("installed")) sandbox.hostFile(Sandbox.WORKSPACE)?.takeIf { it.isDirectory } else null
+        val kids = ws?.listFiles()?.filter { !it.name.startsWith(".") }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase(Locale.ROOT) })) ?: emptyList()
+        o.put("workspace", JSONArray(kids.take(20).map { it.name.take(60) + if (it.isDirectory) "/" else "" }))
+        o.put("workspaceCount", kids.size)
+        val free = s.optLong("freeBytes", -1)
+        if (free >= 0) o.put("freeMb", free / (1024 * 1024))
+        o.toString()
+    } catch (t: Throwable) {
+        "{}"
+    }
+
+    /** Settings → Linux & Agent → Reset: deletes the Linux system and its files (in the background). */
+    @JavascriptInterface
+    fun sandboxReset(): Boolean {
+        if (!trustedPage) return false
+        Thread({
+            runCatching { sandbox.reset() }
+            runCatching { evaluateJs?.invoke("window.__sdAgent&&window.__sdAgent.refresh&&window.__sdAgent.refresh('reset')") }
+        }, "sandbox-reset").start()
+        return true
+    }
+
     /** Stop button: ends every sandbox command and background job. */
     @JavascriptInterface
     fun sandboxStop(): Int = if (!trustedPage) 0 else try {
@@ -2012,6 +2052,10 @@ class WebViewBridge(
         internal const val KEY_SANDBOX_ENABLED = "sd_sandbox_enabled"
         /** "auto" runs the agent's sandbox commands directly; "ask" confirms each one. */
         internal const val KEY_SANDBOX_MODE = "sd_sandbox_mode"
+        /** "0": no automatic "continue" when a reply stops mid-task (sd-agent.js). */
+        internal const val KEY_AGENT_CONTINUE = "sd_agent_autocontinue"
+        /** The chat's UI language ("bn", "en", …), written by sd-agent.js; Studio follows it. */
+        internal const val KEY_UI_LOCALE = "sd_ui_locale"
         private const val DEFAULT_GITHUB_API_BASE_URL = "https://api.github.com"
         private const val DEFAULT_GITHUB_COMMIT_COUNT = 100
         // Desktop Chrome UA for bds-fetch-url requests. Without it OkHttp sends

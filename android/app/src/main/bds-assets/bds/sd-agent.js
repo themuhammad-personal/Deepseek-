@@ -31,9 +31,13 @@
 
   function bridge() { return window.AndroidBridge || null; }
 
+  /** The app's language: the engine's own setting first, then the page / phone. */
   function isBn() {
-    try { return String(document.documentElement.lang || navigator.language || '').toLowerCase().indexOf('bn') === 0; }
-    catch (_) { return false; }
+    try {
+      var e = window.__sdEngine;
+      var l = e && typeof e.locale === 'function' ? String(e.locale() || '') : '';
+      return String(l || document.documentElement.lang || navigator.language || '').toLowerCase().indexOf('bn') === 0;
+    } catch (_) { return false; }
   }
 
   function t(en, bn) { return isBn() ? bn : en; }
@@ -437,7 +441,7 @@
   }
 
   function maybeNudge(callsAtEnd) {
-    if (flow.calls !== callsAtEnd || flow.nudges >= MAX_NUDGES || window.__sdAgentStopped) return;
+    if (flow.calls !== callsAtEnd || flow.nudges >= MAX_NUDGES || window.__sdAgentStopped || !autoContinue()) return;
     if (state.pending || mcpPending || generating() || !sandboxServers().length) return;
     var sid = sessionId();
     if (!sid) return;
@@ -456,6 +460,7 @@
 
   function watchReplies() {
     setInterval(function () {
+      syncLocale();
       var g = generating();
       if (g && flow.timers.length) { flow.timers.forEach(clearTimeout); flow.timers = []; }
       if (flow.was && !g) onReplyEnd();
@@ -634,8 +639,296 @@
     new MutationObserver(function () {
       if (queued) return;
       queued = true;
-      setTimeout(function () { queued = false; addStudioItem(); }, 50);
+      setTimeout(function () { queued = false; addStudioItem(); addLinuxCard(); }, 50);
     }).observe(document.body, { childList: true, subtree: true });
+  }
+
+
+  // ── Preferences shared with the app ────────────────────────────────────────
+  //
+  // The same keys the native side reads (Linux Studio's ⋮ menu shows them too),
+  // so a switch flipped in either place is the one setting.
+
+  var PREF_ENABLED = 'sd_sandbox_enabled';
+  var PREF_MODE = 'sd_sandbox_mode';
+  var PREF_CONTINUE = 'sd_agent_autocontinue';
+  var PREF_LOCALE = 'sd_ui_locale';
+
+  function pref(key, def) {
+    try {
+      var b = bridge();
+      var v = b && typeof b.getStorage === 'function' ? b.getStorage(key) : null;
+      return v === null || v === undefined || v === '' ? def : String(v);
+    } catch (_) { return def; }
+  }
+
+  function setPref(key, value) {
+    try { var b = bridge(); if (b && typeof b.setStorage === 'function') b.setStorage(key, String(value)); } catch (_) {}
+    infoCache = null;
+  }
+
+  function autoContinue() { return pref(PREF_CONTINUE, '1') !== '0'; }
+
+  var lastLocale = null;
+
+  /** Linux Studio speaks the app's language, not only the phone's. */
+  function syncLocale() {
+    var e = window.__sdEngine;
+    var l = e && typeof e.locale === 'function' ? String(e.locale() || '') : '';
+    if (!l || l === lastLocale) return;
+    lastLocale = l;
+    if (pref(PREF_LOCALE, '') !== l) setPref(PREF_LOCALE, l);
+  }
+
+  // ── What the AI knows about its Linux right now ────────────────────────────
+
+  function context() {
+    try {
+      var b = bridge();
+      return JSON.parse(b && typeof b.sandboxContext === 'function' ? b.sandboxContext() : '{}') || {};
+    } catch (_) { return {}; }
+  }
+
+  /** Lines for the tool instructions (injected.js); [] when there is no sandbox. */
+  function promptContext(c) {
+    c = c || context();
+    if (!c.supported || c.enabled === false) return [];
+    var parts = [];
+    parts.push(c.installed ? 'Linux is set up and ready.'
+      : 'Linux is not set up yet: the first call installs it automatically (about a minute), so do not worry about a slow first call.');
+    if (c.mode === 'ask') parts.push('The user approves every call by hand, so a call can be declined; then ask them or take another way.');
+    var jobs = Array.isArray(c.jobs) ? c.jobs : [];
+    if (jobs.length) {
+      parts.push('Running background jobs: ' + jobs.map(function (j) {
+        return String(j.id) + ' `' + String(j.command || '').slice(0, 120) + '`';
+      }).join('; ') + '.');
+    }
+    var ws = Array.isArray(c.workspace) ? c.workspace.map(String) : [];
+    if (c.installed) {
+      parts.push(ws.length ? '/root/workspace contains: ' + ws.join(', ') +
+        (Number(c.workspaceCount) > ws.length ? ', … (' + c.workspaceCount + ' entries)' : '') + '.'
+        : '/root/workspace is empty.');
+    }
+    if (typeof c.freeMb === 'number' && c.freeMb >= 0 && c.freeMb < 500) parts.push('Only ' + c.freeMb + ' MB of storage is free.');
+    return ['Sandbox state when this message was sent: ' + parts.join(' ')];
+  }
+
+  // ── Settings → "Linux & Agent" ─────────────────────────────────────────────
+  //
+  // A card in the engine's own settings (same markup and styles as its other
+  // cards), so the sandbox and the agent are settings of the app like any other.
+  // Switches apply at once; they are native preferences, not engine settings.
+
+  var SV = 'svelte-1f1t8j1';
+  var CARD_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" class="' + SV + '"><rect x="2" y="4" width="20" height="16" rx="2"></rect>' +
+    '<polyline points="6 9 10 12 6 15"></polyline><line x1="12" y1="15" x2="17" y2="15"></line></svg>';
+  var CHEVRON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" class="' + SV + '"><path d="M4 6L8 10L12 6" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+  var card = { el: null, open: false, timer: null, resetArmed: 0 };
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls + ' ' + SV;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function switchRow(label, hint, key, isOn, onChange) {
+    var row = el('div', 'bds-toggle-row');
+    row.setAttribute('data-sd-key', key);
+    var texts = el('div', '');
+    texts.style.minWidth = '0';
+    texts.appendChild(el('span', 'bds-toggle-label', label));
+    if (hint) {
+      var p = el('p', 'sd-hint', hint);
+      texts.appendChild(p);
+    }
+    var sw = el('label', 'bds-switch');
+    var input = el('input', '');
+    input.type = 'checkbox';
+    input.checked = !!isOn;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', function () { onChange(input.checked); updateCard(); });
+    sw.appendChild(input);
+    sw.appendChild(document.createTextNode(' '));
+    sw.appendChild(el('span', 'bds-switch-track'));
+    row.appendChild(texts);
+    row.appendChild(sw);
+    return row;
+  }
+
+  function button(text, cls, onClick) {
+    var b = el('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); onClick(b); });
+    return b;
+  }
+
+  function statusText(i) {
+    if (!i.supported) return t('Not available on this phone', 'এই ফোনে নেই');
+    if (i.enabled === false) return t('Off · the AI works without Linux', 'বন্ধ · AI লিনাক্স ছাড়া কাজ করবে');
+    if (i.installing) {
+      return t('Setting up Linux…', 'লিনাক্স প্রস্তুত হচ্ছে…') +
+        (typeof i.progress === 'number' && i.progress > 0 ? ' ' + Math.round(i.progress * 100) + '%' : '');
+    }
+    var bits = [t('On', 'চালু')];
+    bits.push(i.installed ? ('Alpine ' + (i.version || '')).trim() : t('sets itself up on first use', 'প্রথম ব্যবহারে নিজেই প্রস্তুত হবে'));
+    if (i.mode === 'ask') bits.push(t('asks before each command', 'প্রতিটি কমান্ডের আগে জিজ্ঞেস করে'));
+    if (i.active > 0) bits.push(t(i.active + ' running', i.active + 'টি চলছে'));
+    return bits.join(' · ');
+  }
+
+  function buildCard() {
+    var c = el('div', 'bds-card');
+    c.id = 'sd-linux-card';
+    var head = el('button', 'bds-card-header bds-sub-toggle');
+    head.type = 'button';
+    head.setAttribute('aria-expanded', 'false');
+    head.innerHTML = '<div class="bds-card-header-left ' + SV + '"><span class="bds-card-icon-badge bds-icon--green ' + SV + '">' +
+      CARD_ICON + '</span> <div class="bds-card-title-group ' + SV + '"><span class="bds-card-title ' + SV + '"></span> ' +
+      '<span class="bds-card-subtitle ' + SV + '"></span></div></div> <div class="bds-card-header-right ' + SV + '">' +
+      '<span class="bds-chevron ' + SV + '">' + CHEVRON + '</span></div>';
+    head.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      card.open = !card.open;
+      updateCard();
+    });
+    var body = el('div', 'bds-card-body bds-sub-content');
+    var inner = el('div', 'bds-sub-inner');
+    body.appendChild(inner);
+    c.appendChild(head);
+    c.appendChild(document.createTextNode(' '));
+    c.appendChild(body);
+    return c;
+  }
+
+  function fillCard(c, i) {
+    var inner = c.querySelector('.bds-sub-inner');
+    if (!inner) return;
+    inner.textContent = '';
+    var on = i.enabled !== false;
+    // In the drawer the card header is only a section label: the state goes first in the list.
+    var status = el('div', 'bds-toggle-row sd-status');
+    status.appendChild(el('span', 'sd-dot'));
+    status.appendChild(el('span', 'bds-toggle-label sd-status-text'));
+    inner.appendChild(status);
+    inner.appendChild(switchRow(
+      t('Linux sandbox for the AI', 'AI-এর জন্য লিনাক্স স্যান্ডবক্স'),
+      t('The AI can run code, install packages and build whole projects in its own Linux on this phone.',
+        'AI এই ফোনে নিজের লিনাক্সে কোড চালাতে, প্যাকেজ ইনস্টল করতে ও পুরো প্রজেক্ট বানাতে পারবে।'),
+      PREF_ENABLED, on, function (v) { setPref(PREF_ENABLED, v ? '1' : '0'); }));
+    if (on) {
+      inner.appendChild(switchRow(
+        t('Ask before each command', 'প্রতিটি কমান্ডের আগে জিজ্ঞেস করুন'),
+        t('Off: the agent works on its own and Stop is always there.', 'বন্ধ থাকলে এজেন্ট নিজেই কাজ করে, আর থামানোর বোতাম সবসময় থাকে।'),
+        PREF_MODE, i.mode === 'ask', function (v) { setPref(PREF_MODE, v ? 'ask' : 'auto'); }));
+      inner.appendChild(switchRow(
+        t('Keep going until the task is done', 'কাজ শেষ না হওয়া পর্যন্ত চালিয়ে যাক'),
+        t('When a reply stops in the middle of a task, the app quietly asks the AI to continue (at most twice in a row).',
+          'কাজের মাঝপথে উত্তর থেমে গেলে অ্যাপ চুপচাপ AI-কে চালিয়ে যেতে বলে (পরপর সর্বোচ্চ দুবার)।'),
+        PREF_CONTINUE, autoContinue(), function (v) { setPref(PREF_CONTINUE, v ? '1' : '0'); }));
+    }
+    var row = el('div', 'bds-export-buttons');
+    row.classList.add('sd-actions');
+    row.appendChild(button(t('Open Linux Studio', 'লিনাক্স স্টুডিও খুলুন'), 'bds-btn-outlined', function () {
+      try { var b = bridge(); if (b && typeof b.openStudio === 'function') b.openStudio(); } catch (_) {}
+    }));
+    if (i.active > 0 || state.active) {
+      row.appendChild(button(t('Stop everything', 'সব থামান'), 'bds-btn-outlined', function () { stopAgent(false); updateCard(); }));
+    }
+    if (i.installed && !i.installing) {
+      var armed = Date.now() - card.resetArmed < 4000;
+      row.appendChild(button(armed ? t('Tap again: delete all', 'আবার চাপুন: সব মুছবে') : t('Reset Linux…', 'লিনাক্স রিসেট…'),
+        'bds-btn-danger', function () {
+          if (Date.now() - card.resetArmed >= 4000) {
+            card.resetArmed = Date.now();
+            updateCard();
+            setTimeout(updateCard, 4100);
+            return;
+          }
+          card.resetArmed = 0;
+          try { var b = bridge(); if (b && typeof b.sandboxReset === 'function') b.sandboxReset(); } catch (_) {}
+          toast(t('Resetting Linux… your workspace files are being deleted.', 'লিনাক্স রিসেট হচ্ছে… ওয়ার্কস্পেসের ফাইল মুছে ফেলা হচ্ছে।'));
+          infoCache = null;
+          setTimeout(updateCard, 1500);
+        }));
+    }
+    inner.appendChild(row);
+    var foot = [];
+    if (i.installed) foot.push(t('Files: ', 'ফাইল: ') + (i.workspace || '/root/workspace'));
+    if (typeof i.freeBytes === 'number' && i.freeBytes >= 0) foot.push(t('Free: ', 'খালি: ') + Math.round(i.freeBytes / 1048576) + ' MB');
+    if (!i.supported && i.reason) foot.push(String(i.reason));
+    if (foot.length) inner.appendChild(el('p', 'sd-hint sd-foot', foot.join(' · ')));
+  }
+
+  function updateCard() {
+    var c = card.el;
+    if (!c || !c.isConnected) return;
+    infoCache = null;
+    var i = info();
+    c.classList.toggle('open', card.open);
+    var head = c.querySelector('.bds-sub-toggle');
+    var body = c.querySelector('.bds-sub-content');
+    if (head) { head.classList.toggle('open', card.open); head.setAttribute('aria-expanded', String(card.open)); }
+    if (body) body.classList.toggle('open', card.open);
+    var title = c.querySelector('.bds-card-title');
+    if (title) title.textContent = t('Linux & Agent', 'লিনাক্স ও এজেন্ট');
+    var sub = c.querySelector('.bds-card-subtitle');
+    var line = statusText(i);
+    if (sub) sub.textContent = line;
+    // Rebuilding the rows while a switch is being pressed would eat the tap.
+    var inner = c.querySelector('.bds-sub-inner');
+    var sig = JSON.stringify([i.enabled, i.mode, i.installed, i.installing, i.active > 0 || state.active, autoContinue(),
+      Date.now() - card.resetArmed < 4000, isBn(), i.supported]);
+    if (inner && inner.getAttribute('data-sig') !== sig) { fillCard(c, i); inner.setAttribute('data-sig', sig); }
+    var st = c.querySelector('.sd-status-text');
+    if (st && st.textContent !== line) st.textContent = line;
+    var dot = c.querySelector('.sd-dot');
+    if (dot) {
+      dot.setAttribute('data-state', !i.supported || i.enabled === false ? 'off'
+        : i.installing || !i.installed ? 'wait' : (i.active > 0 || state.active) ? 'busy' : 'on');
+    }
+  }
+
+  var CARD_STYLE = '#sd-linux-card .sd-hint{font-size:11px;line-height:1.4;opacity:.62;margin:3px 0 0}' +
+    '#sd-linux-card .sd-status{justify-content:flex-start!important;gap:10px!important}' +
+    '#sd-linux-card .sd-status-text{font-size:12.5px;opacity:.85;min-width:0}' +
+    '#sd-linux-card .sd-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#8e8ea0}' +
+    '#sd-linux-card .sd-dot[data-state="on"]{background:#22c55e}' +
+    '#sd-linux-card .sd-dot[data-state="busy"]{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:sd-pulse 1.6s infinite}' +
+    '#sd-linux-card .sd-dot[data-state="wait"]{background:#f59e0b}' +
+    '@keyframes sd-pulse{70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}' +
+    '#sd-linux-card .sd-actions{flex-wrap:wrap;padding:12px 0 4px}' +
+    '#sd-linux-card .sd-actions button{flex:1 1 auto;min-height:36px;font-size:12px;border-radius:10px}' +
+    '#sd-linux-card .sd-foot{padding:4px 0 8px;word-break:break-all}';
+
+  /** Puts the card above "Advanced settings" whenever the settings page is showing. */
+  function addLinuxCard() {
+    var inner = document.querySelector('#bds-drawer .bds-advanced-inner, #bds-root .bds-advanced-inner, .bds-advanced-inner');
+    if (!inner) { if (card.timer) { clearInterval(card.timer); card.timer = null; } return; }
+    if (!info().supported) return;
+    if (card.el && card.el.isConnected) return;
+    if (!document.getElementById('sd-linux-style')) {
+      var st = document.createElement('style');
+      st.id = 'sd-linux-style';
+      st.textContent = CARD_STYLE;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    var wrap = inner.parentElement;
+    var toggle = wrap && wrap.previousElementSibling && wrap.previousElementSibling.classList &&
+      wrap.previousElementSibling.classList.contains('bds-advanced-toggle') ? wrap.previousElementSibling : null;
+    var anchor = toggle || wrap;
+    card.el = card.el || buildCard();
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(card.el, anchor);
+    else inner.insertBefore(card.el, inner.firstChild);
+    updateCard();
+    // Live status (setup progress, running jobs) while the page is open.
+    if (!card.timer) card.timer = setInterval(function () {
+      if (!card.el || !card.el.isConnected) { clearInterval(card.timer); card.timer = null; return; }
+      updateCard();
+    }, 2500);
   }
 
   // ── The sandbox call path ──────────────────────────────────────────────────
@@ -758,8 +1051,10 @@
     version: 1,
     stop: stopAgent,
     isActive: function () { return state.active; },
-    /** From native: sandbox activity outside a tool call (Studio, jobs). */
-    refresh: function () { infoCache = null; },
+    /** From native: sandbox activity outside a tool call (Studio, jobs, reset). */
+    refresh: function () { infoCache = null; updateCard(); },
+    /** For the tool instructions (injected.js): the sandbox's live state. */
+    promptContext: function () { try { return promptContext(); } catch (_) { return []; } },
     // Exposed for tests.
     _parseTags: parseTags,
     _tagArgs: tagArgs,
@@ -769,5 +1064,7 @@
     _sweepCards: sweepCards,
     _looksUnfinished: looksUnfinished,
     _nudgeFor: nudgeFor,
+    _promptContext: promptContext,
+    _statusText: statusText,
   };
 })();

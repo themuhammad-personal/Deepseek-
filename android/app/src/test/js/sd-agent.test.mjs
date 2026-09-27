@@ -260,3 +260,46 @@ test('continuity: after a reply the engine re-checks it and an unfinished chain 
   assert.equal(sent[0].label, 'Agent continue');
   assert.match(sent[0].text, /^<SuperDeepSeek>\n\[SDS:AUTO\] Agent continue\n[\s\S]*<\/SuperDeepSeek>$/);
 });
+
+test('prompt context: live sandbox state for the tool instructions', () => {
+  const { win } = load();
+  const pc = (c) => plain(win.__sdAgent._promptContext(c));
+  assert.deepEqual(pc({ supported: false }), []);
+  assert.deepEqual(pc({ supported: true, enabled: false }), []);
+  const fresh = pc({ supported: true, enabled: true, installed: false, mode: 'auto', jobs: [], workspace: [] });
+  assert.equal(fresh.length, 1);
+  assert.match(fresh[0], /not set up yet/);
+  assert.doesNotMatch(fresh[0], /workspace/);
+  const busy = pc({
+    supported: true, enabled: true, installed: true, mode: 'ask', freeMb: 120,
+    jobs: [{ id: 'job1', command: 'python3 -m http.server 8000' }],
+    workspace: ['site/', 'notes.md'], workspaceCount: 30,
+  })[0];
+  assert.match(busy, /set up and ready/);
+  assert.match(busy, /approves every call/);
+  assert.match(busy, /job1 `python3 -m http\.server 8000`/);
+  assert.match(busy, /site\/, notes\.md, … \(30 entries\)/);
+  assert.match(busy, /Only 120 MB/);
+  const empty = pc({ supported: true, enabled: true, installed: true, workspace: [], workspaceCount: 0 })[0];
+  assert.match(empty, /\/root\/workspace is empty/);
+  // Garbage from the bridge never throws.
+  assert.deepEqual(plain(win.__sdAgent.promptContext()), []);
+});
+
+test('settings status line follows the sandbox state', () => {
+  const { win } = load();
+  const s = win.__sdAgent._statusText;
+  assert.match(s({ supported: false }), /Not available/);
+  assert.match(s({ supported: true, enabled: false }), /^Off/);
+  assert.match(s({ supported: true, installing: true, progress: 0.42 }), /Setting up Linux… 42%/);
+  assert.match(s({ supported: true, installed: true, version: '3.20.3', mode: 'ask', active: 2 }), /^On · Alpine 3\.20\.3 · asks before each command · 2 running$/);
+  assert.match(s({ supported: true, installed: false }), /sets itself up on first use/);
+});
+
+test('the engine locale decides the language of the agent UI', () => {
+  const { win } = load();
+  win.__sdEngine = { locale: () => 'bn' };
+  assert.match(win.__sdAgent._statusText({ supported: true, enabled: false }), /^বন্ধ/);
+  win.__sdEngine = { locale: () => 'en' };
+  assert.match(win.__sdAgent._statusText({ supported: true, enabled: false }), /^Off/);
+});

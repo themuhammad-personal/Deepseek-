@@ -138,7 +138,8 @@ internal object UiPolish {
               var RE=$sweepRe;
               var SEL=$deadSel;
               var SWEEP=$sweepSel;
-              var BN=(navigator.language||"").toLowerCase().indexOf("bn")===0;
+              /* The app's language: the engine's own setting, else the phone's. */
+              function BN(){try{var e=window.__sdEngine,l=e&&typeof e.locale==="function"?String(e.locale()||""):"";return (l||navigator.language||"").toLowerCase().indexOf("bn")===0;}catch(x){return false;}}
               var FIX={$labelFixes};
               function sweepText(root){
                 var rows=root.querySelectorAll(SWEEP);
@@ -163,6 +164,7 @@ internal object UiPolish {
                 }catch(e){}
               }
               function fixLabels(root){
+                var bn=BN();
                 var all=(root.body||root.documentElement).querySelectorAll("*");
                 for(var w=0;w<all.length;w++){
                   var el=all[w];
@@ -170,7 +172,7 @@ internal object UiPolish {
                   var t=(el.textContent||"").trim();
                   if(t.length>24)continue;
                   var fix=FIX[t];
-                  if(fix)el.textContent=BN?fix[1]:fix[0];
+                  if(fix)el.textContent=bn?fix[1]:fix[0];
                 }
               }
               function sweep(root){
