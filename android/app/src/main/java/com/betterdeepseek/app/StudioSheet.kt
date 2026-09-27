@@ -8,7 +8,6 @@ import android.app.Dialog
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -119,7 +118,7 @@ internal class StudioSheet(
                         View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 if (!dark) {
                     flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                    if (Build.VERSION.SDK_INT >= 26) flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                    flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
                 }
                 w.decorView.systemUiVisibility = flags
             }
@@ -330,6 +329,7 @@ internal class StudioSheet(
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     track(ev)
                     if (dragging) settle(ev.actionMasked == MotionEvent.ACTION_CANCEL)
+                    else if (ev.actionMasked == MotionEvent.ACTION_UP) performClick()
                     dragging = false
                 }
             }
@@ -346,6 +346,9 @@ internal class StudioSheet(
             if (!cancelled && (far || flick)) this@StudioSheet.dismiss(animated = true)
             else animatePanel(0f, 240L, DecelerateInterpolator(2f))
         }
+
+        // A tap on the panel's empty space does nothing (it only keeps the tap off the dim layer).
+        override fun performClick(): Boolean = super.performClick()
 
         override fun onDetachedFromWindow() {
             tracker?.recycle(); tracker = null
