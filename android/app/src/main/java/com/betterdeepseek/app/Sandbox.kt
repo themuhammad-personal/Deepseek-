@@ -145,13 +145,15 @@ internal class Sandbox private constructor(private val app: Context) {
         if (isInstalled()) { ensureSession(); return }
         if (!isSupported()) throw IOException(unsupportedReason())
         synchronized(installLock) {
-            if (isInstalled()) return
-            installing = true
-            try {
-                install()
-            } finally {
-                installing = false
-                progress("", 0.0)
+            // A second caller that waited for the first install just continues.
+            if (!isInstalled()) {
+                installing = true
+                try {
+                    install()
+                } finally {
+                    installing = false
+                    progress("", 0.0)
+                }
             }
         }
         ensureSession()
@@ -247,6 +249,7 @@ internal class Sandbox private constructor(private val app: Context) {
         }
         progress("configure", 0.97)
         configure(staging)
+        keepWorkspace(staging)
         deleteTreeNoFollow(rootfs)
         if (!staging.renameTo(rootfs)) throw IOException("Could not move the Linux system into place")
         tarball.delete()
@@ -257,6 +260,22 @@ internal class Sandbox private constructor(private val app: Context) {
                 .put("installedAt", System.currentTimeMillis())
                 .toString())
         progress("done", 1.0)
+    }
+
+    /**
+     * A reinstall over a damaged system (e.g. /bin/sh deleted from inside)
+     * keeps the user's files: the old workspace moves into the new system.
+     */
+    private fun keepWorkspace(staging: File) {
+        val old = File(rootfs, "root/workspace")
+        if (!old.isDirectory || isLink(old) || old.list().isNullOrEmpty()) return
+        val fresh = File(staging, "root/workspace")
+        deleteTreeNoFollow(fresh)
+        fresh.parentFile?.mkdirs()
+        if (!old.renameTo(fresh)) {
+            Log.w(TAG, "could not carry the workspace over")
+            fresh.mkdirs()
+        }
     }
 
     private fun download(url: String, dest: File, sha256: String) {
@@ -680,11 +699,8 @@ internal class Sandbox private constructor(private val app: Context) {
     }
 
     /**
-     * An interactive login shell for the Studio terminal (pipes, no PTY:
-     * line-based programs work, full-screen ones like vim do not).
-     */
-    /**
-     * The Studio terminal's shell, started in [cwd] (the folder the previous
+     * The Studio terminal's shell (pipes, no PTY: line-based programs work,
+     * full-screen ones like vim do not), started in [cwd] (the folder the previous
      * one was in, after a Stop). No prompt: the terminal draws its own and
      * learns when a command ends from [ShellProtocol] markers.
      */
@@ -810,6 +826,9 @@ internal class Sandbox private constructor(private val app: Context) {
     /** Deletes the whole Linux system (the workspace too). */
     fun reset() {
         killAll()
+        // Let the processes go before their files do.
+        val deadline = SystemClock.uptimeMillis() + 5000
+        while (activeCount > 0 && SystemClock.uptimeMillis() < deadline) Thread.sleep(100)
         synchronized(installLock) {
             marker.delete()
             deleteTreeNoFollow(rootfs)
@@ -818,6 +837,8 @@ internal class Sandbox private constructor(private val app: Context) {
             File(base, "rootfs.tar.gz").delete()
             sessionReady = false
         }
+        // Studio (if open) starts a fresh terminal; the settings card refreshes.
+        emit(JSONObject().put("type", "reset"))
     }
 
     private fun isLink(f: File): Boolean = runCatching { java.nio.file.Files.isSymbolicLink(f.toPath()) }.getOrDefault(false)

@@ -289,7 +289,8 @@ internal class StudioSheet(
 
         private fun begin(ev: MotionEvent) {
             dragging = true
-            startY = ev.rawY
+            // Caught mid-animation: continue from where the panel is, no jump.
+            startY = ev.rawY - translationY.coerceAtLeast(0f)
             anim?.cancel()
             parent?.requestDisallowInterceptTouchEvent(true)
         }

@@ -39,6 +39,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -157,6 +158,14 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             isAppearanceLightNavigationBars = !dark
         }
         setContentView(buildUi())
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (stepBack()) return
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
         sandbox.addListener(this)
         refreshStatus()
         handleIntent(intent)
@@ -187,6 +196,25 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         shellWriter.shutdown()
         runCatching { previewWeb.destroy() }
         super.onDestroy()
+    }
+
+    /** Back inside Studio first: the preview's own history, then the folder above. */
+    private fun stepBack(): Boolean = when (currentTab) {
+        2 -> if (!previewOpened) false else {
+            if (previewWeb.canGoBack()) previewWeb.goBack()
+            else {
+                previewOpened = false
+                previewWeb.loadUrl("about:blank")
+                previewUrl.setText("")
+                showPreviewHome(null)
+            }
+            true
+        }
+        1 -> if (cwd == Sandbox.WORKSPACE || cwd == "/") false else {
+            loadDir(cwd.substringBeforeLast('/').ifEmpty { "/" })
+            true
+        }
+        else -> false
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -393,13 +421,25 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
             if (isDestroyed) return@post
             when (event.optString("type")) {
                 "install" -> refreshStatus()
+                "reset" -> {
+                    // Reset from Settings (or this screen): nothing of the old system is left.
+                    interruptShell()
+                    shellCwd = Sandbox.WORKSPACE
+                    termBuffer.clear(); termText.text = ""
+                    refreshStatus(); loadDir(Sandbox.WORKSPACE)
+                }
                 "file" -> {
                     val path = event.optString("path")
                     appendTerm("\n✎ AI  " + t("wrote ", "লিখেছে ") + path + " (" + humanSize(event.optLong("bytes")) + ")\n", cAgent)
                     onFileChanged(path)
                 }
                 "exec" -> when (event.optString("phase")) {
-                    "start" -> appendTerm("\n● AI  ${event.optString("cwd")} $ ${event.optString("command")}\n", cAgent)
+                    "start" -> {
+                        // Just the command; the folder only when it is not the workspace.
+                        val dir = event.optString("cwd")
+                        val where = if (dir.isEmpty() || dir == Sandbox.WORKSPACE) "" else "   · " + dir.removePrefix(Sandbox.WORKSPACE + "/")
+                        appendTerm("\n● AI  " + event.optString("command") + where + "\n", cAgent)
+                    }
                     "output" -> appendTerm(Sandbox.stripAnsi(event.optString("text")), cMuted)
                     "end" -> {
                         val code = event.optInt("exitCode")
@@ -548,11 +588,28 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
         trimAndShow(true)
     }
 
-    private fun trimAndShow(forceScroll: Boolean) {
+    private var showPending = false
+    private var showForceScroll = false
+    private val showTerm = Runnable {
+        showPending = false
+        if (isDestroyed) return@Runnable
         if (termBuffer.length > MAX_TERMINAL_CHARS) termBuffer.delete(0, termBuffer.length - MAX_TERMINAL_CHARS * 3 / 4)
         val atBottom = !termScroll.canScrollVertically(1)
         termText.text = termBuffer
-        if (atBottom || forceScroll) termScroll.post { termScroll.fullScroll(View.FOCUS_DOWN) }
+        if (atBottom || showForceScroll) termScroll.post { termScroll.fullScroll(View.FOCUS_DOWN) }
+        showForceScroll = false
+    }
+
+    /**
+     * Shows the buffer at most once a frame: a chatty build prints many
+     * chunks per frame, and re-laying out 200k characters for each one made
+     * the terminal stutter.
+     */
+    private fun trimAndShow(forceScroll: Boolean) {
+        showForceScroll = showForceScroll || forceScroll
+        if (showPending) return
+        showPending = true
+        termText.postOnAnimation(showTerm)
     }
 
     private fun submitCommand() {
@@ -998,8 +1055,9 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
                 runCatching {
                     val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                         if (c.moveToFirst()) c.getString(0) else null
-                    }?.replace('/', '_')?.takeIf { it.isNotBlank() } ?: "file-${System.currentTimeMillis()}"
-                    val out = File(dir, name)
+                    }?.replace('/', '_')?.takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "file-${System.currentTimeMillis()}"
+                    // Never over an existing file ("name_1.ext"), never through a (dangling) symlink.
+                    val out = uniqueFileIn(dir, name)
                     if (runCatching { java.nio.file.Files.isSymbolicLink(out.toPath()) }.getOrDefault(false)) out.delete()
                     contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { o: OutputStream -> input.copyTo(o, 64 * 1024) } }
                     ok++
@@ -1074,11 +1132,12 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
 
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                     previewFailed = false
-                    previewExternal.visibility = if (StudioPreview.isPreviewUrl(url)) View.GONE else View.VISIBLE
+                    previewExternal.visibility = if (url == "about:blank" || StudioPreview.isPreviewUrl(url)) View.GONE else View.VISIBLE
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (url == "about:blank") return
+                    // Leaving a page (Back to the start page): it must not come back with Back.
+                    if (url == "about:blank") { view.clearHistory(); return }
                     if (!previewUrl.hasFocus()) previewUrl.setText(StudioPreview.displayOf(url))
                     if (previewFailed) showPreviewHome(url) else previewHome.visibility = View.GONE
                 }
@@ -1262,7 +1321,10 @@ class StudioActivity : ComponentActivity(), Sandbox.Listener {
     private fun openPreview(raw: String) {
         var url = raw.trim()
         if (url.isEmpty()) return
-        if (url.startsWith("/") || url.startsWith("~")) {
+        // "site/index.html": a workspace path when such a file exists, else a host name.
+        val relativeFile = !url.contains("://") && !url.matches(Regex("^\\d{2,5}(/.*)?$")) &&
+                sandbox.hostFile(Sandbox.guestPath(url))?.exists() == true
+        if (url.startsWith("/") || url.startsWith("~") || relativeFile) {
             // A file or folder in the sandbox.
             val guest = Sandbox.guestPath(url)
             val f = sandbox.hostFile(guest)

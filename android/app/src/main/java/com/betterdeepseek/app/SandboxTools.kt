@@ -274,6 +274,10 @@ internal class SandboxTools(
         val old = required(args, "old_text")
         val new = required(args, "new_text")
         val current = sandbox.readFile(path)
+        // Text that went through a lossy decode would be written back damaged.
+        if (current.indexOf('\u0000') >= 0 || current.indexOf('\uFFFD') >= 0) {
+            return text("$path is binary or not UTF-8 text, so edit_file could damage it. Change it with run instead (e.g. sed, or a Python script).", isError = true)
+        }
         val edited = applyEdit(current, old, new, args.optBoolean("replace_all")).getOrElse {
             return text("$path: ${it.message}", isError = true)
         }
