@@ -869,8 +869,6 @@ class MainActivity : ComponentActivity() {
          */
         const val PAGE_DARK_DEFAULT = 0xFF1E1F23.toInt()
         const val UI_PREFS = "sd_ui"
-        /** After the launch screen has gone, before asking about the old app. */
-        const val LEGACY_PROMPT_DELAY_MS = 1500L
         const val PREF_DARK_PAGE_COLOR = "dark_page_color"
         /** Only clearly dark colours are remembered as the chat's dark background. */
         const val DARK_PAGE_MAX_LUMINANCE = 70.0
@@ -954,8 +952,6 @@ class MainActivity : ComponentActivity() {
             mayRememberDarkColor = true
             refreshBarColors()
             handler.postDelayed(barRefreshLate, 700L)
-            // Not over the launch screen: once the chat is on screen.
-            handler.postDelayed({ maybeOfferLegacyRemoval() }, LEGACY_PROMPT_DELAY_MS)
         }
         bootView = view
         findViewById<ViewGroup>(android.R.id.content).addView(
@@ -1514,43 +1510,6 @@ class MainActivity : ComponentActivity() {
             .setPositiveButton(R.string.bds_update_download) { _, _ -> downloadAndInstallUpdate(info) }
             .setNegativeButton(R.string.bds_update_later) { _, _ -> updateChecker.rememberDeclined(info.digest) }
             .show()
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // The old package (com.betterdeepseek.app) still installed next to this one
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private var legacyPromptChecked = false
-
-    private fun maybeOfferLegacyRemoval() {
-        if (legacyPromptChecked || isFinishing || isDestroyed) return
-        legacyPromptChecked = true
-        val dismissed = uiPrefs.getBoolean(KEY_LEGACY_DISMISSED, false)
-        if (dismissed) return
-        if (!shouldOfferLegacyRemoval(packageName, dismissed, isPackageInstalled(packageManager, LEGACY_APPLICATION_ID))) return
-        android.app.AlertDialog.Builder(this)
-            .setTitle(R.string.sd_legacy_title)
-            .setMessage(R.string.sd_legacy_message)
-            .setPositiveButton(R.string.sd_legacy_uninstall) { _, _ -> uninstallLegacyApp() }
-            .setNeutralButton(R.string.bds_update_later, null)
-            .setNegativeButton(R.string.sd_legacy_never) { _, _ ->
-                uiPrefs.edit().putBoolean(KEY_LEGACY_DISMISSED, true).apply()
-            }
-            .show()
-    }
-
-    /** The system uninstall dialog for the old app; its App info page if that is refused. */
-    private fun uninstallLegacyApp() {
-        val target = Uri.parse("package:$LEGACY_APPLICATION_ID")
-        try {
-            startActivity(Intent(Intent.ACTION_DELETE, target))
-        } catch (_: Exception) {
-            try {
-                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, target))
-            } catch (e: Exception) {
-                Log.w("SuperDeepSeek", "Cannot open the uninstaller for the old app", e)
-            }
-        }
     }
 
     private fun downloadAndInstallUpdate(info: UpdateInfo) {

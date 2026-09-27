@@ -25,8 +25,4 @@
         <item quantity="one">در حال اجرای %d فرمان</item>
         <item quantity="other">در حال اجرای %d فرمان</item>
     </plurals>
-    <string name="sd_legacy_title">نسخهٔ قدیمی حذف شود؟</string>
-    <string name="sd_legacy_message">نسخهٔ قدیمی Super DeepSeek هنوز روی این گوشی است. برنامه اکنون نام بستهٔ خودش را دارد، پس این نسخه به‌صورت برنامه‌ای جداگانه نصب شد.\n\nیک بار دیگر اینجا وارد DeepSeek شوید؛ گفتگوهای شما در حساب DeepSeek می‌مانند. برای انتقال تنظیمات، پرامپت‌ها و حافظه‌ها: در برنامهٔ قدیمی Advanced settings → Integrations &amp; backup → Export را بزنید و سپس اینجا Import کنید. فایل‌های لینوکس منتقل نمی‌شوند؛ هر چه لازم دارید را اول از Linux Studio قدیمی خروجی بگیرید.</string>
-    <string name="sd_legacy_uninstall">حذف نسخهٔ قدیمی</string>
-    <string name="sd_legacy_never">دیگر نپرس</string>
 </resources>

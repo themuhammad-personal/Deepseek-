@@ -36,9 +36,8 @@ what DeepSeek ships.
 
 The application id and Kotlin package are `com.superdeepseek.app`. Earlier builds
 used `com.betterdeepseek.app`; Android treats the new
-id as a different app, so it installs next to the old one and cannot read its data. On first
-start `MainActivity` offers to uninstall the old copy and explains how to carry settings over
-(engine Export → Import); see `LegacyApp.kt`. Keep the new id and the keystore unchanged from
+id as a different app, so it installs next to the old one and cannot read its data. Settings move
+over with the engine's own Export → Import (README, "Coming from an older build?"). Keep the new id and the keystore unchanged from
 now on, or updates break again.
 
 ## The engine bundle

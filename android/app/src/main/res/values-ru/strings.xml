@@ -27,8 +27,4 @@
         <item quantity="many">Выполняется %d команд</item>
         <item quantity="other">Выполняется %d команды</item>
     </plurals>
-    <string name="sd_legacy_title">Удалить старую версию?</string>
-    <string name="sd_legacy_message">Старая версия Super DeepSeek всё ещё установлена. Теперь у приложения собственное имя пакета, поэтому эта версия установилась как отдельное приложение.\n\nВойдите в DeepSeek здесь ещё раз — ваши чаты хранятся в аккаунте DeepSeek. Чтобы перенести настройки, промпты и память, в старом приложении откройте Advanced settings → Integrations &amp; backup → Export, затем выполните Import здесь. Файлы Linux не переносятся — сначала экспортируйте нужное из старой Linux Studio.</string>
-    <string name="sd_legacy_uninstall">Удалить старую версию</string>
-    <string name="sd_legacy_never">Больше не спрашивать</string>
 </resources>

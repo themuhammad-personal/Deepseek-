@@ -26,8 +26,4 @@
     <!-- App Shortcuts -->
     <string name="shortcut_new_chat">নতুন চ্যাট</string>
     <string name="shortcut_deep_research">গভীর গবেষণা</string>
-    <string name="sd_legacy_title">পুরনো ভার্সনটি সরাবেন?</string>
-    <string name="sd_legacy_message">Super DeepSeek-এর পুরনো ভার্সনটি এখনো এই ফোনে আছে। অ্যাপটির এখন নিজস্ব প্যাকেজ নাম, তাই এই ভার্সনটি আলাদা অ্যাপ হিসেবে ইনস্টল হয়েছে।\n\nএখানে আরেকবার DeepSeek-এ লগইন করুন; আপনার চ্যাটগুলো DeepSeek অ্যাকাউন্টেই আছে। সেটিংস, প্রম্পট ও মেমোরি আনতে: পুরনো অ্যাপে Advanced settings → Integrations &amp; backup → Export করুন, তারপর এখানে Import করুন। লিনাক্সের ফাইল আসবে না, তাই দরকারি কিছু থাকলে আগে পুরনো লিনাক্স স্টুডিও থেকে এক্সপোর্ট করে নিন।</string>
-    <string name="sd_legacy_uninstall">পুরনো ভার্সন আনইনস্টল করুন</string>
-    <string name="sd_legacy_never">আর জিজ্ঞেস করবেন না</string>
 </resources>

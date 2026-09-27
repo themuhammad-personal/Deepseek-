@@ -150,7 +150,9 @@ same key, so new versions install as updates.
 > 2. To keep your settings, prompts and memories, go to *Advanced settings → Integrations &
 >    backup → Export* in the old app, then use *Import* in the new one.
 > 3. Linux files are not carried over. Save anything you need from the old Linux Studio first.
-> 4. The new app then offers to uninstall the old one.
+> 4. Then uninstall the old app yourself (long-press its icon → *Uninstall*). Both apps are
+>    called Super DeepSeek, so check in *App info* that you remove the one whose package is
+>    `com.betterdeepseek.app`.
 
 ## FAQ
 
