@@ -110,6 +110,8 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(SOURCE, /ICON_PATHS/);
   assert.match(CSS, /data-theme=midnight/);
   assert.match(CSS, /sd-genui-item-hero/);
+  assert.match(SOURCE, /component\.value !== '' \|\| component\.formula/);
+  assert.match(CSS, /sd-genui-item-hero\[data-accent=teal\]/);
   assert.match(INJECTED, /SDS GenUI v1/);
   assert.match(INJECTED, /Supported component types/);
   assert.match(INJECTED, /Premium visual direction/);

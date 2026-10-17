@@ -562,7 +562,7 @@
       card.appendChild(heroTop);
       if (component.title) card.appendChild(element('h3', 'sd-genui-hero-title', component.title));
       if (component.subtitle) card.appendChild(element('p', 'sd-genui-hero-subtitle', component.subtitle));
-      if (component.value !== '') {
+      if (component.value !== '' || component.formula) {
         var heroValue = element('div', 'sd-genui-hero-value', '');
         heroValue.setAttribute('data-sd-genui-value', 'hero');
         card.appendChild(heroValue);
