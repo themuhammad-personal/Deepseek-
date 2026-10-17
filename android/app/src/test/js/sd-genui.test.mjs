@@ -124,6 +124,7 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(INJECTED, /SDS GenUI v1/);
   assert.match(INJECTED, /Supported component types/);
   assert.match(INJECTED, /Premium visual direction/);
+  assert.doesNotThrow(() => new Function(INJECTED), 'injected.js must parse as one complete script');
   assert.match(INJECTED, /explainer\|how to\|how does/);
   assert.match(INJECTED, /3–7 component composition/);
   assert.match(INJECTED, /comparison \{title,items\}/);
