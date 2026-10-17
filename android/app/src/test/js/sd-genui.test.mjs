@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bds = path.join(here, '../../main/bds-assets/bds');
 const SOURCE = fs.readFileSync(path.join(bds, 'sd-genui.js'), 'utf8');
+const CSS = fs.readFileSync(path.join(bds, 'sd-genui.css'), 'utf8');
 const INJECTED = fs.readFileSync(path.join(bds, 'injected.js'), 'utf8');
 
 function loadApi() {
@@ -20,6 +21,9 @@ function loadApi() {
 function calculatorSpec() {
   return {
     version: 1,
+    theme: 'glass',
+    layout: 'dashboard',
+    accent: 'teal',
     title: 'Compound growth',
     components: [
       { type: 'slider', id: 'principal', label: 'Principal', min: 1000, max: 50000, step: 500, value: 10000, format: 'currency' },
@@ -34,14 +38,48 @@ function calculatorSpec() {
   };
 }
 
-test('parses an interactive calculator and evaluates arithmetic formulas', () => {
+test('parses a calculator with configurable premium layout and evaluates formulas', () => {
   const ui = loadApi();
   const parsed = ui.parseSpec(JSON.stringify(calculatorSpec()));
   assert.equal(parsed.ok, true, parsed.error);
+  assert.equal(parsed.spec.theme, 'glass');
+  assert.equal(parsed.spec.layout, 'dashboard');
+  assert.equal(parsed.spec.accent, 'teal');
   const state = { principal: 10000, rate: 7, years: 20 };
   assert.equal(ui.evaluateFormula('principal * pow(1 + rate / 100, years)', state), 10000 * Math.pow(1.07, 20));
   assert.equal(ui.evaluateFormula('max(4, round(3.6)) + sqrt(16)', state), 8);
   assert.equal(ui.formatValue(7, 'percent'), '7%');
+});
+
+test('parses visual composition blocks, curated icons and donut charts', () => {
+  const ui = loadApi();
+  const parsed = ui.parseSpec({
+    version: 1,
+    theme: 'editorial',
+    accent: 'rose',
+    components: [
+      { type: 'hero', eyebrow: 'Overview', title: 'A premium dashboard', subtitle: 'Key insight', value: 42, format: 'integer', icon: 'trending-up', accent: 'teal' },
+      { type: 'callout', tone: 'success', title: 'On track', text: 'All checks pass.', icon: 'check-circle' },
+      { type: 'list', title: 'Highlights', items: [{ title: 'First', text: 'Detail', icon: 'star' }, 'Second'] },
+      { type: 'steps', title: 'Workflow', items: [{ title: 'Plan', status: 'done' }, { title: 'Build', status: 'active' }] },
+      { type: 'timeline', title: 'Timeline', events: [{ date: 'Today', title: 'Started', tone: 'success' }] },
+      { type: 'quote', text: 'A useful principle', attribution: 'Team', role: 'Product' },
+      { type: 'icon', name: 'rocket', label: 'Launch', size: 'lg' },
+      { type: 'divider', label: 'Details' },
+      { type: 'chart', kind: 'donut', title: 'Mix', data: [{ label: 'A', value: 60 }, { label: 'B', value: 40 }] }
+    ]
+  });
+  assert.equal(parsed.ok, true, parsed.error);
+  assert.equal(parsed.spec.components[0].icon, 'trending-up');
+  assert.equal(parsed.spec.components[1].tone, 'success');
+  assert.equal(parsed.spec.components[2].items.length, 2);
+  assert.equal(parsed.spec.components[8].kind, 'donut');
+  const fallback = ui.parseSpec({ version: 1, theme: 'external-css', accent: 'url()', components: [{ type: 'icon', name: '<script>', label: '<img>' }] });
+  assert.equal(fallback.ok, true);
+  assert.equal(fallback.spec.theme, 'aurora');
+  assert.equal(fallback.spec.accent, 'violet');
+  assert.equal(fallback.spec.components[0].name, 'sparkles');
+  assert.equal(fallback.spec.components[0].label, '<img>');
 });
 
 test('rejects unknown components, duplicate controls and oversized specs', () => {
@@ -52,6 +90,7 @@ test('rejects unknown components, duplicate controls and oversized specs', () =>
     { type: 'toggle', id: 'amount', label: 'Duplicate', value: true }
   ] }).ok, false);
   assert.equal(ui.parseSpec(' '.repeat(25001)).ok, false);
+  assert.equal(ui.parseSpec({ version: 1, components: [{ type: 'timeline', events: Array.from({ length: 11 }, (_, index) => ({ title: String(index) })) }] }).ok, false);
 });
 
 test('formula evaluation refuses arbitrary JavaScript, unknown values and division by zero', () => {
@@ -64,11 +103,14 @@ test('formula evaluation refuses arbitrary JavaScript, unknown values and divisi
   ] }).ok, false);
 });
 
-test('renderer and prompt share a constrained schema; generated source is not executed', () => {
+test('renderer, theme styles and prompt use an allowlist instead of dynamic code execution', () => {
   assert.match(SOURCE, /language-sds-ui/);
   assert.match(SOURCE, /data-sd-genui-hidden/);
   assert.doesNotMatch(SOURCE, /\beval\s*\(|new Function|innerHTML\s*=/);
+  assert.match(SOURCE, /ICON_PATHS/);
+  assert.match(CSS, /data-theme=midnight/);
+  assert.match(CSS, /sd-genui-item-hero/);
   assert.match(INJECTED, /SDS GenUI v1/);
-  assert.match(INJECTED, /sds-ui/);
   assert.match(INJECTED, /Supported component types/);
+  assert.match(INJECTED, /Premium visual direction/);
 });

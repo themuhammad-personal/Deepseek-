@@ -8,6 +8,37 @@
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var COLORS = ['#818cf8', '#2dd4bf', '#f59e0b', '#f472b6', '#60a5fa', '#a3e635', '#fb7185', '#c084fc'];
 
+  var ICON_PATHS = {
+    sparkles: ['M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z','M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z','M5 2l.5 1.5L7 4l-1.5.5L5 6l-.5-1.5L3 4l1.5-.5L5 2z'],
+    'trending-up': ['M3 17l6-6 4 4 8-8','M15 7h6v6'],
+    wallet: ['M4 6.5A2.5 2.5 0 0 1 6.5 4H20v14H6.5A2.5 2.5 0 0 1 4 15.5z','M4 7H2v10a3 3 0 0 0 3 3h15','M20 10h-4a2 2 0 0 0 0 4h4','M16 12h.01'],
+    calendar: ['M8 2v4','M16 2v4','M3 9h18','M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z','M8 13h.01','M12 13h.01','M16 13h.01','M8 17h.01','M12 17h.01'],
+    clock: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z','M12 6v6l4 2'],
+    'shield-check': ['M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z','M9 12l2 2 4-4'],
+    target: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z','M18 12a6 6 0 1 1-12 0 6 6 0 0 1 12 0z','M14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z'],
+    zap: ['M13 2L3 14h8l-1 8 11-13h-8z'],
+    leaf: ['M20 4c-9 0-15 4-15 11a5 5 0 0 0 5 5c7 0 11-6 10-16z','M4 21c3-6 7-9 12-12'],
+    rocket: ['M4.5 16.5c-1.5 1.3-2 4.5-2 4.5s3.2-.5 4.5-2','M9 15l-3-3c2-5 7-8 14-9 0 7-4 12-9 14l-2-2z','M14 10h.01','M5 10H2l3-5 5 0','M14 19v3l5-3v-5'],
+    heart: ['M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z'],
+    lightbulb: ['M9 18h6','M10 22h4','M8 14c-1.3-1-2-2.5-2-4a6 6 0 0 1 12 0c0 1.5-.7 3-2 4l-1 2h-6z'],
+    users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2','M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z','M22 21v-2a4 4 0 0 0-3-3.9','M16 3.1a4 4 0 0 1 0 7.8'],
+    'book-open': ['M12 7v14','M3 18V5a1 1 0 0 1 1-1h4a4 4 0 0 1 4 4 4 4 0 0 1 4-4h4a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-4a4 4 0 0 0-4 2 4 4 0 0 0-4-2H4a1 1 0 0 1-1-1z'],
+    globe: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z','M2 12h20','M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z'],
+    code: ['M8 17l-5-5 5-5','M16 7l5 5-5 5','M14 4l-4 16'],
+    star: ['M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z'],
+    lock: ['M5 11h14v10H5z','M8 11V7a4 4 0 0 1 8 0v4','M12 15v2'],
+    activity: ['M22 12h-4l-3 8L9 4l-3 8H2'],
+    'check-circle': ['M22 11.1V12a10 10 0 1 1-5.9-9.1','M22 4L12 14l-3-3'],
+    info: ['M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z','M12 11v5','M12 7h.01'],
+    'alert-triangle': ['M10.3 3.9L1.8 18.3A2 2 0 0 0 3.5 21h17a2 2 0 0 0 1.7-2.7L13.7 3.9a2 2 0 0 0-3.4 0z','M12 9v4','M12 17h.01'],
+    compass: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z','M16.2 7.8l-2.7 5.7-5.7 2.7 2.7-5.7z'],
+    coffee: ['M4 8h13v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z','M17 10h2a2 2 0 1 1 0 4h-2','M2 22h20','M7 4l1 2','M12 3l1 3'],
+    'graduation-cap': ['M2 10l10-5 10 5-10 5z','M6 12v5c4 3 8 3 12 0v-5','M22 10v6'],
+    music: ['M9 18V5l12-2v13','M9 18a3 3 0 1 1-3-3c1.7 0 3 .8 3 3z','M21 16a3 3 0 1 1-3-3c1.7 0 3 .8 3 3z'],
+    image: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z','M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z','M22 15l-5-5L5 20']
+  };
+  var ACCENTS = ['violet', 'teal', 'amber', 'rose', 'blue', 'lime'];
+
   function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
@@ -167,7 +198,58 @@
     if (!isObject(input)) throw new Error('Component must be an object');
     var type = cleanText(input.type, 32);
     var out = { type: type };
-    if (type === 'text') {
+    out.span = choose(input.span, ['full', 'half'], 'auto');
+    if (type === 'hero') {
+      out.eyebrow = cleanText(input.eyebrow, 90);
+      out.title = cleanText(input.title, 180);
+      out.subtitle = cleanText(input.subtitle, 320);
+      out.value = typeof input.value === 'number' && Number.isFinite(input.value) ? input.value : cleanText(input.value, 160);
+      out.formula = cleanText(input.formula, 160);
+      out.format = choose(input.format, ['number', 'integer', 'currency', 'percent'], 'number');
+      out.currency = /^[A-Z]{3}$/.test(input.currency || '') ? input.currency : 'USD';
+      out.footnote = cleanText(input.footnote, 180);
+      out.badge = cleanText(input.badge, 80);
+      out.icon = choose(input.icon, Object.keys(ICON_PATHS), 'sparkles');
+      out.accent = choose(input.accent, ACCENTS, 'violet');
+    } else if (type === 'callout') {
+      out.tone = choose(input.tone, ['info', 'success', 'warning', 'danger', 'tip'], 'info');
+      out.title = cleanText(input.title, 140);
+      out.text = cleanText(input.text, 700);
+      out.icon = choose(input.icon, Object.keys(ICON_PATHS), input.tone === 'warning' ? 'alert-triangle' : 'info');
+    } else if (type === 'list') {
+      out.title = cleanText(input.title, 140);
+      if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 12) throw new Error('List needs 1–12 items');
+      out.items = input.items.map(function (item) {
+        if (typeof item === 'string') return { title: cleanText(item, 160), text: '', icon: 'check-circle' };
+        if (!isObject(item)) throw new Error('List item must be text or an object');
+        return { title: cleanText(item.title || item.label, 160), text: cleanText(item.text || item.description, 240), icon: choose(item.icon, Object.keys(ICON_PATHS), 'check-circle') };
+      });
+    } else if (type === 'steps') {
+      out.title = cleanText(input.title, 140);
+      if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 10) throw new Error('Steps needs 1–10 items');
+      out.items = input.items.map(function (item) {
+        if (!isObject(item)) throw new Error('Step must be an object');
+        return { title: cleanText(item.title, 140), text: cleanText(item.text || item.description, 240), status: choose(item.status, ['done', 'active', 'upcoming'], 'upcoming') };
+      });
+    } else if (type === 'timeline') {
+      out.title = cleanText(input.title, 140);
+      if (!Array.isArray(input.events) || input.events.length < 1 || input.events.length > 10) throw new Error('Timeline needs 1–10 events');
+      out.events = input.events.map(function (event) {
+        if (!isObject(event)) throw new Error('Timeline event must be an object');
+        return { date: cleanText(event.date, 80), title: cleanText(event.title, 140), text: cleanText(event.text || event.description, 240), tone: choose(event.tone, ['neutral', 'info', 'success', 'warning'], 'neutral') };
+      });
+    } else if (type === 'quote') {
+      out.text = cleanText(input.text || input.quote, 1000);
+      out.attribution = cleanText(input.attribution, 140);
+      out.role = cleanText(input.role, 160);
+    } else if (type === 'icon') {
+      out.name = choose(input.name, Object.keys(ICON_PATHS), 'sparkles');
+      out.label = cleanText(input.label, 120);
+      out.size = choose(input.size, ['sm', 'md', 'lg'], 'md');
+      out.tone = choose(input.tone, ['neutral', 'info', 'success', 'warning', 'danger'], 'neutral');
+    } else if (type === 'divider') {
+      out.label = cleanText(input.label, 100);
+    } else if (type === 'text') {
       out.text = cleanText(input.text, MAX_TEXT);
       out.tone = choose(input.tone, ['normal', 'secondary', 'strong'], 'normal');
     } else if (type === 'stat') {
@@ -214,7 +296,7 @@
       out.label = cleanText(input.label, 120);
       out.value = input.value === true;
     } else if (type === 'chart') {
-      out.kind = choose(input.kind, ['bar', 'line', 'pie'], 'bar');
+      out.kind = choose(input.kind, ['bar', 'line', 'pie', 'donut'], 'bar');
       out.title = cleanText(input.title, 160);
       out.description = cleanText(input.description, 240);
       if (!Array.isArray(input.data) || input.data.length < 1 || input.data.length > 24) throw new Error('Chart needs 1–24 points');
@@ -263,6 +345,9 @@
         version: 1,
         title: cleanText(data.title, 120),
         description: cleanText(data.description, 300),
+        theme: choose(data.theme, ['aurora', 'editorial', 'glass', 'midnight'], 'aurora'),
+        layout: choose(data.layout, ['grid', 'stack', 'dashboard'], 'grid'),
+        accent: choose(data.accent, ACCENTS, 'violet'),
         components: data.components.map(function (component) { return sanitizeComponent(component, ids); })
       };
       var state = Object.create(null);
@@ -318,6 +403,28 @@
     if (text !== undefined) node.textContent = String(text);
     return node;
   }
+  function iconNode(name, size, className) {
+    var paths = ICON_PATHS[name] || ICON_PATHS.sparkles;
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', String(size || 20));
+    svg.setAttribute('height', String(size || 20));
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    if (className) svg.setAttribute('class', className);
+    paths.forEach(function (d) { svg.appendChild(svgElement('path', { d: d })); });
+    return svg;
+  }
+  function appendIcon(target, name, size, className) {
+    var svg = iconNode(name, size, className);
+    target.appendChild(svg);
+    return svg;
+  }
+
   function chartValues(component, state) {
     return component.data.map(function (point) {
       var value = point.formula ? valueOf({ formula: point.formula }, state) : point.value;
@@ -327,11 +434,11 @@
   function renderChart(target, component, state) {
     var values = chartValues(component, state);
     var svg = svgElement('svg', {
-      viewBox: component.kind === 'pie' ? '0 0 320 210' : '0 0 360 220',
+      viewBox: component.kind === 'pie' || component.kind === 'donut' ? '0 0 320 210' : '0 0 360 220',
       role: 'img', 'aria-label': component.title || 'Data chart',
       class: 'sd-genui-chart-svg', preserveAspectRatio: 'xMidYMid meet'
     });
-    if (component.kind === 'pie') {
+    if (component.kind === 'pie' || component.kind === 'donut') {
       var positive = values.map(function (point) { return Math.max(0, point.value); });
       var total = positive.reduce(function (sum, number) { return sum + number; }, 0) || 1;
       var angle = -Math.PI / 2;
@@ -343,7 +450,10 @@
         var x1 = cx + radius * Math.cos(angle), y1 = cy + radius * Math.sin(angle);
         var x2 = cx + radius * Math.cos(end), y2 = cy + radius * Math.sin(end);
         var arc = slice > Math.PI ? 1 : 0;
-        var path = 'M ' + cx + ' ' + cy + ' L ' + x1 + ' ' + y1 + ' A ' + radius + ' ' + radius + ' 0 ' + arc + ' 1 ' + x2 + ' ' + y2 + ' Z';
+        var innerRadius = component.kind === 'donut' ? 39 : 0;
+        var path = innerRadius > 0
+          ? 'M ' + x1 + ' ' + y1 + ' A ' + radius + ' ' + radius + ' 0 ' + arc + ' 1 ' + x2 + ' ' + y2 + ' L ' + (cx + innerRadius * Math.cos(end)) + ' ' + (cy + innerRadius * Math.sin(end)) + ' A ' + innerRadius + ' ' + innerRadius + ' 0 ' + arc + ' 0 ' + (cx + innerRadius * Math.cos(angle)) + ' ' + (cy + innerRadius * Math.sin(angle)) + ' Z'
+          : 'M ' + cx + ' ' + cy + ' L ' + x1 + ' ' + y1 + ' A ' + radius + ' ' + radius + ' 0 ' + arc + ' 1 ' + x2 + ' ' + y2 + ' Z';
         svg.appendChild(svgElement('path', { d: path, fill: COLORS[index % COLORS.length], stroke: 'currentColor', 'stroke-opacity': 0.15, 'stroke-width': 1 }));
         angle = end;
       });
@@ -440,7 +550,94 @@
   function buildComponent(component, index, scope) {
     var card = element('section', 'sd-genui-item sd-genui-item-' + component.type);
     card.setAttribute('data-sd-genui-index', String(index));
-    if (component.type === 'text') {
+    if (component.span === 'full' || component.span === 'half') card.classList.add('sd-genui-span-' + component.span);
+    if (component.type === 'hero') {
+      card.setAttribute('data-accent', component.accent);
+      var heroTop = element('div', 'sd-genui-hero-top');
+      var heroIcon = element('span', 'sd-genui-hero-icon');
+      appendIcon(heroIcon, component.icon, 28);
+      heroTop.appendChild(heroIcon);
+      if (component.eyebrow) heroTop.appendChild(element('span', 'sd-genui-eyebrow', component.eyebrow));
+      if (component.badge) heroTop.appendChild(element('span', 'sd-genui-hero-badge', component.badge));
+      card.appendChild(heroTop);
+      if (component.title) card.appendChild(element('h3', 'sd-genui-hero-title', component.title));
+      if (component.subtitle) card.appendChild(element('p', 'sd-genui-hero-subtitle', component.subtitle));
+      if (component.value !== '') {
+        var heroValue = element('div', 'sd-genui-hero-value', '');
+        heroValue.setAttribute('data-sd-genui-value', 'hero');
+        card.appendChild(heroValue);
+      }
+      if (component.footnote) card.appendChild(element('div', 'sd-genui-hero-footnote', component.footnote));
+    } else if (component.type === 'callout') {
+      card.setAttribute('data-tone', component.tone);
+      var calloutIcon = element('span', 'sd-genui-callout-icon');
+      appendIcon(calloutIcon, component.icon, 21);
+      card.appendChild(calloutIcon);
+      var calloutBody = element('div', 'sd-genui-callout-body');
+      if (component.title) calloutBody.appendChild(element('div', 'sd-genui-callout-title', component.title));
+      calloutBody.appendChild(element('div', 'sd-genui-callout-text', component.text));
+      card.appendChild(calloutBody);
+    } else if (component.type === 'list') {
+      if (component.title) card.appendChild(element('h3', 'sd-genui-section-title', component.title));
+      var listItems = element('div', 'sd-genui-list');
+      component.items.forEach(function (entry) {
+        var row = element('div', 'sd-genui-list-row');
+        var mark = element('span', 'sd-genui-list-icon');
+        appendIcon(mark, entry.icon, 17);
+        row.appendChild(mark);
+        var copy = element('div', 'sd-genui-list-copy');
+        copy.appendChild(element('div', 'sd-genui-list-item-title', entry.title));
+        if (entry.text) copy.appendChild(element('div', 'sd-genui-caption', entry.text));
+        row.appendChild(copy);
+        listItems.appendChild(row);
+      });
+      card.appendChild(listItems);
+    } else if (component.type === 'steps') {
+      if (component.title) card.appendChild(element('h3', 'sd-genui-section-title', component.title));
+      var stepsList = element('div', 'sd-genui-steps');
+      component.items.forEach(function (step, stepIndex) {
+        var row = element('div', 'sd-genui-step sd-genui-step-' + step.status);
+        row.appendChild(element('span', 'sd-genui-step-number', step.status === 'done' ? '✓' : String(stepIndex + 1)));
+        var body = element('div', 'sd-genui-step-body');
+        body.appendChild(element('div', 'sd-genui-list-item-title', step.title));
+        if (step.text) body.appendChild(element('div', 'sd-genui-caption', step.text));
+        row.appendChild(body);
+        stepsList.appendChild(row);
+      });
+      card.appendChild(stepsList);
+    } else if (component.type === 'timeline') {
+      if (component.title) card.appendChild(element('h3', 'sd-genui-section-title', component.title));
+      var timeline = element('div', 'sd-genui-timeline');
+      component.events.forEach(function (event) {
+        var row = element('div', 'sd-genui-timeline-event sd-genui-timeline-' + event.tone);
+        row.appendChild(element('span', 'sd-genui-timeline-dot'));
+        var body = element('div', 'sd-genui-timeline-body');
+        if (event.date) body.appendChild(element('div', 'sd-genui-timeline-date', event.date));
+        body.appendChild(element('div', 'sd-genui-list-item-title', event.title));
+        if (event.text) body.appendChild(element('div', 'sd-genui-caption', event.text));
+        row.appendChild(body);
+        timeline.appendChild(row);
+      });
+      card.appendChild(timeline);
+    } else if (component.type === 'quote') {
+      card.appendChild(element('span', 'sd-genui-quote-mark', '“'));
+      card.appendChild(element('blockquote', 'sd-genui-quote-text', component.text));
+      if (component.attribution || component.role) {
+        var attribution = element('div', 'sd-genui-quote-attribution');
+        if (component.attribution) attribution.appendChild(element('span', 'sd-genui-quote-name', component.attribution));
+        if (component.role) attribution.appendChild(element('span', 'sd-genui-quote-role', component.role));
+        card.appendChild(attribution);
+      }
+    } else if (component.type === 'icon') {
+      card.classList.add('sd-genui-icon-card', 'sd-genui-icon-' + component.size, 'sd-genui-tone-' + component.tone);
+      var iconHolder = element('span', 'sd-genui-icon-holder');
+      appendIcon(iconHolder, component.name, component.size === 'lg' ? 34 : component.size === 'sm' ? 17 : 24);
+      card.appendChild(iconHolder);
+      if (component.label) card.appendChild(element('span', 'sd-genui-icon-label', component.label));
+    } else if (component.type === 'divider') {
+      card.classList.add('sd-genui-divider');
+      if (component.label) card.appendChild(element('span', 'sd-genui-divider-label', component.label));
+    } else if (component.type === 'text') {
       card.classList.add('sd-genui-text-' + component.tone);
       card.setAttribute('data-sd-genui-template', component.text);
       card.textContent = templateText(component.text, scope.state);
@@ -586,6 +783,15 @@
       if (!card) return;
       if (component.type === 'text') {
         card.textContent = templateText(component.text, scope.state);
+      } else if (component.type === 'hero') {
+        var heroOutput = card.querySelector('[data-sd-genui-value="hero"]');
+        if (heroOutput) {
+          var heroValue = valueOf(component, scope.state);
+          heroOutput.textContent = component.formula || typeof heroValue === 'number'
+            ? formatValue(heroValue, component.format, component.currency)
+            : templateText(heroValue, scope.state);
+          heroOutput.hidden = heroValue === '' || heroValue === null || heroValue === undefined;
+        }
       } else if (component.type === 'stat') {
         var output = card.querySelector('[data-sd-genui-value]');
         if (output) {
@@ -635,6 +841,9 @@
     instanceCount++;
     var scope = { instanceId: String(instanceCount), spec: spec, state: initialState(spec), surface: null };
     var surface = element('div', 'sd-genui-surface');
+    surface.setAttribute('data-theme', spec.theme || 'aurora');
+    surface.setAttribute('data-layout', spec.layout || 'grid');
+    surface.setAttribute('data-accent', spec.accent || 'violet');
     if (spec.title) surface.appendChild(element('h2', 'sd-genui-title', spec.title));
     if (spec.description) surface.appendChild(element('p', 'sd-genui-description', spec.description));
     var grid = element('div', 'sd-genui-grid');

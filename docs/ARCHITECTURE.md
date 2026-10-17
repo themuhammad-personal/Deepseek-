@@ -60,11 +60,9 @@ Things inside the bundle that deliberately keep their original names:
 
 ## Generative UI
 
-The additive `sd-genui.js` renderer lets relevant assistant replies contain a fenced `sds-ui` JSON block. `injected.js` provides the version-1 output contract; a throttled DOM observer finds complete, valid blocks in DeepSeek messages and replaces only a validated block with a responsive interface. `sd-genui.css` supplies card, chart and control styles. The shipped 3.3 MB `content.js` bundle is deliberately left untouched.
+`sd-genui.js` is the allowlisted, schema-driven UI layer. Relevant prompts receive an `sds-ui` JSON contract from `injected.js`; a throttled observer validates complete blocks, then replaces only validated blocks with responsive DOM components. It supports four visual themes (`aurora`, `editorial`, `glass`, `midnight`), six accents, grid/stack/dashboard layouts, curated SVG icons, hero panels, KPI/stat cards, callouts, badges, progress, sliders, selectors/toggles, bar/line/pie/donut charts, tables, lists, numbered steps, timelines, quotes, dividers and copy buttons.
 
-Version 1 supports text, statistic cards, badges, progress bars, sliders, selects, toggles, bar/line/pie charts, tables and copy buttons. Control changes recalculate bound text, formulas, progress and charts locally. Formula evaluation uses a small arithmetic parser; generated JavaScript is never executed. Payload size, component count and table/chart rows are capped; unrecognised types are rejected; text is rendered through `textContent`. Incomplete or invalid blocks remain visible as ordinary code.
-
-This is an initial implementation, not ChatGPT's private production renderer. Because it mounts inside the official site's message DOM, it depends on DeepSeek's message and code-block markup remaining compatible.
+Interactions recalculate bound text, formulas, progress and charts locally. Formula evaluation uses a small arithmetic parser; generated JavaScript, arbitrary markup and remote images are not executed or inserted. Input length, component count and table/chart sizes are capped, and text is rendered as text. Invalid/incomplete blocks remain visible as code. The existing minified `content.js` bundle is not rebuilt or overwritten. Because rendering hooks into the official site's message/code-block DOM, compatibility still depends on DeepSeek's markup.
 
 ## Linux sandbox and the agent
 
