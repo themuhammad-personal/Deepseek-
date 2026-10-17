@@ -86,6 +86,7 @@ else below is extra.
   when it finishes.
 - **Compress and hand off:** summarise a long chat and continue in a fresh one with the full
   context.
+- **Generative UI:** on visual tasks, replies can render schema-validated cards, live charts, sliders, toggles, dropdowns and tables. Only explicitly allowed components render; model-generated JavaScript is never executed.
 - **Mixed scripts done right:** Bengali, Arabic, Persian and English in one message each keep
   their own direction, like on the website.
 - Collapsible long messages, optional timestamps, chat tags and token cost estimates.

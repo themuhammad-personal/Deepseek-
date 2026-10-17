@@ -15,7 +15,8 @@ what DeepSeek ships.
 │        1. injected.js   network hooks (prompt injection, tool tags) │
 │        2. content.css   engine styles  (style#bds-css)              │
 │        3. content.js    engine UI + logic (Svelte)                  │
-│        4. UiPolish      hides out-of-scope features, signals ready  │
+│        4. sd-genui.js   validated interactive UI blocks             │
+│        5. UiPolish      hides out-of-scope features, signals ready  │
 │   shouldInterceptRequest ─▶ https://bds-asset.local/bds/* from APK  │
 │                                                                     │
 │ AndroidBridge (WebViewBridge) — JS ⇄ native                         │
@@ -30,7 +31,7 @@ what DeepSeek ships.
 |---|---|---|
 | Native shell | `android/app/src/main/java/com/superdeepseek/app/` | WebView setup, splash/boot overlay, insets, back handling, file chooser, external links |
 | Bridge | `WebViewBridge.kt` | `window.AndroidBridge`: persistent storage, native pickers, blob downloads, haptics, CORS-free fetch for MCP/web tools |
-| Engine | `android/app/src/main/bds-assets/bds/` | `content.js` (UI + features), `content.css`, `injected.js` (network layer), `sandbox.*` (isolated code runners) |
+| Engine | `android/app/src/main/bds-assets/bds/` | `content.js` (existing UI), `injected.js` (network hooks and GenUI prompt), `sd-genui.js` + `sd-genui.css` (safe schema renderer), `sandbox.*` (isolated code runners) |
 | Polish | `UiPolish.kt` | Small, unit-tested DOM sweep: hides voice / Deep Code entries and repairs raw labels |
 | Updates | `UpdateChecker.kt` | Polls this repository's GitHub Releases (stable or beta channel) and installs the signed APK |
 
@@ -56,6 +57,14 @@ Things inside the bundle that deliberately keep their original names:
   (`sdsRebrandStored`);
 - storage keys (`bds_*`) and CSS classes (`bds-*`), so user data survives updates;
 - the third-party DeepSeek Harness *Better DeepSeek Bridge* plugin and its endpoints.
+
+## Generative UI
+
+The additive `sd-genui.js` renderer lets relevant assistant replies contain a fenced `sds-ui` JSON block. `injected.js` provides the version-1 output contract; a throttled DOM observer finds complete, valid blocks in DeepSeek messages and replaces only a validated block with a responsive interface. `sd-genui.css` supplies card, chart and control styles. The shipped 3.3 MB `content.js` bundle is deliberately left untouched.
+
+Version 1 supports text, statistic cards, badges, progress bars, sliders, selects, toggles, bar/line/pie charts, tables and copy buttons. Control changes recalculate bound text, formulas, progress and charts locally. Formula evaluation uses a small arithmetic parser; generated JavaScript is never executed. Payload size, component count and table/chart rows are capped; unrecognised types are rejected; text is rendered through `textContent`. Incomplete or invalid blocks remain visible as ordinary code.
+
+This is an initial implementation, not ChatGPT's private production renderer. Because it mounts inside the official site's message DOM, it depends on DeepSeek's message and code-block markup remaining compatible.
 
 ## Linux sandbox and the agent
 

@@ -771,7 +771,9 @@ class MainActivity : ComponentActivity() {
             val css = buildString {
                 readAsset("content.css")?.let { append(it).append("\n") }
                 // Our design frame on top of the engine's UI.
-                readAsset("our-skin.css")?.let { append(it) }
+                readAsset("our-skin.css")?.let { append(it).append("\n") }
+                // Safe, schema-driven assistant UI (charts, controls and tables).
+                readAsset("sd-genui.css")?.let { append(it) }
             }
             val cssJs = if (css.isBlank()) null else """
                 (function(){
@@ -785,7 +787,7 @@ class MainActivity : ComponentActivity() {
             """.trimIndent()
             // Native glue, then the sandbox agent glue (it wraps sd-native's bridge
             // fetch), then the sheet gestures (they wrap content.js's Back handler).
-            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"))
+            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"), readAsset("sd-genui.js"))
                 .joinToString("\n;\n").ifEmpty { null }
             return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), native)
                 .also { engineAssets = it }
@@ -798,7 +800,7 @@ class MainActivity : ComponentActivity() {
      * history hops) and content.js has no load guard of its own: a second run
      * duplicated the engine's UI and listeners. Order matters: injected.js
      * (network hooks) first, then the CSS, content.js, the native glue
-     * (sd-native.js) and the polish pass.
+     * (sd-native.js), sheet gestures, the GenUI renderer and the polish pass.
      */
     private fun injectBdsScripts(webView: WebView) {
         Thread {

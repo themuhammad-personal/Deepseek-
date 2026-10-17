@@ -1,0 +1,51 @@
+.sd-genui-surface{box-sizing:border-box;margin:14px 0 18px;padding:16px;border:1px solid rgba(128,128,128,.25);border-radius:18px;background:rgba(128,128,128,.045);color:inherit;font:inherit;min-width:0;overflow:hidden}
+.sd-genui-surface *{box-sizing:border-box}
+.sd-genui-title{font-size:1.12rem;font-weight:650;letter-spacing:-.02em;line-height:1.35;margin:0 0 5px}
+.sd-genui-description{margin:0 0 14px;color:inherit;opacity:.68;font-size:.9rem;line-height:1.5}
+.sd-genui-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}
+.sd-genui-item{min-width:0;border:1px solid rgba(128,128,128,.22);border-radius:13px;background:rgba(128,128,128,.035);padding:12px}
+.sd-genui-item-text,.sd-genui-item-chart,.sd-genui-item-table,.sd-genui-item-progress,.sd-genui-item-button{grid-column:1/-1}
+.sd-genui-item-text{padding:3px 1px;border:0;background:transparent;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.sd-genui-text-secondary,.sd-genui-caption{opacity:.68}
+.sd-genui-text-strong{font-weight:650}
+.sd-genui-kicker{font-size:.78rem;line-height:1.4;opacity:.68;margin-bottom:8px}
+.sd-genui-stat-value{font-size:clamp(1.2rem,4.5vw,1.7rem);font-weight:650;letter-spacing:-.035em;line-height:1.2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.sd-genui-caption{font-size:.8rem;line-height:1.45;margin:7px 0 0;overflow-wrap:anywhere}
+.sd-genui-badge{display:inline-flex;align-items:center;max-width:100%;padding:5px 9px;border:1px solid rgba(128,128,128,.26);border-radius:999px;font-size:.78rem;font-weight:600;overflow-wrap:anywhere}
+.sd-genui-tone-neutral{background:rgba(128,128,128,.07)}
+.sd-genui-tone-info{background:rgba(96,165,250,.14);color:#60a5fa}
+.sd-genui-tone-success{background:rgba(45,212,191,.14);color:#2dd4bf}
+.sd-genui-tone-warning{background:rgba(245,158,11,.14);color:#f59e0b}
+.sd-genui-tone-danger{background:rgba(251,113,133,.14);color:#fb7185}
+.sd-genui-control-head,.sd-genui-progress-label{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:.88rem;line-height:1.4}
+.sd-genui-control-head label,.sd-genui-control-label{font-weight:550;min-width:0;overflow-wrap:anywhere}
+.sd-genui-control-value,.sd-genui-progress-value{font-size:.82rem;opacity:.68;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sd-genui-slider{display:block;appearance:auto;width:100%;min-height:36px;margin:9px 0 2px;accent-color:#818cf8;cursor:pointer}
+.sd-genui-bounds{display:flex;justify-content:space-between;gap:12px;opacity:.68;font-size:.74rem;font-variant-numeric:tabular-nums}
+.sd-genui-control-label{display:block;margin-bottom:8px;font-size:.88rem}
+.sd-genui-select{width:100%;min-height:42px;border:1px solid rgba(128,128,128,.3);border-radius:10px;background:transparent;color:inherit;padding:8px 10px;font:inherit}
+.sd-genui-select option{color:#111;background:#fff}
+.sd-genui-toggle{display:flex;align-items:center;gap:10px;min-height:42px;cursor:pointer;font-size:.9rem}
+.sd-genui-toggle input{width:19px;height:19px;accent-color:#818cf8;flex:0 0 auto}
+.sd-genui-progress-track{height:8px;background:rgba(128,128,128,.17);border-radius:999px;overflow:hidden;margin-top:10px}
+.sd-genui-progress-fill{width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#818cf8,#2dd4bf);transition:width .18s ease}
+.sd-genui-chart-title{font-size:.94rem;line-height:1.4;font-weight:620;margin:0 0 4px}
+.sd-genui-chart-plot{width:100%;min-width:0;margin-top:8px}
+.sd-genui-chart-svg{display:block;width:100%;height:auto;max-height:290px;overflow:visible}
+.sd-genui-chart-grid{stroke:currentColor;stroke-opacity:.12;stroke-width:1;stroke-dasharray:3 4}
+.sd-genui-chart-tick{font-size:9px;fill:currentColor;fill-opacity:.65}
+.sd-genui-chart-label{font-size:9px;fill:currentColor;fill-opacity:.8}
+.sd-genui-chart-value{font-size:9px;fill:currentColor;fill-opacity:.6}
+.sd-genui-table-wrap{max-width:100%;overflow-x:auto}
+.sd-genui-table{border-collapse:collapse;width:100%;min-width:240px;font-size:.82rem;font-variant-numeric:tabular-nums}
+.sd-genui-table th,.sd-genui-table td{padding:9px 8px;text-align:start;vertical-align:top;border-bottom:1px solid rgba(128,128,128,.2);overflow-wrap:anywhere}
+.sd-genui-table th{font-size:.75rem;opacity:.68;font-weight:600}
+.sd-genui-table tbody tr:last-child td{border-bottom:0}
+.sd-genui-button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:9px 14px;border:1px solid rgba(128,128,128,.28);border-radius:999px;background:rgba(128,128,128,.08);color:inherit;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer;transition:transform .15s ease}
+.sd-genui-button:active{transform:scale(.98)}
+.sd-genui-button-status{font-size:.78rem;opacity:.68;margin-inline-start:10px}
+.sd-genui-copy-buffer{position:fixed!important;left:0!important;bottom:0!important;width:2px!important;height:2px!important;opacity:.01!important;pointer-events:none!important}
+.sd-genui-surface button:focus-visible,.sd-genui-surface input:focus-visible,.sd-genui-surface select:focus-visible{outline:2px solid #818cf8;outline-offset:3px}
+pre[data-sd-genui-hidden="1"]{display:none!important}
+@media(max-width:480px){.sd-genui-surface{padding:12px;border-radius:15px}.sd-genui-grid{gap:8px}.sd-genui-item{padding:10px;border-radius:11px}.sd-genui-stat-value{font-size:1.2rem}.sd-genui-item-text{padding-inline:0}}
+@media(prefers-reduced-motion:reduce){.sd-genui-progress-fill,.sd-genui-button{transition:none}}
