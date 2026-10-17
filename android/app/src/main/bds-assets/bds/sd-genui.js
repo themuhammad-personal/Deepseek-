@@ -334,6 +334,54 @@
         while (cells.length < out.columns.length) cells.push('');
         return cells;
       });
+    } else if (type === 'diagram') {
+      out.title = cleanText(input.title, 140);
+      out.description = cleanText(input.description, 240);
+      if (!Array.isArray(input.nodes) || input.nodes.length < 2 || input.nodes.length > 12) throw new Error('Diagram needs 2–12 nodes');
+      var diagramIds = Object.create(null);
+      var diagramPositions = Object.create(null);
+      out.nodes = input.nodes.map(function (node, index) {
+        if (!isObject(node)) throw new Error('Diagram node must be an object');
+        var id = cleanText(node.id, 32);
+        if (!validId(id) || diagramIds[id]) throw new Error('Diagram node IDs must be unique identifiers');
+        diagramIds[id] = true;
+        var column = Number.isFinite(Number(node.column)) ? Math.max(0, Math.min(3, Math.round(Number(node.column)))) : index % 4;
+        var row = Number.isFinite(Number(node.row)) ? Math.max(0, Math.min(2, Math.round(Number(node.row)))) : Math.floor(index / 4);
+        var position = column + ':' + row;
+        if (diagramPositions[position]) {
+          var found = false;
+          for (var slot = 0; slot < 12; slot++) {
+            var candidateColumn = slot % 4;
+            var candidateRow = Math.floor(slot / 4);
+            var candidatePosition = candidateColumn + ':' + candidateRow;
+            if (!diagramPositions[candidatePosition]) {
+              column = candidateColumn;
+              row = candidateRow;
+              position = candidatePosition;
+              found = true;
+              break;
+            }
+          }
+          if (!found) throw new Error('Diagram nodes cannot overlap');
+        }
+        diagramPositions[position] = true;
+        return {
+          id: id,
+          title: cleanText(node.title || node.label, 100),
+          text: cleanText(node.text || node.description, 100),
+          kind: choose(node.kind, ['neutral', 'primary', 'success', 'warning', 'danger'], 'neutral'),
+          column: column,
+          row: row
+        };
+      });
+      if (!Array.isArray(input.edges) || input.edges.length > 20) throw new Error('Diagram supports up to 20 connections');
+      out.edges = input.edges.map(function (edge) {
+        if (!isObject(edge)) throw new Error('Diagram connection must be an object');
+        var from = cleanText(edge.from, 32);
+        var to = cleanText(edge.to, 32);
+        if (!diagramIds[from] || !diagramIds[to] || from === to) throw new Error('Diagram connection refers to an unknown node');
+        return { from: from, to: to, label: cleanText(edge.label, 50) };
+      });
     } else if (type === 'button') {
       out.label = cleanText(input.label, 120);
       if (input.action !== 'copy') throw new Error('Only the copy action is available');
@@ -534,6 +582,100 @@
         svg.appendChild(svgElement('circle', { cx: x, cy: y, r: 3.5, fill: COLORS[0] }));
       });
     }
+    target.replaceChildren(svg);
+  }
+
+  function renderDiagram(target, component, scope) {
+    var nodeWidth = 132, nodeHeight = 76;
+    var positions = Object.create(null);
+    var maxRow = 0;
+    component.nodes.forEach(function (node) {
+      var x = 16 + node.column * 154;
+      var y = 18 + node.row * 96;
+      positions[node.id] = { x: x, y: y, cx: x + nodeWidth / 2, cy: y + nodeHeight / 2, column: node.column, row: node.row };
+      maxRow = Math.max(maxRow, node.row);
+    });
+    var svgHeight = 30 + maxRow * 96 + nodeHeight;
+    var svg = svgElement('svg', {
+      viewBox: '0 0 640 ' + svgHeight,
+      role: 'img',
+      'aria-label': component.title || 'Diagram',
+      class: 'sd-genui-diagram-svg',
+      preserveAspectRatio: 'xMidYMid meet'
+    });
+    var defs = svgElement('defs');
+    var markerId = 'sd-genui-diagram-arrow-' + scope.instanceId;
+    var marker = svgElement('marker', {
+      id: markerId, markerWidth: 7, markerHeight: 7, refX: 5.5, refY: 3.5,
+      orient: 'auto', markerUnits: 'strokeWidth'
+    });
+    marker.appendChild(svgElement('path', { d: 'M0,0 L7,3.5 L0,7 Z', class: 'sd-genui-diagram-arrowhead' }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+    component.edges.forEach(function (edge) {
+      var from = positions[edge.from], to = positions[edge.to];
+      if (!from || !to) return;
+      var horizontal = Math.abs(to.cx - from.cx) >= Math.abs(to.cy - from.cy);
+      var x1, y1, x2, y2, midX, midY, path;
+      if (horizontal) {
+        var directionX = to.cx >= from.cx ? 1 : -1;
+        x1 = from.cx + directionX * (nodeWidth / 2);
+        x2 = to.cx - directionX * (nodeWidth / 2);
+        y1 = from.cy;
+        y2 = to.cy;
+        midX = (x1 + x2) / 2;
+        midY = (y1 + y2) / 2;
+        path = 'M ' + x1 + ' ' + y1 + ' L ' + midX + ' ' + y1 + ' L ' + midX + ' ' + y2 + ' L ' + x2 + ' ' + y2;
+      } else {
+        var directionY = to.cy >= from.cy ? 1 : -1;
+        x1 = from.cx;
+        x2 = to.cx;
+        y1 = from.cy + directionY * (nodeHeight / 2);
+        y2 = to.cy - directionY * (nodeHeight / 2);
+        midX = (x1 + x2) / 2;
+        midY = (y1 + y2) / 2;
+        path = 'M ' + x1 + ' ' + y1 + ' L ' + x1 + ' ' + midY + ' L ' + x2 + ' ' + midY + ' L ' + x2 + ' ' + y2;
+      }
+      svg.appendChild(svgElement('path', {
+        d: path, class: 'sd-genui-diagram-edge', 'marker-end': 'url(#' + markerId + ')'
+      }));
+      if (edge.label) {
+        svg.appendChild(svgElement('text', {
+          x: midX, y: midY - 5, 'text-anchor': 'middle', class: 'sd-genui-diagram-edge-label'
+        }, edge.label.slice(0, 22)));
+      }
+    });
+    component.nodes.forEach(function (node) {
+      var position = positions[node.id];
+      var group = svgElement('g', { class: 'sd-genui-diagram-node', 'data-kind': node.kind });
+      group.appendChild(svgElement('rect', {
+        x: position.x, y: position.y, width: nodeWidth, height: nodeHeight, rx: 10,
+        class: 'sd-genui-diagram-node-bg'
+      }));
+      var titleLines = [];
+      var words = String(node.title || node.id).split(/\s+/);
+      var line = '';
+      words.forEach(function (word) {
+        var next = line ? line + ' ' + word : word;
+        if (next.length > 19 && line) { titleLines.push(line); line = word; }
+        else line = next;
+      });
+      if (line) titleLines.push(line);
+      if (titleLines.length > 2) titleLines = [titleLines[0], titleLines.slice(1).join(' ').slice(0, 18) + '…'];
+      titleLines.forEach(function (titleLine, lineIndex) {
+        group.appendChild(svgElement('text', {
+          x: position.cx, y: position.y + (titleLines.length === 1 ? 32 : 25 + lineIndex * 13),
+          'text-anchor': 'middle', class: 'sd-genui-diagram-node-title'
+        }, titleLine));
+      });
+      if (node.text) {
+        var label = node.text.length > 23 ? node.text.slice(0, 22) + '…' : node.text;
+        group.appendChild(svgElement('text', {
+          x: position.cx, y: position.y + 59, 'text-anchor': 'middle', class: 'sd-genui-diagram-node-copy'
+        }, label));
+      }
+      svg.appendChild(group);
+    });
     target.replaceChildren(svg);
   }
 
@@ -804,6 +946,12 @@
       table.appendChild(body);
       wrap.appendChild(table);
       card.appendChild(wrap);
+    } else if (component.type === 'diagram') {
+      if (component.title) card.appendChild(element('h3', 'sd-genui-section-title', component.title));
+      if (component.description) card.appendChild(element('p', 'sd-genui-caption', component.description));
+      var diagramWrap = element('div', 'sd-genui-diagram-wrap');
+      card.appendChild(diagramWrap);
+      renderDiagram(diagramWrap, component, scope);
     } else if (component.type === 'button') {
       var button = element('button', 'sd-genui-button', component.label);
       button.type = 'button';

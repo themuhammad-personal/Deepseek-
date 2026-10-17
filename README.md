@@ -86,7 +86,7 @@ else below is extra.
   when it finishes.
 - **Compress and hand off:** summarise a long chat and continue in a fresh one with the full
   context.
-- **Generative UI:** visual answers can become premium dashboards, hero cards, KPI stats, SVG charts, plan-comparison cards, callouts, timelines, step flows, tables, sliders and live calculators—with curated icons, four themes and six accents. Linked text and charts update as controls change. Only schema-approved components render; generated JavaScript is never executed.
+- **Generative UI:** visual requests can become mobile-first dashboards, KPI summaries, safe SVG charts and system diagrams, comparison cards, timelines, step flows, tables and live calculators—with four themes and six accents. Linked values, charts and formulas update as controls change. The renderer only accepts schema-approved components and draws diagrams from validated nodes/edges; it never executes generated JavaScript or inserts model-supplied markup.
 - **Mixed scripts done right:** Bengali, Arabic, Persian and English in one message each keep
   their own direction, like on the website.
 - Collapsible long messages, optional timestamps, chat tags and token cost estimates.

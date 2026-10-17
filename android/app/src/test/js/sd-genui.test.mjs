@@ -68,7 +68,8 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
       { type: 'icon', name: 'rocket', label: 'Launch', size: 'lg' },
       { type: 'divider', label: 'Details' },
       { type: 'chart', kind: 'donut', title: 'Mix', data: [{ label: 'A', value: 60 }, { label: 'B', value: 40 }] },
-      { type: 'comparison', title: 'Choose a plan', items: [{ title: 'Basic', price: 0, features: ['Core features'] }, { title: 'Plus', price: 12, period: '/ month', highlighted: true, badge: 'Recommended', features: ['Everything in Basic', 'Priority support'] }] }
+      { type: 'comparison', title: 'Choose a plan', items: [{ title: 'Basic', price: 0, features: ['Core features'] }, { title: 'Plus', price: 12, period: '/ month', highlighted: true, badge: 'Recommended', features: ['Everything in Basic', 'Priority support'] }] },
+      { type: 'diagram', title: 'Request flow', description: 'How a request moves through the system', nodes: [{ id: 'client', title: 'Client', text: 'Starts request', kind: 'primary', column: 0, row: 0 }, { id: 'api', title: 'API', text: 'Validates request', kind: 'neutral', column: 1, row: 0 }, { id: 'store', title: 'Database', text: 'Returns data', kind: 'success', column: 2, row: 0 }], edges: [{ from: 'client', to: 'api', label: 'HTTPS' }, { from: 'api', to: 'store', label: 'Query' }] }
     ]
   });
   assert.equal(parsed.ok, true, parsed.error);
@@ -78,6 +79,11 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
   assert.equal(parsed.spec.components[8].kind, 'donut');
   assert.equal(parsed.spec.components[9].items.length, 2);
   assert.equal(parsed.spec.components[9].items[1].highlighted, true);
+  assert.equal(parsed.spec.components[10].type, 'diagram');
+  assert.equal(parsed.spec.components[10].nodes.length, 3);
+  assert.equal(parsed.spec.components[10].edges[0].from, 'client');
+  assert.match(SOURCE, /sd-genui-diagram-svg/);
+  assert.match(CSS, /sd-genui-diagram-node-bg/);
   assert.match(SOURCE, /data-sd-genui-template/);
   assert.match(CSS, /sd-genui-compare-featured/);
   const inheritedAccent = ui.parseSpec({ version: 1, accent: 'rose', components: [{ type: 'hero', title: 'Inherits theme accent' }] });
@@ -94,6 +100,7 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
 test('rejects unknown components, duplicate controls and oversized specs', () => {
   const ui = loadApi();
   assert.equal(ui.parseSpec({ version: 1, components: [{ type: 'html', value: '<script>alert(1)</script>' }] }).ok, false);
+  assert.equal(ui.parseSpec({ version: 1, components: [{ type: 'diagram', nodes: [{ id: 'only', title: 'Only' }, { id: 'other', title: 'Other' }], edges: [{ from: 'only', to: 'missing' }] }] }).ok, false);
   assert.equal(ui.parseSpec({ version: 1, components: [
     { type: 'slider', id: 'amount', label: 'Amount', min: 0, max: 10, value: 5 },
     { type: 'toggle', id: 'amount', label: 'Duplicate', value: true }
@@ -124,6 +131,10 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(INJECTED, /SDS GenUI v1/);
   assert.match(INJECTED, /Supported component types/);
   assert.match(INJECTED, /Premium visual direction/);
+  assert.match(INJECTED, /diagram \\{title,description,nodes/);
+  assert.match(INJECTED, /visual design\\|visual aid\\|illustrate\\|diagram\\|infographic\\|poster/);
+  assert.match(INJECTED, /explicitly asks you to design, visualize, draw, map, diagram/);
+  assert.match(INJECTED, /NEVER invent factual numbers, sources, outcomes or progress/);
   assert.doesNotThrow(() => new Function(INJECTED), 'injected.js must parse as one complete script');
   assert.match(INJECTED, /explainer\|how to\|how does/);
   assert.match(INJECTED, /3–7 component composition/);
