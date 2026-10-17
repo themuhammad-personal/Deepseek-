@@ -67,7 +67,8 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
       { type: 'quote', text: 'A useful principle', attribution: 'Team', role: 'Product' },
       { type: 'icon', name: 'rocket', label: 'Launch', size: 'lg' },
       { type: 'divider', label: 'Details' },
-      { type: 'chart', kind: 'donut', title: 'Mix', data: [{ label: 'A', value: 60 }, { label: 'B', value: 40 }] }
+      { type: 'chart', kind: 'donut', title: 'Mix', data: [{ label: 'A', value: 60 }, { label: 'B', value: 40 }] },
+      { type: 'comparison', title: 'Choose a plan', items: [{ title: 'Basic', price: 0, features: ['Core features'] }, { title: 'Plus', price: 12, period: '/ month', highlighted: true, badge: 'Recommended', features: ['Everything in Basic', 'Priority support'] }] }
     ]
   });
   assert.equal(parsed.ok, true, parsed.error);
@@ -75,6 +76,10 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
   assert.equal(parsed.spec.components[1].tone, 'success');
   assert.equal(parsed.spec.components[2].items.length, 2);
   assert.equal(parsed.spec.components[8].kind, 'donut');
+  assert.equal(parsed.spec.components[9].items.length, 2);
+  assert.equal(parsed.spec.components[9].items[1].highlighted, true);
+  assert.match(SOURCE, /data-sd-genui-template/);
+  assert.match(CSS, /sd-genui-compare-featured/);
   const inheritedAccent = ui.parseSpec({ version: 1, accent: 'rose', components: [{ type: 'hero', title: 'Inherits theme accent' }] });
   assert.equal(inheritedAccent.ok, true);
   assert.equal(inheritedAccent.spec.components[0].accent, 'rose');
@@ -119,4 +124,5 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(INJECTED, /SDS GenUI v1/);
   assert.match(INJECTED, /Supported component types/);
   assert.match(INJECTED, /Premium visual direction/);
+  assert.match(INJECTED, /comparison \{title,items\}/);
 });

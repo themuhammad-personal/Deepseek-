@@ -129,3 +129,19 @@ pre[data-sd-genui-hidden="1"]{display:none!important}
 @media(max-width:360px){.sd-genui-grid,.sd-genui-layout-dashboard .sd-genui-grid{grid-template-columns:minmax(0,1fr)}.sd-genui-item.sd-genui-span-half{grid-column:1/-1}.sd-genui-layout-dashboard .sd-genui-item-stat{grid-column:1/-1}}
 @media(hover:none){.sd-genui-item:hover{box-shadow:0 3px 10px rgba(0,0,0,.018)}}
 @media(prefers-reduced-motion:reduce){.sd-genui-progress-fill,.sd-genui-button,.sd-genui-item{transition:none}}
+.sd-genui-item-comparison{grid-column:1/-1}
+.sd-genui-comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;align-items:stretch}
+.sd-genui-compare-card{position:relative;min-width:0;border:1px solid var(--sd-gui-line);border-radius:16px;padding:15px;background:linear-gradient(160deg,var(--sd-gui-card),transparent);overflow:hidden}
+.sd-genui-compare-featured{border-color:color-mix(in srgb,var(--sd-gui-accent) 43%,var(--sd-gui-line));background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,var(--sd-gui-accent) 16%,transparent),transparent 52%),linear-gradient(150deg,color-mix(in srgb,var(--sd-gui-accent) 7%,transparent),var(--sd-gui-card));box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 8px 22px color-mix(in srgb,var(--sd-gui-accent) 7%,transparent)}
+.sd-genui-compare-eyebrow{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:760;color:var(--sd-gui-muted);margin-bottom:7px}
+.sd-genui-compare-badge{display:inline-flex;max-width:100%;margin-bottom:8px;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,var(--sd-gui-accent) 12%,transparent);color:var(--sd-gui-accent);border:1px solid color-mix(in srgb,var(--sd-gui-accent) 25%,var(--sd-gui-line));font-size:.68rem;line-height:1.25;font-weight:760}
+.sd-genui-compare-title{font-size:1rem;font-weight:740;letter-spacing:-.025em;line-height:1.28;margin:0 0 6px;overflow-wrap:anywhere}
+.sd-genui-compare-description{font-size:.8rem;line-height:1.5;color:var(--sd-gui-muted);margin:0 0 12px;overflow-wrap:anywhere}
+.sd-genui-compare-price-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px;margin:10px 0 13px}
+.sd-genui-compare-price{font-size:clamp(1.25rem,4.4vw,1.7rem);font-weight:780;letter-spacing:-.045em;line-height:1.1;overflow-wrap:anywhere}
+.sd-genui-compare-period{font-size:.75rem;color:var(--sd-gui-muted)}
+.sd-genui-compare-features{display:grid;gap:9px;list-style:none;padding:0;margin:12px 0 0}
+.sd-genui-compare-features li{display:flex;align-items:flex-start;gap:7px;font-size:.78rem;line-height:1.45;min-width:0}
+.sd-genui-compare-check{flex:0 0 16px;color:var(--sd-gui-accent);margin-top:1px}
+.sd-genui-compare-feature{overflow-wrap:anywhere;min-width:0}
+@media(max-width:520px){.sd-genui-comparison-grid{grid-template-columns:minmax(0,1fr);gap:8px}.sd-genui-compare-card{padding:13px;border-radius:13px}.sd-genui-compare-price{font-size:1.4rem}}

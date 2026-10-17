@@ -199,7 +199,23 @@
     var type = cleanText(input.type, 32);
     var out = { type: type };
     out.span = choose(input.span, ['full', 'half'], 'auto');
-    if (type === 'hero') {
+    if (type === 'comparison') {
+      out.title = cleanText(input.title, 140);
+      if (!Array.isArray(input.items) || input.items.length < 2 || input.items.length > 3) throw new Error('Comparison needs 2–3 options');
+      out.items = input.items.map(function (item) {
+        if (!isObject(item)) throw new Error('Comparison option must be an object');
+        return {
+          eyebrow: cleanText(item.eyebrow, 80),
+          title: cleanText(item.title || item.name, 140),
+          description: cleanText(item.description || item.text, 240),
+          price: typeof item.price === 'number' && Number.isFinite(item.price) ? item.price : cleanText(item.price, 120),
+          period: cleanText(item.period, 80),
+          badge: cleanText(item.badge, 100),
+          highlighted: item.highlighted === true,
+          features: Array.isArray(item.features) ? item.features.slice(0, 8).map(function (feature) { return cleanText(feature, 160); }) : []
+        };
+      });
+    } else if (type === 'hero') {
       out.eyebrow = cleanText(input.eyebrow, 90);
       out.title = cleanText(input.title, 180);
       out.subtitle = cleanText(input.subtitle, 320);
@@ -396,7 +412,11 @@
   function element(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
-    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (text !== undefined && text !== null) {
+      var value = String(text);
+      node.textContent = value;
+      if (/\{\{\s*[A-Za-z][A-Za-z0-9_]{0,31}\s*\}\}/.test(value)) node.setAttribute('data-sd-genui-template', value);
+    }
     return node;
   }
   function svgElement(tag, attrs, text) {
@@ -553,7 +573,37 @@
     var card = element('section', 'sd-genui-item sd-genui-item-' + component.type);
     card.setAttribute('data-sd-genui-index', String(index));
     if (component.span === 'full' || component.span === 'half') card.classList.add('sd-genui-span-' + component.span);
-    if (component.type === 'hero') {
+    if (component.type === 'comparison') {
+      if (component.title) card.appendChild(element('h3', 'sd-genui-section-title', component.title));
+      var compareGrid = element('div', 'sd-genui-comparison-grid');
+      component.items.forEach(function (option) {
+        var panel = element('article', 'sd-genui-compare-card' + (option.highlighted ? ' sd-genui-compare-featured' : ''));
+        if (option.eyebrow) panel.appendChild(element('div', 'sd-genui-compare-eyebrow', option.eyebrow));
+        if (option.badge) panel.appendChild(element('span', 'sd-genui-compare-badge', option.badge));
+        panel.appendChild(element('h4', 'sd-genui-compare-title', option.title));
+        if (option.description) panel.appendChild(element('p', 'sd-genui-compare-description', option.description));
+        if (option.price !== '') {
+          var priceLine = element('div', 'sd-genui-compare-price-line');
+          priceLine.appendChild(element('span', 'sd-genui-compare-price', option.price));
+          if (option.period) priceLine.appendChild(element('span', 'sd-genui-compare-period', option.period));
+          panel.appendChild(priceLine);
+        }
+        if (option.features.length) {
+          var featureList = element('ul', 'sd-genui-compare-features');
+          option.features.forEach(function (feature) {
+            var featureRow = element('li', '');
+            var check = element('span', 'sd-genui-compare-check');
+            appendIcon(check, 'check-circle', 15);
+            featureRow.appendChild(check);
+            featureRow.appendChild(element('span', 'sd-genui-compare-feature', feature));
+            featureList.appendChild(featureRow);
+          });
+          panel.appendChild(featureList);
+        }
+        compareGrid.appendChild(panel);
+      });
+      card.appendChild(compareGrid);
+    } else if (component.type === 'hero') {
       card.setAttribute('data-accent', component.accent);
       var heroTop = element('div', 'sd-genui-hero-top');
       var heroIcon = element('span', 'sd-genui-hero-icon');
@@ -819,6 +869,10 @@
       } else if (component.type === 'table') {
         var cells = card.querySelectorAll('[data-sd-genui-template]');
         for (var i = 0; i < cells.length; i++) cells[i].textContent = templateText(cells[i].getAttribute('data-sd-genui-template') || '', scope.state);
+      var dynamicTextNodes = card.querySelectorAll('[data-sd-genui-template]');
+      for (var dynamicIndex = 0; dynamicIndex < dynamicTextNodes.length; dynamicIndex++) {
+        var templateValue = dynamicTextNodes[dynamicIndex].getAttribute('data-sd-genui-template') || '';
+        dynamicTextNodes[dynamicIndex].textContent = templateText(templateValue, scope.state);
       }
     });
     var controls = scope.surface.querySelectorAll('[data-sd-genui-control]');
