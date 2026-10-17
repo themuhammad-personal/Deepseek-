@@ -297,26 +297,6 @@ test('prompt context: live sandbox state for the tool instructions', () => {
   assert.deepEqual(plain(win.__sdAgent.promptContext()), []);
 });
 
-test('Mission Control snapshot reports actual tool activity without raw argument objects', async () => {
-  const { win } = load();
-  const before = win.__sdAgent.getSnapshot();
-  assert.equal(before.active, false); assert.equal(before.mode, 'auto'); assert.equal(before.supported, true);
-  assert.deepEqual(plain(before.activities), []);
-  await win.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'sandbox', toolName: 'run', args: { command: 'npm test -- --runInBand' } });
-  const after = plain(win.__sdAgent.getSnapshot());
-  assert.equal(after.active, true); assert.equal(after.pending, 0); assert.equal(after.activities.length, 1);
-  assert.equal(after.activities[0].tool, 'run'); assert.match(after.activities[0].label, /npm test/);
-  assert.equal(after.activities[0].status, 'done'); assert.ok(after.activities[0].durationMs >= 0);
-  assert.equal(Object.hasOwn(after.activities[0], 'args'), false); assert.equal(Object.hasOwn(after.activities[0], 'content'), false);
-  win.__sdAgent.stop(true);
-  const { win: secretWin } = load();
-  await secretWin.__sdBridgeFetch({ type: 'bds-mcp-call', serverUrl: 'sandbox', toolName: 'run',
-    args: { command: "curl -H 'Authorization: Bearer abc123' --api-key=secret123" } });
-  const safe = JSON.stringify(plain(secretWin.__sdAgent.getSnapshot()));
-  assert.doesNotMatch(safe, /abc123|secret123/, 'sensitive-looking command values must be redacted from the exported snapshot');
-  assert.match(safe, /redacted/);
-});
-
 test('settings status line follows the sandbox state', () => {
   const { win } = load();
   const s = win.__sdAgent._statusText;

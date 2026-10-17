@@ -772,9 +772,8 @@ class MainActivity : ComponentActivity() {
                 readAsset("content.css")?.let { append(it).append("\n") }
                 // Our design frame on top of the engine's UI.
                 readAsset("our-skin.css")?.let { append(it).append("\n") }
-                // Safe, schema-driven assistant UI and the Mission Control dock.
+                // Safe, schema-driven assistant UI.
                 readAsset("sd-genui.css")?.let { append(it) }
-                readAsset("sd-mission-control.css")?.let { append(it) }
             }
             val cssJs = if (css.isBlank()) null else """
                 (function(){
@@ -786,9 +785,8 @@ class MainActivity : ComponentActivity() {
                   document.head.appendChild(s);
                 })();
             """.trimIndent()
-            // Native glue → sandbox agent → sheet gestures → safe GenUI → Mission Control.
-            // Mission Control consumes the bounded activity snapshot exposed by sd-agent.
-            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"), readAsset("sd-genui.js"), readAsset("sd-mission-control.js"))
+            // Native glue → sandbox agent → sheet gestures → safe GenUI.
+            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"), readAsset("sd-genui.js"))
                 .joinToString("\n;\n").ifEmpty { null }
             return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), native)
                 .also { engineAssets = it }
