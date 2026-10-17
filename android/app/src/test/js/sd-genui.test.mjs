@@ -133,6 +133,8 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(INJECTED, /Premium visual direction/);
   assert.ok(INJECTED.includes('diagram {title,description,nodes'));
   assert.ok(INJECTED.includes('visual design|visual aid|illustrate|diagram|infographic|poster'));
+  assert.ok(INJECTED.includes('app screen|screen design|mobile screen|website design|web page design|prototype|layout'));
+  assert.ok(INJECTED.includes('ইউআই|ইন্টারফেস|স্ক্রিন|নকশা|বানাও|তৈরি কর|আঁকো|প্রোটোটাইপ'));
   assert.match(INJECTED, /explicitly asks you to design, visualize, draw, map, diagram/);
   assert.match(INJECTED, /NEVER invent factual numbers, sources, outcomes or progress/);
   assert.doesNotThrow(() => new Function(INJECTED), 'injected.js must parse as one complete script');

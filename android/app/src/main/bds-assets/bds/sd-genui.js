@@ -595,7 +595,7 @@
       positions[node.id] = { x: x, y: y, cx: x + nodeWidth / 2, cy: y + nodeHeight / 2, column: node.column, row: node.row };
       maxRow = Math.max(maxRow, node.row);
     });
-    var svgHeight = 30 + maxRow * 96 + nodeHeight;
+    var svgHeight = 48 + maxRow * 96 + nodeHeight;
     var svg = svgElement('svg', {
       viewBox: '0 0 640 ' + svgHeight,
       role: 'img',
@@ -612,6 +612,7 @@
     marker.appendChild(svgElement('path', { d: 'M0,0 L7,3.5 L0,7 Z', class: 'sd-genui-diagram-arrowhead' }));
     defs.appendChild(marker);
     svg.appendChild(defs);
+    var edgeLabels = [];
     component.edges.forEach(function (edge) {
       var from = positions[edge.from], to = positions[edge.to];
       if (!from || !to) return;
@@ -640,9 +641,11 @@
         d: path, class: 'sd-genui-diagram-edge', 'marker-end': 'url(#' + markerId + ')'
       }));
       if (edge.label) {
-        svg.appendChild(svgElement('text', {
-          x: midX, y: midY - 5, 'text-anchor': 'middle', class: 'sd-genui-diagram-edge-label'
-        }, edge.label.slice(0, 22)));
+        edgeLabels.push({
+          x: midX,
+          y: Math.max(from.y + nodeHeight, to.y + nodeHeight) + 12,
+          text: edge.label.slice(0, 22)
+        });
       }
     });
     component.nodes.forEach(function (node) {
@@ -675,6 +678,11 @@
         }, label));
       }
       svg.appendChild(group);
+    });
+    edgeLabels.forEach(function (label) {
+      svg.appendChild(svgElement('text', {
+        x: label.x, y: label.y, 'text-anchor': 'middle', class: 'sd-genui-diagram-edge-label'
+      }, label.text));
     });
     target.replaceChildren(svg);
   }
