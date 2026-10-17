@@ -131,8 +131,8 @@ test('renderer, theme styles and prompt use an allowlist instead of dynamic code
   assert.match(INJECTED, /SDS GenUI v1/);
   assert.match(INJECTED, /Supported component types/);
   assert.match(INJECTED, /Premium visual direction/);
-  assert.match(INJECTED, /diagram \\{title,description,nodes/);
-  assert.match(INJECTED, /visual design\\|visual aid\\|illustrate\\|diagram\\|infographic\\|poster/);
+  assert.ok(INJECTED.includes('diagram {title,description,nodes'));
+  assert.ok(INJECTED.includes('visual design|visual aid|illustrate|diagram|infographic|poster'));
   assert.match(INJECTED, /explicitly asks you to design, visualize, draw, map, diagram/);
   assert.match(INJECTED, /NEVER invent factual numbers, sources, outcomes or progress/);
   assert.doesNotThrow(() => new Function(INJECTED), 'injected.js must parse as one complete script');
