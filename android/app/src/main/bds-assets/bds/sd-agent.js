@@ -86,6 +86,40 @@
     return i.mode === 'ask' ? 'ask' : 'auto';
   }
 
+  function recordActivity(payload) {
+    var a = { id: nextActivityId++, tool: String(payload && payload.toolName || 'tool').slice(0, 48),
+      label: describe(payload).slice(0, 120), status: 'running', startedAt: Date.now(), endedAt: 0, durationMs: 0 };
+    activityLog.push(a); if (activityLog.length > 12) activityLog.shift(); return a.id;
+  }
+  function updateActivityLabel(id, label) {
+    for (var i = activityLog.length - 1; i >= 0; i--) if (activityLog[i].id === id) { activityLog[i].label = String(label || '').slice(0, 120); return; }
+  }
+  function finishActivity(id, reply, failed) {
+    var now = Date.now();
+    for (var i = activityLog.length - 1; i >= 0; i--) {
+      var a = activityLog[i]; if (a.id !== id) continue;
+      a.endedAt = now; a.durationMs = Math.max(0, now - a.startedAt);
+      a.status = window.__sdAgentStopped ? 'stopped' : (failed || reply && (reply.isError === true || reply.ok === false)) ? 'error' : 'done';
+      return;
+    }
+  }
+  function stopRunningActivities() {
+    var now = Date.now();
+    activityLog.forEach(function (a) { if (a.status === 'running') { a.status = 'stopped'; a.endedAt = now; a.durationMs = Math.max(0, now - a.startedAt); } });
+  }
+  function snapshot() {
+    var i = info() || {};
+    return { active: !!state.active, pending: Math.max(0, Number(state.pending) || 0), stopped: !!window.__sdAgentStopped,
+      label: String(state.label || '').slice(0, 120), mode: mode(), supported: !!i.supported, enabled: i.enabled !== false,
+      installed: !!i.installed, sandboxStatus: statusShort(i), lastActivity: Number(state.lastActivity) || 0,
+      activities: activityLog.map(function (a) { return { id: a.id, tool: a.tool, label: a.label, status: a.status,
+        startedAt: a.startedAt, endedAt: a.endedAt, durationMs: a.durationMs }; }) };
+  }
+  function announce() {
+    try { if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function')
+      window.dispatchEvent(new CustomEvent('sd:agent-state', { detail: snapshot() })); } catch (_) {}
+  }
+
   // ── Exact arguments from the raw reply ─────────────────────────────────────
 
   function parseAttrs(raw) {
@@ -266,6 +300,9 @@
   // ── Agent activity, Stop ───────────────────────────────────────────────────
 
   var state = { pending: 0, active: false, lastActivity: 0, label: '' };
+  // Bounded, privacy-aware journal used by the Mission Control view.
+  var activityLog = [];
+  var nextActivityId = 1;
   window.__sdAgentStopped = false;
 
   function describe(p) {
@@ -308,19 +345,13 @@
   function beginCall(payload) {
     // Nudges are counted per instruction of the user, not per tool call: a
     // model that answers a nudge by redoing work must not earn new nudges.
-    flow.calls++;
-    state.pending++;
-    state.active = true;
-    state.lastActivity = Date.now();
+    flow.calls++; state.pending++; state.active = true; state.lastActivity = Date.now();
     state.label = describe(payload);
-    render();
-    ensurePoll();
+    var id = recordActivity(payload); render(); ensurePoll(); return id;
   }
-
-  function endCall() {
-    state.pending = Math.max(0, state.pending - 1);
-    state.lastActivity = Date.now();
-    render();
+  function endCall(id, reply, failed) {
+    state.pending = Math.max(0, state.pending - 1); state.lastActivity = Date.now();
+    finishActivity(id, reply, !!failed); render();
   }
 
   function clickOfficialStop() {
@@ -334,6 +365,7 @@
     window.__sdAgentStopped = true;
     try { var b = bridge(); if (b && typeof b.sandboxStop === 'function') b.sandboxStop(); } catch (_) {}
     clickOfficialStop();
+    stopRunningActivities();
     state.active = false;
     state.pending = 0;
     render();
@@ -701,6 +733,7 @@
 
   function render() {
     reportActive();
+    announce();
     var c = ensureChip();
     if (!c) return;
     c.hidden = !state.active;
@@ -1116,10 +1149,10 @@
 
   function sandboxCall(payload, inner) {
     if (window.__sdAgentStopped) return Promise.resolve(stoppedReply());
-    beginCall(payload);
+    var activityId = beginCall(payload);
     return exactArgs(payload)
       .then(function (p) {
-        state.label = describe(p);
+        state.label = describe(p); updateActivityLabel(activityId, state.label);
         render();
         if (mode() !== 'ask') return p;
         return confirmCall(p).then(function (choice) {
@@ -1136,8 +1169,8 @@
         if (window.__sdAgentStopped) return stoppedReply();
         return inner(p);
       })
-      .then(function (reply) { endCall(); return reply; },
-        function (err) { endCall(); return { ok: false, error: String((err && err.message) || err) }; });
+      .then(function (reply) { endCall(activityId, reply, false); return reply; },
+        function (err) { endCall(activityId, null, true); return { ok: false, error: String((err && err.message) || err) }; });
   }
 
   // ── Tool cards: stop the spinner when the call is over ─────────────────────
@@ -1236,6 +1269,8 @@
     /** For the settings overview: whether this phone can run the sandbox, and a one-word state. */
     supported: function () { try { return !!info().supported; } catch (_) { return false; } },
     statusShort: function () { try { return statusShort(); } catch (_) { return ''; } },
+    /** Read-only Mission Control snapshot; raw arguments and file bodies are never returned. */
+    getSnapshot: function () { try { return snapshot(); } catch (_) { return { active: false, pending: 0, activities: [] }; } },
     /** Fills the "Linux & Agent" settings page (content.js sdLinuxPg). */
     mountSettings: mountSettings,
     // Exposed for tests.

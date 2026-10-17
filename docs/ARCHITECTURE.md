@@ -33,6 +33,7 @@ what DeepSeek ships.
 | Bridge | `WebViewBridge.kt` | `window.AndroidBridge`: persistent storage, native pickers, blob downloads, haptics, CORS-free fetch for MCP/web tools |
 | Engine | `android/app/src/main/bds-assets/bds/` | `content.js` (existing UI), `injected.js` (network hooks and GenUI prompt), `sd-genui.js` + `sd-genui.css` (safe schema renderer), `sandbox.*` (isolated code runners) |
 | Polish | `UiPolish.kt` | Small, unit-tested DOM sweep: hides voice / Deep Code entries and repairs raw labels |
+| Mission Control | `sd-mission-control.js` / `.css` | Accessible mobile dock showing observed tool activity, approval mode, Stop and Open Linux Studio actions |
 | Updates | `UpdateChecker.kt` | Polls this repository's GitHub Releases (stable or beta channel) and installs the signed APK |
 
 The application id and Kotlin package are `com.superdeepseek.app`. Earlier builds
@@ -63,6 +64,10 @@ Things inside the bundle that deliberately keep their original names:
 `sd-genui.js` is the allowlisted, schema-driven UI layer. Relevant prompts receive an `sds-ui` JSON contract from `injected.js`; a throttled observer validates complete blocks, then replaces only validated blocks with responsive DOM components. It supports four visual themes (`aurora`, `editorial`, `glass`, `midnight`), six accents, grid/stack/dashboard layouts, curated SVG icons, hero panels, KPI/stat cards, callouts, badges, progress, sliders, selectors/toggles, bar/line/pie/donut charts, plan-comparison cards, tables, lists, numbered steps, timelines, quotes, dividers and copy buttons. Text bindings also refresh throughout nested components when controls change.
 
 Interactions recalculate bound text, formulas, progress and charts locally. Formula evaluation uses a small arithmetic parser; generated JavaScript, arbitrary markup and remote images are not executed or inserted. Input length, component count and table/chart sizes are capped, and text is rendered as text. Invalid/incomplete blocks remain visible as code. The existing minified `content.js` bundle is not rebuilt or overwritten. Because rendering hooks into the official site's message/code-block DOM, compatibility still depends on DeepSeek's markup.
+
+### Agent Mission Control
+
+`sd-agent.js` publishes a read-only snapshot and a rolling 12-entry activity journal. Entries keep tool names, short display labels, observed status and duration; raw argument objects and file bodies are not exported. `sd-mission-control.js` provides a compact mobile dock with recent activity, approval-before-each-command mode, Open Linux Studio and Stop controls. It builds DOM nodes and uses `textContent`; it does not inject model HTML or execute generated code. It reports observed tool activity instead of inventing completion percentages or pretending a plan exists when none was provided.
 
 ## Linux sandbox and the agent
 
