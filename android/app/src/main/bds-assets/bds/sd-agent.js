@@ -86,13 +86,19 @@
     return i.mode === 'ask' ? 'ask' : 'auto';
   }
 
+  function safeActivityLabel(value) {
+    return String(value || '').slice(0, 120)
+      .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/((?:api[_-]?key|token|password|secret|authorization|client[_-]?secret)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s]+)/gi, '$1[redacted]')
+      .replace(/(--(?:api[_-]?key|token|password|secret)\s+)(?:"[^"]*"|'[^']*'|[^\s]+)/gi, '$1[redacted]');
+  }
   function recordActivity(payload) {
     var a = { id: nextActivityId++, tool: String(payload && payload.toolName || 'tool').slice(0, 48),
-      label: describe(payload).slice(0, 120), status: 'running', startedAt: Date.now(), endedAt: 0, durationMs: 0 };
+      label: safeActivityLabel(describe(payload)), status: 'running', startedAt: Date.now(), endedAt: 0, durationMs: 0 };
     activityLog.push(a); if (activityLog.length > 12) activityLog.shift(); return a.id;
   }
   function updateActivityLabel(id, label) {
-    for (var i = activityLog.length - 1; i >= 0; i--) if (activityLog[i].id === id) { activityLog[i].label = String(label || '').slice(0, 120); return; }
+    for (var i = activityLog.length - 1; i >= 0; i--) if (activityLog[i].id === id) { activityLog[i].label = safeActivityLabel(label); return; }
   }
   function finishActivity(id, reply, failed) {
     var now = Date.now();
@@ -110,7 +116,7 @@
   function snapshot() {
     var i = info() || {};
     return { active: !!state.active, pending: Math.max(0, Number(state.pending) || 0), stopped: !!window.__sdAgentStopped,
-      label: String(state.label || '').slice(0, 120), mode: mode(), supported: !!i.supported, enabled: i.enabled !== false,
+      label: safeActivityLabel(state.label), mode: mode(), supported: !!i.supported, enabled: i.enabled !== false,
       installed: !!i.installed, sandboxStatus: statusShort(i), lastActivity: Number(state.lastActivity) || 0,
       activities: activityLog.map(function (a) { return { id: a.id, tool: a.tool, label: a.label, status: a.status,
         startedAt: a.startedAt, endedAt: a.endedAt, durationMs: a.durationMs }; }) };
