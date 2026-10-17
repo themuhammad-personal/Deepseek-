@@ -869,6 +869,7 @@
       } else if (component.type === 'table') {
         var cells = card.querySelectorAll('[data-sd-genui-template]');
         for (var i = 0; i < cells.length; i++) cells[i].textContent = templateText(cells[i].getAttribute('data-sd-genui-template') || '', scope.state);
+      }
       var dynamicTextNodes = card.querySelectorAll('[data-sd-genui-template]');
       for (var dynamicIndex = 0; dynamicIndex < dynamicTextNodes.length; dynamicIndex++) {
         var templateValue = dynamicTextNodes[dynamicIndex].getAttribute('data-sd-genui-template') || '';
