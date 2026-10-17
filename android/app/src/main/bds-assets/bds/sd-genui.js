@@ -194,7 +194,7 @@
     evaluateFormula(source, state);
   }
 
-  function sanitizeComponent(input, ids) {
+  function sanitizeComponent(input, ids, defaultAccent) {
     if (!isObject(input)) throw new Error('Component must be an object');
     var type = cleanText(input.type, 32);
     var out = { type: type };
@@ -210,7 +210,7 @@
       out.footnote = cleanText(input.footnote, 180);
       out.badge = cleanText(input.badge, 80);
       out.icon = choose(input.icon, Object.keys(ICON_PATHS), 'sparkles');
-      out.accent = choose(input.accent, ACCENTS, 'violet');
+      out.accent = choose(input.accent, ACCENTS, defaultAccent || 'violet');
     } else if (type === 'callout') {
       out.tone = choose(input.tone, ['info', 'success', 'warning', 'danger', 'tip'], 'info');
       out.title = cleanText(input.title, 140);
@@ -341,14 +341,16 @@
       }
       if (data.components.length < 1 || data.components.length > MAX_COMPONENTS) throw new Error('Component count is out of range');
       var ids = Object.create(null);
+      var chosenAccent = choose(data.accent, ACCENTS, 'violet');
+      var chosenLayout = choose(data.layout, ['grid', 'stack', 'dashboard'], 'grid');
       var spec = {
         version: 1,
         title: cleanText(data.title, 120),
         description: cleanText(data.description, 300),
         theme: choose(data.theme, ['aurora', 'editorial', 'glass', 'midnight'], 'aurora'),
-        layout: choose(data.layout, ['grid', 'stack', 'dashboard'], 'grid'),
-        accent: choose(data.accent, ACCENTS, 'violet'),
-        components: data.components.map(function (component) { return sanitizeComponent(component, ids); })
+        layout: chosenLayout,
+        accent: chosenAccent,
+        components: data.components.map(function (component) { return sanitizeComponent(component, ids, chosenAccent); })
       };
       var state = Object.create(null);
       spec.components.forEach(function (component) {
@@ -844,6 +846,7 @@
     surface.setAttribute('data-theme', spec.theme || 'aurora');
     surface.setAttribute('data-layout', spec.layout || 'grid');
     surface.setAttribute('data-accent', spec.accent || 'violet');
+    surface.classList.add('sd-genui-layout-' + (spec.layout || 'grid'));
     if (spec.title) surface.appendChild(element('h2', 'sd-genui-title', spec.title));
     if (spec.description) surface.appendChild(element('p', 'sd-genui-description', spec.description));
     var grid = element('div', 'sd-genui-grid');

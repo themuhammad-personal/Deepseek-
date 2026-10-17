@@ -45,6 +45,7 @@ test('parses a calculator with configurable premium layout and evaluates formula
   assert.equal(parsed.spec.theme, 'glass');
   assert.equal(parsed.spec.layout, 'dashboard');
   assert.equal(parsed.spec.accent, 'teal');
+  assert.match(SOURCE, /sd-genui-layout-.*spec\.layout/);
   const state = { principal: 10000, rate: 7, years: 20 };
   assert.equal(ui.evaluateFormula('principal * pow(1 + rate / 100, years)', state), 10000 * Math.pow(1.07, 20));
   assert.equal(ui.evaluateFormula('max(4, round(3.6)) + sqrt(16)', state), 8);
@@ -74,6 +75,9 @@ test('parses visual composition blocks, curated icons and donut charts', () => {
   assert.equal(parsed.spec.components[1].tone, 'success');
   assert.equal(parsed.spec.components[2].items.length, 2);
   assert.equal(parsed.spec.components[8].kind, 'donut');
+  const inheritedAccent = ui.parseSpec({ version: 1, accent: 'rose', components: [{ type: 'hero', title: 'Inherits theme accent' }] });
+  assert.equal(inheritedAccent.ok, true);
+  assert.equal(inheritedAccent.spec.components[0].accent, 'rose');
   const fallback = ui.parseSpec({ version: 1, theme: 'external-css', accent: 'url()', components: [{ type: 'icon', name: '<script>', label: '<img>' }] });
   assert.equal(fallback.ok, true);
   assert.equal(fallback.spec.theme, 'aurora');
