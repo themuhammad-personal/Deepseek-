@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Super DeepSeek frame</title>
+</head>
+<body>
+<script>
+/* Fallback host for sds-html blocks (see sd-genui-html.js). It is loaded in an iframe with
+   sandbox="allow-scripts" (opaque origin), waits for one render message from the chat page and
+   replaces itself with the generated document. The document carries its own CSP meta tag. */
+(function () {
+  window.addEventListener('message', function (event) {
+    var data = event.data;
+    if (!data || data.sds !== 1 || data.type !== 'render' || typeof data.html !== 'string') return;
+    if (event.source !== window.parent) return;
+    document.open();
+    document.write(data.html);
+    document.close();
+  });
+  try { window.parent.postMessage({ sds: 1, id: String(location.hash || '').slice(1), type: 'frame-loaded' }, '*'); } catch (_) {}
+})();
+</script>
+</body>
+</html>

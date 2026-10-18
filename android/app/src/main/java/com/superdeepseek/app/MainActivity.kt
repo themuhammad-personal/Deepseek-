@@ -786,7 +786,7 @@ class MainActivity : ComponentActivity() {
                 })();
             """.trimIndent()
             // Native glue → sandbox agent → sheet gestures → safe GenUI.
-            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"), readAsset("sd-genui.js"))
+            val native = listOfNotNull(readAsset("sd-native.js"), readAsset("sd-agent.js"), readAsset("sd-sheets.js"), readAsset("sd-genui.js"), readAsset("sd-genui-html.js"))
                 .joinToString("\n;\n").ifEmpty { null }
             return EngineAssets(readAsset("injected.js"), cssJs, readAsset("content.js"), native)
                 .also { engineAssets = it }
